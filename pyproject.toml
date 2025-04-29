@@ -12,6 +12,7 @@ psycopg2 = "^2.9.10"
 fastapi = "^0.115.12"
 uvicorn = "^0.34.2"
 openai = "^1.76.0"
+pydantic = "^2.6.4"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -22,3 +23,27 @@ pre-commit = "^4.2.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",  # whitespace before ':'
+    "E501",  # line too long
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D205",  # 1 blank line required between summary line and description
+    "D401"   # First line should be in imperative mood
+]
+docstring-convention = "google"

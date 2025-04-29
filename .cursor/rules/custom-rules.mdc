@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Sens Project Development Rules
@@ -9,63 +9,63 @@ This project follows strict principles to maintain simplicity, reliability, and 
 
 ## Fundamental Principles
 
-1. **Start Simple, Escalate Only When Needed**  
-   - Solve with the fewest components possible.  
+1. **Start Simple, Escalate Only When Needed**
+   - Solve with the fewest components possible.
    - Avoid unnecessary abstractions, libraries, or agent chaining unless explicitly requested.
 
-2. **Plan Before Coding**  
-   - Always outline a short "Planning Trace" explaining steps before generating code.  
+2. **Plan Before Coding**
+   - Always outline a short "Planning Trace" explaining steps before generating code.
    - No direct code output without an explicit plan.
 
 
-3. **One Module, One Responsibility**  
-   - Each script/class/module must serve a single, clear purpose.  
+3. **One Module, One Responsibility**
+   - Each script/class/module must serve a single, clear purpose.
    - Example: `schema_extractor.py` for extraction, `query_planner.py` for SQL planning.
 
-4. **Structured Transparency**  
-   - Log all agent plans, generated SQL, and actions using structured (JSON-format preferred) logging.  
+4. **Structured Transparency**
+   - Log all agent plans, generated SQL, and actions using structured (JSON-format preferred) logging.
    - No hidden agent behaviors or opaque decisions.
 
 ## Extended Quality and Security Standards
 
-7. **Mandatory Test Coverage**  
-   - Every new module must ship with at least one passing unit test placed in `/tests/`.  
+7. **Mandatory Test Coverage**
+   - Every new module must ship with at least one passing unit test placed in `/tests/`.
    - No module merges without baseline test coverage.
 
-8. **Prompt and Configuration Hygiene**  
-   - All prompts must be stored under `/prompts/`, version-controlled.  
+8. **Prompt and Configuration Hygiene**
+   - All prompts must be stored under `/prompts/`, version-controlled.
    - No ad-hoc hardcoded prompts buried inside logic files.
 
-9. **Secrets Management Discipline**  
-   - Never embed credentials, API keys, or database strings directly in source code.  
+9. **Secrets Management Discipline**
+   - Never embed credentials, API keys, or database strings directly in source code.
    - Always use environment variables (`.env`) and maintain an updated `.env.example` for onboarding.
 
-10. **Dependency Management via Poetry**  
-    - **Poetry is the mandatory dependency manager.**  
-    - All project dependencies must be declared cleanly in `pyproject.toml`.  
-    - No direct use of `pip`, `pipenv`, `requirements.txt`, or manual installs.  
+10. **Dependency Management via Poetry**
+    - **Poetry is the mandatory dependency manager.**
+    - All project dependencies must be declared cleanly in `pyproject.toml`.
+    - No direct use of `pip`, `pipenv`, `requirements.txt`, or manual installs.
     - Environments must be reproducible via `poetry install`.
 
-11. **Dependency Justification**  
+11. **Dependency Justification**
     - Any new runtime dependency must be explicitly justified in the PR description (why it's needed, what it replaces, why no standard library alternative suffices).
 
-12. **Performance Mindfulness**  
-    - Avoid N+1 database queries; suggest caching or batched queries where sensible.  
+12. **Performance Mindfulness**
+    - Avoid N+1 database queries; suggest caching or batched queries where sensible.
     - Benchmark critical retrieval paths when adding new DB interactions.
 
 ## Cursor Behavior Expectations
 
-- ✏️ Always propose the simplest viable solution first.  
-- ✏️ Always deliver a "Planning Trace" before any code suggestion.  
+- ✏️ Always propose the simplest viable solution first.
+- ✏️ Always deliver a "Planning Trace" before any code suggestion.
 - ✏️ Always favor transparency, control, and reliability over speculative complexity.
 
 ---
 
 # Reminder
 
-**Simplicity wins.  
-Control wins.  
-Transparency wins.  
+**Simplicity wins.
+Control wins.
+Transparency wins.
 Every time.**
 
 Noncompliant suggestions will be rejected automatically.
