@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "sens"
+version = "0.1.0"
+description = ""
+authors = ["renyicao <renyi.cao@qq.com>"]
+readme = "README.md"
+packages = [{include = "sens", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+psycopg2 = "^2.9.10"
+fastapi = "^0.115.12"
+uvicorn = "^0.34.2"
+openai = "^1.76.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+black = "^25.1.0"
+pre-commit = "^4.2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
