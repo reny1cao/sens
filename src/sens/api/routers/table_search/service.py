@@ -1,7 +1,9 @@
 """Service implementation for table search operations."""
 
 import logging
+import sys
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends
@@ -100,6 +102,71 @@ class TableSearchService:
                 for format in self._index.index.table_formats.values()
             },
         }
+
+    def get_detailed_index(self) -> Dict[str, Any]:
+        """Get detailed information about the index structure.
+
+        Returns:
+            Dictionary containing detailed index information
+        """
+        try:
+            token_map = self._index.index.token_map
+            table_formats = self._index.index.table_formats
+
+            # Calculate token details
+            tokens = {}
+            for token, tables in token_map.items():
+                token_memory = sys.getsizeof(token) + sum(
+                    sys.getsizeof(t) for t in tables
+                )
+                tokens[token] = {
+                    "token": token,
+                    "tables": list(tables),
+                    "frequency": len(tables),
+                    "memory_bytes": token_memory,
+                }
+
+            # Calculate table tokenization details
+            tables = {}
+            for table_name, case_format in table_formats.items():
+                table_tokens = self._index._tokenize(table_name)
+                table_memory = sys.getsizeof(table_name) + sum(
+                    sys.getsizeof(t) for t in table_tokens
+                )
+                tables[table_name] = {
+                    "table_name": table_name,
+                    "tokens": table_tokens,
+                    "case_format": case_format.value,
+                    "memory_bytes": table_memory,
+                }
+
+            # Find most common tokens
+            token_frequencies = Counter(
+                {t: len(tables) for t, tables in token_map.items()}
+            )
+            most_common = [
+                tokens[token] for token, _ in token_frequencies.most_common(10)
+            ]
+
+            # Calculate memory distribution
+            memory_distribution = {
+                "tokens": sum(t["memory_bytes"] for t in tokens.values()),
+                "tables": sum(t["memory_bytes"] for t in tables.values()),
+                "overhead": (sys.getsizeof(token_map) + sys.getsizeof(table_formats)),
+            }
+
+            return {
+                "total_tables": len(table_formats),
+                "total_tokens": len(token_map),
+                "total_memory_bytes": self._index.index._current_size_bytes,
+                "tokens": tokens,
+                "tables": tables,
+                "most_common_tokens": most_common,
+                "memory_distribution": memory_distribution,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get detailed index: {str(e)}")
+            raise ServiceError(f"Failed to get detailed index: {str(e)}")
 
     def refresh_index(self) -> Dict[str, Any]:
         """Refresh the search index with latest schema.

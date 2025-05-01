@@ -4,7 +4,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .models import IndexStatsResponse, RefreshResponse, TableSearchResponse
+from .models import (
+    DetailedIndexResponse,
+    IndexStatsResponse,
+    RefreshResponse,
+    TableSearchResponse,
+)
 from .service import TableSearchService
 
 router = APIRouter(
@@ -41,6 +46,18 @@ async def get_index_stats(
     try:
         stats = service.get_index_stats()
         return IndexStatsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/structure", response_model=DetailedIndexResponse)
+async def get_index_structure(
+    service: TableSearchService = Depends(get_service),
+) -> DetailedIndexResponse:
+    """Get detailed information about the index structure."""
+    try:
+        result = service.get_detailed_index()
+        return DetailedIndexResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
