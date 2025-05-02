@@ -18,6 +18,89 @@ class TokenIndexBuilder:
         self.index = TokenIndex()
         self._logger = self._setup_logger()
 
+    def load_from_schema(self, schema_path: str) -> None:
+        """Load table names from a schema JSON file and build the index.
+
+        Args:
+            schema_path: Path to the schema metadata JSON file.
+        """
+        self._logger.info(
+            json.dumps(
+                {
+                    "event": "load_from_schema_start",
+                    "schema_path": schema_path,
+                    "timestamp": self._get_timestamp(),
+                }
+            )
+        )
+        try:
+            with open(schema_path, "r") as f:
+                schema_data = json.load(f)
+
+            # Extract table names (handle potential missing 'tables' key)
+            table_names = [table["name"] for table in schema_data.get("tables", [])]
+            if not table_names:
+                self._logger.warning(
+                    json.dumps(
+                        {
+                            "event": "load_from_schema_no_tables",
+                            "schema_path": schema_path,
+                            "timestamp": self._get_timestamp(),
+                        }
+                    )
+                )
+                return  # Nothing to index
+
+            # Reset the index before building
+            self.index = TokenIndex()
+            self.build_index(table_names)
+
+            self._logger.info(
+                json.dumps(
+                    {
+                        "event": "load_from_schema_complete",
+                        "table_count": len(table_names),
+                        "schema_path": schema_path,
+                        "timestamp": self._get_timestamp(),
+                    }
+                )
+            )
+
+        except FileNotFoundError:
+            self._logger.error(
+                json.dumps(
+                    {
+                        "event": "load_from_schema_file_not_found",
+                        "schema_path": schema_path,
+                        "timestamp": self._get_timestamp(),
+                    }
+                )
+            )
+            raise  # Re-raise the exception
+        except json.JSONDecodeError:
+            self._logger.error(
+                json.dumps(
+                    {
+                        "event": "load_from_schema_invalid_json",
+                        "schema_path": schema_path,
+                        "timestamp": self._get_timestamp(),
+                    }
+                )
+            )
+            raise  # Re-raise the exception
+        except Exception as e:
+            self._logger.exception(
+                json.dumps(
+                    {
+                        "event": "load_from_schema_error",
+                        "schema_path": schema_path,
+                        "error": str(e),
+                        "timestamp": self._get_timestamp(),
+                    }
+                )
+            )
+            raise  # Re-raise for higher level handling
+
     def build_index(self, table_names: List[str]) -> None:
         """Build the token index from a list of table names.
 
