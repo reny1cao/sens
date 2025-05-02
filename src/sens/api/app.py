@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .routers.column_search.router import router as column_search_router
 from .routers.table_search.router import router as table_search_router
 
 app = FastAPI(
@@ -22,6 +23,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(table_search_router)
+app.include_router(column_search_router)
 
 
 @app.get("/health")
