@@ -5,7 +5,7 @@ from typing import List
 
 import pytest
 
-from sens.token_index import TokenIndexBuilder
+from sens.retrieval import TokenIndexBuilder
 
 
 @pytest.fixture
