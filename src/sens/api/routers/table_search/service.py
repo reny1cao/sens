@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends
 
+from sens.retrieval import TokenIndexBuilder
 from sens.schema import SchemaExtractor
-from sens.token_index import TokenIndexBuilder
 
 from ...common.errors import ServiceError
 
