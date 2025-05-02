@@ -1,10 +1,7 @@
-"""Retrieval components for schema elements (embedding, token, etc.)."""
+"""Retrieval components, including token and embedding based methods."""
 
-# Embedding Search Components
-# Token Index Components (assuming these files were moved here)
-from .builder import TokenIndexBuilder
-from .embedding_search import EmbeddingSearch, top_columns
-from .models import CaseFormat, TokenIndex
+from .embedding import EmbeddingSearch, top_columns
+from .token import CaseFormat, TokenIndex, TokenIndexBuilder
 
 __all__ = [
     # Embedding

@@ -2,7 +2,7 @@
 
 import pytest
 
-from sens.retrieval import CaseFormat, TokenIndex, TokenIndexBuilder
+from sens.retrieval.token import CaseFormat, TokenIndex, TokenIndexBuilder
 
 
 @pytest.fixture

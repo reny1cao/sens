@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from sens.retrieval import EmbeddingSearch, top_columns
+from sens.retrieval.embedding import EmbeddingSearch, top_columns
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ def test_top_columns_api(schema_file, index_dir, monkeypatch):
     search.build_index(str(schema_file))
 
     # Patch the global instance
-    monkeypatch.setattr("sens.retrieval.embedding_search._embedding_search", search)
+    monkeypatch.setattr("sens.retrieval.embedding.search._embedding_search", search)
 
     # Test API
     results = top_columns("user name", k=2)

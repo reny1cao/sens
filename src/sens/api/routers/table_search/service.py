@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends
 
-from sens.retrieval import TokenIndexBuilder
+from sens.retrieval.token import TokenIndexBuilder
 from sens.schema import SchemaExtractor
 
 from ...common.errors import ServiceError
