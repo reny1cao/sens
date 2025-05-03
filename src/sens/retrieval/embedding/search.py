@@ -36,7 +36,7 @@ class EmbeddingSearch:
         self.index_dir.mkdir(parents=True, exist_ok=True)
 
         self.dimension = dimension
-        self.index: Optional[faiss.IndexHNSWFlatIP] = None
+        self.index: Optional[faiss.IndexHNSWFlat] = None
         self.lookup: Dict[int, Tuple[str, str]] = {}  # id -> (table, column)
 
     def _build_column_text(self, table: str, column: str, description: str = "") -> str:
@@ -93,7 +93,7 @@ class EmbeddingSearch:
 
         # Build FAISS index using Inner Product (Cosine Similarity for normalized vectors)
         # Note: Higher scores will now indicate greater similarity.
-        self.index = faiss.IndexHNSWFlatIP(self.dimension, 32)  # IP for Inner Product
+        self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         self.index.hnsw.efConstruction = 200  # More thorough index construction
         self.index.add(embeddings)
 
