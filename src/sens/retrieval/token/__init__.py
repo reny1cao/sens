@@ -1,4 +1,4 @@
-"""Token Index Builder for efficient table name lookups."""
+"""Token-based retrieval components."""
 
 from .builder import TokenIndexBuilder
 from .models import CaseFormat, TokenIndex

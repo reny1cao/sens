@@ -53,6 +53,45 @@ This project follows strict principles to maintain simplicity, reliability, and 
     - Avoid N+1 database queries; suggest caching or batched queries where sensible.
     - Benchmark critical retrieval paths when adding new DB interactions.
 
+## Architectural Code Organization Rules
+
+**13. Organize by Responsibility, Not Layers**
+- All source code under `src/sens/` must be grouped by **domain responsibility** (e.g., retrieval, schema, llm), not technical roles (like “services” or “helpers”).
+- While specific folder layouts may vary, they should reflect **clear ownership boundaries** and **single-purpose modules**.
+- For example:
+
+  ```
+  src/sens/
+  ├── api/              # FastAPI entrypoint & route bindings
+  ├── retrieval/        # Token/embedding-based table/column retrieval
+  ├── schema/           # Schema extraction and FK graph traversal
+  ├── llm/              # Prompt builders, LLM output parsers
+  ├── validation/       # SQL safety, cost, structure checks
+  └── tests/            # Unit tests per module
+  ```
+
+  > 📌 This is a conceptual illustration. The project is not bound to match this layout exactly.
+
+
+**14. Naming Must Be Descriptive and Specific**
+- Cursor must **propose filenames that reflect the function or domain** of the module with high clarity.
+- The following are **forbidden** as top-level modules or filenames:
+  - ❌ `service.py`, `handler.py`, `main.py`, `utils.py`, `core.py`
+- Instead, Cursor must **name files by what they specifically do or own**:
+  - ✅ `token_index.py`, `embedding_index.py`, `intent_extractor.py`, `schema_extractor.py`, `sql_validator.py`
+- For multi-entity files, prefer domain-qualified names:
+  - ✅ `query_orchestrator.py`, `prompt_builder.py`
+  - ❌ `pipeline.py`, `processor.py`
+
+> 💡 When unsure, Cursor should first propose 2–3 naming options and explain the reasoning behind each before finalizing a file or module name.
+
+
+**15. Agent-Compatible Interfaces Only**
+- Logic modules under `/retrieval/`, `/schema/`, `/llm/`, etc. must expose **pure Python functions or classes**, callable from API, agent, or CLI.
+- These modules must remain **free of FastAPI-specific or global-state code**.
+- Cursor should default to writing these modules as **composable and testable building blocks**, not coupled handlers.
+
+
 ## Cursor Behavior Expectations
 
 - ✏️ Always propose the simplest viable solution first.
