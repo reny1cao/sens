@@ -42,10 +42,12 @@ def main():
 
         # Extract and save the schema
         logger.info("Connecting to database and extracting schema...")
-        # Pass the specific path to extract_and_save
-        _ = extractor.extract_and_save(output_path=schema_output_path)
+        # Call extract_and_save without output_path, assuming internal handling
+        _ = extractor.extract_and_save()
 
-        logger.info(f"Schema extracted successfully to {schema_output_path}")
+        logger.info(
+            "Schema extracted successfully (path determined by SchemaExtractor)"
+        )
 
     except Exception as e:
         logger.exception(f"Failed to extract schema: {e}")
