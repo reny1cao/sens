@@ -17,7 +17,6 @@ This project follows strict principles to maintain simplicity, reliability, and 
    - Always outline a short "Planning Trace" explaining steps before generating code.
    - No direct code output without an explicit plan.
 
-
 3. **One Module, One Responsibility**
    - Each script/class/module must serve a single, clear purpose.
    - Example: `schema_extractor.py` for extraction, `query_planner.py` for SQL planning.
@@ -26,37 +25,47 @@ This project follows strict principles to maintain simplicity, reliability, and 
    - Log all agent plans, generated SQL, and actions using structured (JSON-format preferred) logging.
    - No hidden agent behaviors or opaque decisions.
 
-## Extended Quality and Security Standards
+5. **Model Honesty and Real Solutions**
+   - All code and logic must represent real, working solutions—no mock functions, stubs, or shortcuts to "fake" functionality.
+   - Every implementation must be production-viable and reflect the true system behavior.
+   - No placeholder or TODO comments without immediate implementation plans.
 
-7. **Mandatory Test Coverage**
+## Quality and Security Standards
+
+6. **Mandatory Test Coverage**
    - Every new module must ship with at least one passing unit test placed in `/tests/`.
    - No module merges without baseline test coverage.
 
-8. **Prompt and Configuration Hygiene**
+7. **Prompt and Configuration Hygiene**
    - All prompts must be stored under `/prompts/`, version-controlled.
    - No ad-hoc hardcoded prompts buried inside logic files.
 
-9. **Secrets Management Discipline**
+8. **Secrets Management Discipline**
    - Never embed credentials, API keys, or database strings directly in source code.
    - Always use environment variables (`.env`) and maintain an updated `.env.example` for onboarding.
 
-10. **Dependency Management via Poetry**
+9. **Dependency Management via Poetry**
     - **Poetry is the mandatory dependency manager.**
     - All project dependencies must be declared cleanly in `pyproject.toml`.
     - No direct use of `pip`, `pipenv`, `requirements.txt`, or manual installs.
     - Environments must be reproducible via `poetry install`.
 
-11. **Dependency Justification**
+10. **Dependency Justification**
     - Any new runtime dependency must be explicitly justified in the PR description (why it's needed, what it replaces, why no standard library alternative suffices).
 
-12. **Performance Mindfulness**
+11. **Performance Mindfulness**
     - Avoid N+1 database queries; suggest caching or batched queries where sensible.
     - Benchmark critical retrieval paths when adding new DB interactions.
 
+12. **Comment Discipline**
+    - Only include comments that clarify non-obvious logic or intent.
+    - Avoid redundant, obvious, or boilerplate comments; code should be self-explanatory where possible.
+    - No comments that merely restate what the code does.
+
 ## Architectural Code Organization Rules
 
-**13. Organize by Responsibility, Not Layers**
-- All source code under `src/sens/` must be grouped by **domain responsibility** (e.g., retrieval, schema, llm), not technical roles (like “services” or “helpers”).
+13. **Organize by Responsibility, Not Layers**
+- All source code under `src/sens/` must be grouped by **domain responsibility** (e.g., retrieval, schema, llm), not technical roles (like "services" or "helpers").
 - While specific folder layouts may vary, they should reflect **clear ownership boundaries** and **single-purpose modules**.
 - For example:
 
@@ -72,8 +81,7 @@ This project follows strict principles to maintain simplicity, reliability, and 
 
   > 📌 This is a conceptual illustration. The project is not bound to match this layout exactly.
 
-
-**14. Naming Must Be Descriptive and Specific**
+14. **Naming Must Be Descriptive and Specific**
 - Cursor must **propose filenames that reflect the function or domain** of the module with high clarity.
 - The following are **forbidden** as top-level modules or filenames:
   - ❌ `service.py`, `handler.py`, `main.py`, `utils.py`, `core.py`
@@ -85,12 +93,10 @@ This project follows strict principles to maintain simplicity, reliability, and 
 
 > 💡 When unsure, Cursor should first propose 2–3 naming options and explain the reasoning behind each before finalizing a file or module name.
 
-
-**15. Agent-Compatible Interfaces Only**
+15. **Agent-Compatible Interfaces Only**
 - Logic modules under `/retrieval/`, `/schema/`, `/llm/`, etc. must expose **pure Python functions or classes**, callable from API, agent, or CLI.
 - These modules must remain **free of FastAPI-specific or global-state code**.
 - Cursor should default to writing these modules as **composable and testable building blocks**, not coupled handlers.
-
 
 ## Cursor Behavior Expectations
 
