@@ -37,8 +37,11 @@ class TokenIndexBuilder:
             with open(schema_path, "r") as f:
                 schema_data = json.load(f)
 
-            # Extract table names (handle potential missing 'tables' key)
-            table_names = [table["name"] for table in schema_data.get("tables", [])]
+            # Extract table names from the dictionary structure
+            table_names = [
+                table_info["name"]
+                for table_info in schema_data.get("tables", {}).values()
+            ]
             if not table_names:
                 self._logger.warning(
                     json.dumps(
