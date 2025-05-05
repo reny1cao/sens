@@ -1,8 +1,13 @@
+"""Intent extraction from natural language queries."""
+
+import re
 from pathlib import Path
 from typing import Optional
 
 import structlog
 from openai import OpenAI
+
+from sens.config import settings
 
 from .models import Intent
 
@@ -12,77 +17,134 @@ log = structlog.get_logger()
 class IntentExtractor:
     """
     Extracts structured intent from natural language questions about database schemas.
-    Uses OpenAI's API to parse questions and return validated Intent objects.
+    Uses OpenRouter's API to parse questions and return validated Intent objects.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", prompt_path: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, prompt_path: Optional[Path] = None):
         """
         Initialize the IntentExtractor.
 
         Args:
-            model: OpenAI model to use for extraction
-            prompt_path: Optional path to custom prompt template
+            model: Optional override for the model to use
+            prompt_path: Optional path to custom prompt template (as Path object)
+
+        Raises:
+            ValueError: If required settings are missing
+            FileNotFoundError: If prompt template cannot be found
         """
-        self.client = OpenAI()
-        self.model = model
+        # Initialize OpenAI client with OpenRouter config
+        cfg = settings.get_openrouter_config()
+        self.client = OpenAI(
+            base_url=cfg["base_url"],
+            api_key=cfg["api_key"],
+            default_headers=cfg["headers"],
+        )
+
+        # Get primary and fallback models
+        self.models = settings.get_models_for(
+            "intent_extractor", [model] if model else None
+        )
         self._load_prompt(prompt_path)
 
-    def _load_prompt(self, path: Optional[str] = None) -> None:
+    def _load_prompt(self, path: Optional[Path] = None) -> None:
         """
-        Load the prompt template from file.
+        Load the prompt template from file or use default.
 
         Args:
-            path: Optional custom path to prompt template
+            path: Optional Path to custom prompt template
+
+        Raises:
+            FileNotFoundError: If prompt template cannot be found
         """
-        if not path:
-            path = Path(__file__).parent.parent.parent / "prompts/llm/intent.txt"
-        self.template = Path(path).read_text()
-        log.info("prompt_loaded", path=str(path))
+        if path:
+            if not path.exists():
+                raise FileNotFoundError(f"Custom prompt not found at {path}")
+            self.template = path.read_text()
+        else:
+            # Look for the prompt file in the llm/prompts directory
+            default_path = Path(__file__).parent / "prompts" / "intent.txt"
+            if not default_path.exists():
+                raise FileNotFoundError(
+                    f"Default prompt template not found at {default_path}"
+                )
+            self.template = default_path.read_text()
+
+    def _clean_json_response(self, raw_response: str) -> str:
+        """
+        Clean the JSON response from markdown code blocks and other formatting.
+
+        Args:
+            raw_response: The raw response from the API
+
+        Returns:
+            Clean JSON string
+        """
+        # Remove markdown code blocks if present
+        json_match = re.search(r"```(?:json)?\n(.*?)\n```", raw_response, re.DOTALL)
+        if json_match:
+            return json_match.group(1).strip()
+        return raw_response.strip()
+
+    def _validate_inputs(self, question: str, schema_snippet: str) -> None:
+        """
+        Validate input parameters.
+
+        Args:
+            question: The question to validate
+            schema_snippet: The schema to validate
+
+        Raises:
+            ValueError: If inputs are invalid
+        """
+        if not question or not question.strip():
+            raise ValueError("Question cannot be empty")
+        if not schema_snippet or not schema_snippet.strip():
+            raise ValueError("Schema cannot be empty")
+
+        # Basic schema validation - must contain at least one TABLE definition
+        if not re.search(r"TABLE\s+\w+\s*\(", schema_snippet, re.IGNORECASE):
+            raise ValueError(
+                "Invalid schema format: must contain at least one TABLE definition"
+            )
 
     def extract(self, question: str, schema_snippet: str) -> Intent:
         """
-        Extract structured intent from a natural language question.
+        Extract intent from a natural language question about a database schema.
 
         Args:
-            question: User's natural language question
-            schema_snippet: Relevant database schema context
+            question: The natural language question to analyze
+            schema_snippet: Relevant portion of the database schema
 
         Returns:
-            Intent: Structured intent with confidence score
+            Intent object containing the structured understanding of the query
 
         Raises:
-            ValidationError: If LLM output doesn't match Intent schema
-            OpenAIError: For API-related issues
+            ValueError: If inputs are invalid or if the LLM response cannot be parsed
         """
-        log.info("extracting_intent", phase="intent_extraction", question=question)
+        # Validate inputs
+        self._validate_inputs(question, schema_snippet)
 
         prompt = self.template.format(question=question, schema_snippet=schema_snippet)
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,  # Deterministic
-                response_format={"type": "json_object"},
-            )
-
-            raw_json = response.choices[0].message.content
-            intent = Intent.model_validate_json(raw_json)
-
-            log.info(
-                "intent_extracted",
-                phase="intent_extraction",
-                intent=intent.model_dump(),
-                confidence=intent.confidence,
-            )
-
-            return intent
-
-        except Exception as e:
-            log.error(
-                "intent_extraction_failed",
-                phase="intent_extraction",
-                error=str(e),
-                question=question,
-            )
-            raise
+        # Try primary model first, fall back if needed
+        for model in self.models:
+            try:
+                resp = self.client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    response_format={"type": "json_object"},
+                )
+                raw_json = resp.choices[0].message.content.strip()
+                cleaned_json = self._clean_json_response(raw_json)
+                intent = Intent.model_validate_json(cleaned_json)
+                log.info("intent_extracted", intent=intent.model_dump(), model=model)
+                return intent
+            except Exception as e:
+                if model == self.models[-1]:  # Last model in the list
+                    log.error("intent_extraction_failed", error=str(e), model=model)
+                    raise ValueError(f"Failed to extract intent: {str(e)}")
+                log.warning(
+                    "model_attempt_failed", error=str(e), model=model, will_retry=True
+                )
+                continue

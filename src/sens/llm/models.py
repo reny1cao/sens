@@ -46,10 +46,8 @@ class Intent(BaseModel):
         description="The LLM's confidence score (0.0 to 1.0) in the accuracy of the extracted intent.",
     )
 
-    class Config:
-        """Configuration for the Intent model."""
-
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "query_type": "aggregation",
                 "tables": ["movie"],
@@ -57,5 +55,6 @@ class Intent(BaseModel):
                 "conditions": ["release_year = 2023"],
                 "confidence": 0.93,
             }
-        }
-        use_enum_values = True
+        },
+        "use_enum_values": True,
+    }

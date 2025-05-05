@@ -1,13 +1,7 @@
 import logging
-from typing import Dict, List  # Assuming List and Dict will be needed
+from typing import Dict, List
 
-# Import the context model
 from .models import RetrievedColumn, RetrievedContext, RetrievedTable
-
-# Placeholder for actual index implementations (to be imported later)
-# from .token_index import TokenIndex # Assuming location
-# from .embedding_index import EmbeddingIndex # Assuming location
-# from ..schema.graph import SchemaGraph # Assuming location for schema info
 
 logger = logging.getLogger(__name__)
 

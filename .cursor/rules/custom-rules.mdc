@@ -37,7 +37,7 @@ This project follows strict principles to maintain simplicity, reliability, and 
    - No module merges without baseline test coverage.
 
 7. **Prompt and Configuration Hygiene**
-   - All prompts must be stored under `/prompts/`, version-controlled.
+   - All prompts must be stored under `/llm/prompts/`, version-controlled.
    - No ad-hoc hardcoded prompts buried inside logic files.
 
 8. **Secrets Management Discipline**

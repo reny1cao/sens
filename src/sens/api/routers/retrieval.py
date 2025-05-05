@@ -140,10 +140,7 @@ async def get_orchestrator() -> RetrievalOrchestrator:
     global _token_service_instance, _embedding_search_instance
 
     try:
-        # --- Get/Instantiate Real Dependencies ---
-
         # SchemaGraph (Singleton via get_instance)
-        # Assumes SchemaGraph can find 'config/schema_metadata.json' or is configured
         schema_g = SchemaGraph.get_instance()
 
         # TokenIndex (via TableSearchService Singleton)
