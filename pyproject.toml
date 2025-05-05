@@ -17,6 +17,7 @@ sentence-transformers = "^2.5.1"
 faiss-cpu = "^1.8.0"
 numpy = "^1.26.4"
 torch = "2.2.1"
+structlog = "^25.3.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -51,3 +52,9 @@ extend-ignore = [
     "D401"   # First line should be in imperative mood
 ]
 docstring-convention = "google"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "timeout: marks tests with timeout constraints"
+]
