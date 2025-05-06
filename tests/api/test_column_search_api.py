@@ -4,8 +4,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-# Assuming your main app object is in src/sens/api/app.py
-from src.sens.api.app import app
+from sens.api.app import app
 
 client = TestClient(app)
 
