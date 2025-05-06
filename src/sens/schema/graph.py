@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from typing import ClassVar, Dict, List, Optional, Set, Tuple
 
+from sens.settings import get_settings
+
 # Use the Pydantic models for schema validation and structure
 from .schema_extractor import (
     ColumnInfo,
@@ -14,7 +16,9 @@ from .schema_extractor import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SCHEMA_PATH = "config/schema_metadata.json"
+# Get schema path from settings
+settings = get_settings()
+DEFAULT_SCHEMA_PATH = str(settings.schema_path)
 
 
 class SchemaGraph:
@@ -141,6 +145,24 @@ class SchemaGraph:
             A list of primary key column names.
         """
         return self._pk_map.get(table_name, [])
+
+    def get_table_columns(self, table_name: str) -> List[str]:
+        """Get all column names for a given table.
+
+        Args:
+            table_name: The name of the table to get columns for.
+
+        Returns:
+            A list of column names.
+        """
+        try:
+            with open(self.schema_path, "r") as f:
+                schema_data = DatabaseSchema.model_validate_json(f.read())
+                if table_name in schema_data.tables:
+                    return [col.name for col in schema_data.tables[table_name].columns]
+        except Exception as e:
+            logger.error(f"Failed to get columns for table {table_name}: {e}")
+        return []
 
     def get_table_fks_involved(
         self, table_name: str, involved_tables: Set[str]

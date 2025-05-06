@@ -1,0 +1,92 @@
+Database Schema:
+
+Table tv_show {
+  id: bigint (primary key) (not null)
+    # Primary unique identifier
+  created_date: timestamp with time zone (not null)
+    # Date when this record was created
+  modified_date: timestamp with time zone (not null)
+    # Date when this record was last modified
+  available_globally: boolean
+    # A flag that indicates if this title is available outside US
+  locale: character varying
+    # The original language/region of the TV show
+  original_title: character varying
+    # The TV show title in its original language
+  release_date: date
+    # Date when this title was released
+  title: character varying (not null)
+    # The TV show title
+}
+
+Table season {
+  id: bigint (primary key) (not null)
+    # Primary unique identifier
+  created_date: timestamp with time zone (not null)
+    # Date when this record was created
+  modified_date: timestamp with time zone (not null)
+    # Date when this record was last modified
+  original_title: character varying
+    # The season title in its original language
+  release_date: date
+    # Date when this title was released
+  runtime: bigint
+    # The total runtime in minutes
+  season_number: integer
+    # The season number
+  title: character varying (not null)
+    # The season title
+  tv_show_id: bigint
+    # The TV show that this season belongs to
+  → tv_show via (tv_show_id)
+}
+
+Table movie {
+  id: bigint (primary key) (not null)
+    # Primary unique identifier
+  created_date: timestamp with time zone (not null)
+    # Date when this record was created
+  modified_date: timestamp with time zone (not null)
+    # Date when this record was last modified
+  available_globally: boolean
+    # A flag that indicates if this title is available outside US
+  locale: character varying
+    # The original language/region of the movie
+  original_title: character varying
+    # The movie title in its original language
+  release_date: date
+    # Date when this title was released
+  runtime: bigint
+    # The total runtime in minutes
+  title: character varying (not null)
+    # The movie title
+}
+
+Table view_summary {
+  id: bigint (primary key) (not null)
+    # Primary unique identifier
+  created_date: timestamp with time zone (not null)
+    # Date when this record was created
+  modified_date: timestamp with time zone (not null)
+    # Date when this record was last modified
+  cumulative_weeks_in_top10: integer
+    # The number of cumulative weeks in top 10 list
+  duration: character varying (not null)
+    # The duration of the period this summary refers to
+  end_date: date (not null)
+    # The last day of the period this summary refers to
+  hours_viewed: integer (not null)
+    # The total hours viewed during this period
+  start_date: date (not null)
+    # The first day of the period this summary refers to
+  view_rank: integer
+    # The rank during this period
+  views: integer
+    # The number of views during this period
+  movie_id: bigint
+    # The movie for this weekly summary
+  season_id: bigint
+    # The season for this weekly summary
+  → movie via (movie_id)
+  → season via (season_id)
+}

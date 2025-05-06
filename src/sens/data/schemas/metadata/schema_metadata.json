@@ -1,0 +1,464 @@
+{
+  "tables": {
+    "tv_show": {
+      "name": "tv_show",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": true,
+          "foreign_key": null,
+          "description": "Primary unique identifier"
+        },
+        {
+          "name": "created_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was created"
+        },
+        {
+          "name": "modified_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was last modified"
+        },
+        {
+          "name": "available_globally",
+          "data_type": "boolean",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "A flag that indicates if this title is available outside US"
+        },
+        {
+          "name": "locale",
+          "data_type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The original language/region of the TV show"
+        },
+        {
+          "name": "original_title",
+          "data_type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The TV show title in its original language"
+        },
+        {
+          "name": "release_date",
+          "data_type": "date",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this title was released"
+        },
+        {
+          "name": "title",
+          "data_type": "character varying",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The TV show title"
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "row_count": 4552,
+      "description": null
+    },
+    "season": {
+      "name": "season",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": true,
+          "foreign_key": null,
+          "description": "Primary unique identifier"
+        },
+        {
+          "name": "created_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was created"
+        },
+        {
+          "name": "modified_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was last modified"
+        },
+        {
+          "name": "original_title",
+          "data_type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The season title in its original language"
+        },
+        {
+          "name": "release_date",
+          "data_type": "date",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this title was released"
+        },
+        {
+          "name": "runtime",
+          "data_type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The total runtime in minutes"
+        },
+        {
+          "name": "season_number",
+          "data_type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The season number"
+        },
+        {
+          "name": "title",
+          "data_type": "character varying",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The season title"
+        },
+        {
+          "name": "tv_show_id",
+          "data_type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The TV show that this season belongs to"
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "constraint_name": "fk_season_tv_show_id",
+          "from_table": "season",
+          "to_table": "tv_show",
+          "columns": [
+            {
+              "from_column": "tv_show_id",
+              "to_column": "id"
+            }
+          ]
+        }
+      ],
+      "row_count": 8251,
+      "description": null
+    },
+    "movie": {
+      "name": "movie",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": true,
+          "foreign_key": null,
+          "description": "Primary unique identifier"
+        },
+        {
+          "name": "created_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was created"
+        },
+        {
+          "name": "modified_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was last modified"
+        },
+        {
+          "name": "available_globally",
+          "data_type": "boolean",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "A flag that indicates if this title is available outside US"
+        },
+        {
+          "name": "locale",
+          "data_type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The original language/region of the movie"
+        },
+        {
+          "name": "original_title",
+          "data_type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The movie title in its original language"
+        },
+        {
+          "name": "release_date",
+          "data_type": "date",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this title was released"
+        },
+        {
+          "name": "runtime",
+          "data_type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The total runtime in minutes"
+        },
+        {
+          "name": "title",
+          "data_type": "character varying",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The movie title"
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "row_count": 11632,
+      "description": null
+    },
+    "view_summary": {
+      "name": "view_summary",
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": true,
+          "foreign_key": null,
+          "description": "Primary unique identifier"
+        },
+        {
+          "name": "created_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was created"
+        },
+        {
+          "name": "modified_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "Date when this record was last modified"
+        },
+        {
+          "name": "cumulative_weeks_in_top10",
+          "data_type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The number of cumulative weeks in top 10 list"
+        },
+        {
+          "name": "duration",
+          "data_type": "character varying",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The duration of the period this summary refers to"
+        },
+        {
+          "name": "end_date",
+          "data_type": "date",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The last day of the period this summary refers to"
+        },
+        {
+          "name": "hours_viewed",
+          "data_type": "integer",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The total hours viewed during this period"
+        },
+        {
+          "name": "start_date",
+          "data_type": "date",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The first day of the period this summary refers to"
+        },
+        {
+          "name": "view_rank",
+          "data_type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The rank during this period"
+        },
+        {
+          "name": "views",
+          "data_type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The number of views during this period"
+        },
+        {
+          "name": "movie_id",
+          "data_type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The movie for this weekly summary"
+        },
+        {
+          "name": "season_id",
+          "data_type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary": false,
+          "foreign_key": null,
+          "description": "The season for this weekly summary"
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "constraint_name": "fk_view_summary_movie_id",
+          "from_table": "view_summary",
+          "to_table": "movie",
+          "columns": [
+            {
+              "from_column": "movie_id",
+              "to_column": "id"
+            }
+          ]
+        },
+        {
+          "constraint_name": "fk_view_summary_season_id",
+          "from_table": "view_summary",
+          "to_table": "season",
+          "columns": [
+            {
+              "from_column": "season_id",
+              "to_column": "id"
+            }
+          ]
+        }
+      ],
+      "row_count": 35667,
+      "description": null
+    }
+  },
+  "relationships": [
+    {
+      "constraint_name": "fk_season_tv_show_id",
+      "from_table": "season",
+      "to_table": "tv_show",
+      "columns": [
+        {
+          "from_column": "tv_show_id",
+          "to_column": "id"
+        }
+      ]
+    },
+    {
+      "constraint_name": "fk_view_summary_movie_id",
+      "from_table": "view_summary",
+      "to_table": "movie",
+      "columns": [
+        {
+          "from_column": "movie_id",
+          "to_column": "id"
+        }
+      ]
+    },
+    {
+      "constraint_name": "fk_view_summary_season_id",
+      "from_table": "view_summary",
+      "to_table": "season",
+      "columns": [
+        {
+          "from_column": "season_id",
+          "to_column": "id"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "extracted_at": "2025-05-06T11:38:11.881202",
+    "database": "netflixdb"
+  }
+}

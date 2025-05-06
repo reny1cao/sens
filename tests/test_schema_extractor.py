@@ -5,11 +5,13 @@ from pathlib import Path
 import pytest
 
 from sens.schema import DatabaseSchema, SchemaExtractor
+from sens.settings import get_settings
 
 
 def test_schema_extraction(schema_extractor):
     """Test basic schema extraction."""
     schema = schema_extractor.extract_and_save()
+    settings = get_settings()
 
     # Basic validation
     assert isinstance(schema, DatabaseSchema)
@@ -18,8 +20,8 @@ def test_schema_extraction(schema_extractor):
     assert "metadata" in schema.model_dump()
 
     # Check if files were created
-    assert Path("config/schema_metadata.json").exists()
-    assert Path("config/schema_for_llm.txt").exists()
+    assert settings.schema_path.exists()
+    assert settings.llm_schema_path.exists()
 
 
 def test_table_structure(schema_extractor):

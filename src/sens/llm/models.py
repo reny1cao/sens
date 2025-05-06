@@ -167,3 +167,13 @@ class SQLGenerationError(Exception):
         self.message = message
         self.details = details or {}
         super().__init__(self.message)
+
+
+class IntentExtractionError(Exception):
+    """Custom exception for errors during intent extraction."""
+
+    def __init__(self, message: str, details: Optional[Dict] = None):
+        """Initialize the intent extraction error with a message and optional details."""
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)

@@ -1,15 +1,18 @@
-"""Intent extraction from natural language queries."""
+"""Intent extraction from natural language using LLMs."""
 
+import json
+import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 import structlog
 from openai import OpenAI
 
-from sens.config import settings
+from sens.schema.graph import SchemaGraph
+from sens.settings import get_settings
 
-from .models import Intent
+from .models import Intent, IntentExtractionError, QueryType
 
 log = structlog.get_logger()
 
@@ -32,12 +35,18 @@ class IntentExtractor:
             ValueError: If required settings are missing
             FileNotFoundError: If prompt template cannot be found
         """
+        # Get settings instance
+        settings = get_settings()
+
         # Initialize OpenAI client with OpenRouter config
         cfg = settings.get_openrouter_config()
         self.client = OpenAI(
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
-            default_headers=cfg["headers"],
+            default_headers={
+                "HTTP-Referer": str(cfg["referer"]),
+                "Title": cfg["title"],
+            },
         )
 
         # Get primary and fallback models

@@ -10,11 +10,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.sens.retrieval.embedding import EmbeddingSearch  # noqa: E402
-
-# --- Configuration ---
-# TODO: Consider moving these paths to a config file or environment variables
-DEFAULT_SCHEMA_PATH = "config/schema_metadata.json"
-DEFAULT_INDEX_DIR = "var/indices"
+from src.sens.settings import get_settings  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -29,8 +25,9 @@ def main():
     """Main function to build the embedding index."""
     logger.info("Starting embedding index build process...")
 
-    schema_path = os.getenv("SCHEMA_PATH", DEFAULT_SCHEMA_PATH)
-    index_dir = os.getenv("INDEX_DIR", DEFAULT_INDEX_DIR)
+    settings = get_settings()
+    schema_path = str(settings.schema_path)
+    index_dir = str(settings.index_dir)
 
     # Ensure schema file exists
     if not Path(schema_path).exists():
@@ -44,8 +41,6 @@ def main():
 
     try:
         # Initialize the embedding search component
-        # Ensure the index_dir is passed if it's configurable in EmbeddingSearch
-        # (Checking EmbeddingSearch implementation - it takes index_dir)
         searcher = EmbeddingSearch(index_dir=index_dir)
 
         # Build the index

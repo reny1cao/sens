@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, List
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -17,6 +18,58 @@ from sens.llm.models import (
 )
 from sens.llm.sql_generator import SQLGenerator
 from sens.schema.graph import SchemaGraph
+
+
+@pytest.fixture
+def mock_llm_response():
+    """Create a mock LLM response with a valid SQL query."""
+    return """Here's the SQL query to answer your question:
+```sql
+SELECT u.name, COUNT(o.id) as order_count
+FROM users u
+JOIN orders o ON u.id = o.user_id
+GROUP BY u.name
+ORDER BY order_count DESC;
+```
+This query will show all users and their order counts."""
+
+
+@pytest.fixture
+def mock_llm_error_response():
+    """Create a mock LLM response indicating an error."""
+    return "ERROR: Unable to generate SQL for the given schema."
+
+
+@pytest.fixture
+def mock_llm_invalid_response():
+    """Create a mock LLM response without SQL."""
+    return "I understand you want to query the database."
+
+
+@pytest.fixture
+def mock_openai_response(mock_llm_response):
+    """Create a mock OpenAI API response object."""
+
+    class MockUsage:
+        def __init__(self):
+            self.prompt_tokens = 100
+            self.completion_tokens = 50
+            self.total_tokens = 150
+
+    class MockMessage:
+        def __init__(self):
+            self.content = mock_llm_response
+
+    class MockChoice:
+        def __init__(self):
+            self.message = MockMessage()
+
+    class MockResponse:
+        def __init__(self):
+            self.choices = [MockChoice()]
+            self.usage = MockUsage()
+
+    return MockResponse()
 
 
 @pytest.fixture
@@ -295,3 +348,70 @@ def test_sql_generator_init(sql_generator):
     assert sql_generator.primary_model == "gpt-4"  # Default from settings
     assert sql_generator.max_tokens == 500  # Default value
     assert sql_generator.temperature == 0.1  # Default value
+
+
+@pytest.mark.asyncio
+async def test_call_llm_success(sql_generator, mock_openai_response, monkeypatch):
+    """Test successful LLM API call."""
+    mock_create = AsyncMock(return_value=mock_openai_response)
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    result = await sql_generator._call_llm("Test prompt")
+    assert "SELECT u.name" in result
+    assert "FROM users" in result
+    mock_create.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_call_llm_api_error(sql_generator, monkeypatch):
+    """Test LLM API error handling."""
+
+    async def mock_error(*args, **kwargs):
+        raise Exception("API Error")
+
+    mock_create = AsyncMock(side_effect=mock_error)
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    with pytest.raises(SQLGenerationError, match="Failed to generate SQL using LLM"):
+        await sql_generator._call_llm("Test prompt")
+
+
+@pytest.mark.asyncio
+async def test_call_llm_fallback(sql_generator, mock_openai_response, monkeypatch):
+    """Test fallback to secondary model on primary model failure."""
+    call_count = 0
+
+    async def mock_api_call(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:  # First call (primary model)
+            raise Exception("Primary model error")
+        return mock_openai_response  # Second call (fallback model)
+
+    mock_create = AsyncMock(side_effect=mock_api_call)
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    result = await sql_generator._call_llm("Test prompt")
+    assert call_count == 2  # Verify both models were tried
+    assert "SELECT u.name" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_end_to_end(
+    sql_generator, valid_intent, mock_openai_response, monkeypatch
+):
+    """Test the complete generation flow with mocked LLM."""
+    mock_create = AsyncMock(return_value=mock_openai_response)
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    result = await sql_generator.generate(
+        "How many orders does each user have?",
+        valid_intent,
+    )
+
+    assert isinstance(result, GeneratedSQL)
+    assert "SELECT u.name" in result.sql
+    assert "users" in result.tables_used
+    assert "orders" in result.tables_used
+    assert result.model_used == sql_generator.primary_model
+    assert result.generation_ms > 0

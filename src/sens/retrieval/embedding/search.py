@@ -11,6 +11,8 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+from sens.settings import get_settings
+
 # Configure structured logging
 logger = logging.getLogger(__name__)
 
@@ -21,18 +23,21 @@ class EmbeddingSearch:
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
-        index_dir: str = "var/indices",
+        index_dir: Optional[str] = None,
         dimension: int = 384,
     ):
         """Initialize the embedding search component.
 
         Args:
             model_name: Name of the sentence-transformer model to use
-            index_dir: Directory to store/load the FAISS index and lookup map
+            index_dir: Directory to store/load the FAISS index and lookup map. If None, uses settings.
             dimension: Embedding dimension (384 for MiniLM-L6)
         """
         self.model = SentenceTransformer(model_name)
-        self.index_dir = Path(index_dir)
+        if index_dir is None:
+            self.index_dir = get_settings().index_dir
+        else:
+            self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
 
         self.dimension = dimension

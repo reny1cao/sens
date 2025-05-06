@@ -1,7 +1,6 @@
 """Script to extract database schema and save it to a JSON file."""
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -10,10 +9,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.sens.schema import SchemaExtractor  # noqa: E402
-
-# --- Configuration ---
-# Output path for the schema metadata
-DEFAULT_SCHEMA_PATH = "config/schema_metadata.json"
+from src.sens.settings import get_settings  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -28,25 +24,36 @@ def main():
     """Main function to extract and save schema."""
     logger.info("Starting schema extraction process...")
 
-    schema_output_path = os.getenv("SCHEMA_PATH", DEFAULT_SCHEMA_PATH)
-    output_path_obj = Path(schema_output_path)
+    # Get settings
+    settings = get_settings()
+    schema_path = settings.schema_path
 
     # Ensure the output directory exists
-    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    schema_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Schema will be saved to: {schema_output_path}")
+    logger.info(f"Schema will be saved to: {schema_path}")
 
     try:
-        # Instantiate the extractor (assuming it reads DB config from env/defaults)
-        extractor = SchemaExtractor()
+        # Instantiate the extractor with database settings from environment
+        extractor = SchemaExtractor(
+            host=settings.db_host,
+            port=settings.db_port,
+            dbname=settings.db_name,
+            user=settings.db_user,
+            password=settings.db_password,
+        )
 
         # Extract and save the schema
         logger.info("Connecting to database and extracting schema...")
-        # Call extract_and_save without output_path, assuming internal handling
-        _ = extractor.extract_and_save()
+        schema = extractor.extract_and_save()
 
         logger.info(
-            "Schema extracted successfully (path determined by SchemaExtractor)"
+            "Schema extracted successfully",
+            extra={
+                "schema_path": str(schema_path),
+                "table_count": len(schema.tables),
+                "relationship_count": len(schema.relationships),
+            },
         )
 
     except Exception as e:

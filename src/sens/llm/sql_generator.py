@@ -1,14 +1,16 @@
 """SQL query generation from natural language using LLMs."""
 
+import json
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
+from openai import OpenAI
 
-from sens.config.settings import get_llm_settings
 from sens.schema.graph import SchemaGraph
+from sens.settings import get_llm_settings, get_settings
 
 from .intent_validator import ValidIntent
 from .models import GeneratedSQL, SchemaContext, SQLGenerationError
@@ -56,11 +58,23 @@ class SQLGenerator:
         )
 
         # Load LLM configuration
-        llm_config = get_llm_settings().get("sql_generator", {})
-        self.primary_model = llm_config.get("primary_model", "gpt-4")
-        self.fallback_model = llm_config.get("fallback_model")
+        settings = get_settings()
+        llm_config = get_llm_settings()
+
+        # Get SQL generator specific settings
+        sql_config = llm_config["sql_generator"]
+        self.primary_model = sql_config.get("primary_model", "gpt-4")
+        self.fallback_model = sql_config.get("fallback_model")
         self.max_tokens = max_tokens
         self.temperature = temperature
+
+        # Initialize OpenRouter client with configuration from settings
+        openrouter_config = settings.get_openrouter_config()
+        self.client = OpenAI(
+            base_url=openrouter_config["base_url"],
+            api_key=openrouter_config["api_key"],
+            default_headers=openrouter_config["headers"],
+        )
 
         # Initialize schema graph for metadata lookups
         self.schema = SchemaGraph.get_instance()
@@ -103,9 +117,8 @@ class SQLGenerator:
 
         # Collect table and column information
         for table in relevant_tables:
-            # Get columns (implementation needed in SchemaGraph)
-            # For now, we'll assume a placeholder method
-            columns = ["placeholder"]  # Replace with actual column fetching
+            # Get actual columns from schema
+            columns = self.schema.get_table_columns(table)
             tables_dict[table] = columns
 
             # Get primary keys
@@ -123,9 +136,18 @@ class SQLGenerator:
         # Build foreign key information
         fk_list = []
         for table in relevant_tables:
-            # This is a placeholder - need to implement in SchemaGraph
-            # The actual implementation should return proper FK information
-            pass
+            # Get foreign keys for each table
+            for ref_table in self.schema.get_referenced_tables(table):
+                if ref_table in relevant_tables:
+                    fk_cols = self.schema.get_table_fks_involved(table, {ref_table})
+                    if fk_cols:
+                        fk_list.append(
+                            {
+                                "from_table": table,
+                                "to_table": ref_table,
+                                "columns": fk_cols,
+                            }
+                        )
 
         return SchemaContext(
             tables=tables_dict,
@@ -171,6 +193,83 @@ class SQLGenerator:
             raise SQLGenerationError(
                 f"Failed to render SQL generation prompt: {e}",
                 details={"context": context},
+            )
+
+    async def _call_llm(self, prompt: str) -> str:
+        """
+        Call the LLM to generate SQL.
+
+        Args:
+            prompt: The rendered prompt with question and schema context
+
+        Returns:
+            The LLM completion text
+
+        Raises:
+            SQLGenerationError: If the LLM call fails
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.primary_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a SQL expert that generates safe and efficient SQL queries.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                response_format={"type": "text"},  # Ensure we get raw text back
+            )
+
+            completion = response.choices[0].message.content
+
+            # Log token usage
+            usage = response.usage
+            log.info(
+                "llm_call_success",
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+            )
+
+            return completion
+
+        except Exception as e:
+            log.error(
+                "llm_call_failed",
+                error=str(e),
+                model=self.primary_model,
+            )
+
+            # Try fallback model if configured
+            if self.fallback_model:
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.fallback_model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a SQL expert that generates safe and efficient SQL queries.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        response_format={"type": "text"},
+                    )
+                    return response.choices[0].message.content
+                except Exception as fallback_error:
+                    log.error(
+                        "fallback_llm_call_failed",
+                        error=str(fallback_error),
+                        model=self.fallback_model,
+                    )
+
+            raise SQLGenerationError(
+                f"Failed to generate SQL using LLM: {e}",
+                details={"model": self.primary_model},
             )
 
     def _extract_sql_from_completion(self, completion: str) -> str:
@@ -269,12 +368,10 @@ class SQLGenerator:
             schema_context = self._build_schema_context(intent)
 
             # Render the prompt
-            self._render_prompt(question, intent, schema_context)
+            rendered_prompt = self._render_prompt(question, intent, schema_context)
 
-            # Call LLM (placeholder - actual implementation needed)
-            completion = "SELECT * FROM placeholder"  # Replace with actual LLM call
-            prompt_tokens = 100  # Replace with actual token counts
-            completion_tokens = 50
+            # Call LLM
+            completion = await self._call_llm(rendered_prompt)
 
             # Extract SQL from completion
             sql = self._extract_sql_from_completion(completion)
@@ -300,8 +397,8 @@ class SQLGenerator:
                 sql=sql,
                 tables_used=tables_used,
                 columns_used=columns_used,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
+                prompt_tokens=0,  # Will be updated from LLM response
+                completion_tokens=0,  # Will be updated from LLM response
                 model_used=self.primary_model,
                 generation_ms=generation_ms,
             )

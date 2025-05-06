@@ -13,6 +13,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel, Field
 
+from sens.settings import get_settings
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -78,18 +80,30 @@ class DatabaseSchema(BaseModel):
 class SchemaExtractor:
     """Extracts and manages database schema information."""
 
-    def __init__(self, db_url: str = "postgresql://localhost/netflixdb"):
-        """Initialize the schema extractor.
+    def __init__(self, host=None, port=None, dbname=None, user=None, password=None):
+        """Initialize with database connection parameters."""
+        settings = get_settings()
 
-        Args:
-            db_url: Database connection URL
-        """
-        self.db_url = db_url
+        # Use provided values or fall back to settings
+        self.db_config = {
+            "host": host or settings.db_host,
+            "port": port or settings.db_port,
+            "dbname": dbname or settings.db_name,
+            "user": user or settings.db_user,
+            "password": password or settings.db_password,
+        }
+
         self.logger = logging.getLogger(__name__)
 
     def _get_connection(self):
         """Create a database connection."""
-        return psycopg2.connect(self.db_url)
+        return psycopg2.connect(
+            host=self.db_config["host"],
+            port=self.db_config["port"],
+            dbname=self.db_config["dbname"],
+            user=self.db_config["user"],
+            password=self.db_config["password"],
+        )
 
     def extract_basic_schema(self) -> Dict[str, TableInfo]:
         """Extract basic table and column information."""
@@ -308,11 +322,16 @@ class SchemaExtractor:
 
         return "\n".join(output)
 
-    def extract_and_save(self, config_dir: str = "config") -> DatabaseSchema:
+    def extract_and_save(self, config_dir: Optional[str] = None) -> DatabaseSchema:
         """Extract schema and save to files."""
         try:
-            # Ensure config directory exists
-            Path(config_dir).mkdir(parents=True, exist_ok=True)
+            settings = get_settings()
+            schema_path = (
+                Path(config_dir) / "schema_metadata.json"
+                if config_dir
+                else settings.schema_path
+            )
+            schema_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Extract basic schema
             self.logger.info("Extracting basic schema information...")
@@ -332,18 +351,17 @@ class SchemaExtractor:
                 relationships=relationships,
                 metadata={
                     "extracted_at": datetime.utcnow().isoformat(),
-                    "database": self.db_url.split("/")[-1],
+                    "database": self.db_config["dbname"],
                 },
             )
 
             # Save full schema
-            schema_path = Path(config_dir) / "schema_metadata.json"
             self.logger.info(f"Saving full schema to {schema_path}")
             with open(schema_path, "w") as f:
                 json.dump(schema.model_dump(), f, indent=2)
 
             # Save LLM-friendly version
-            llm_path = Path(config_dir) / "schema_for_llm.txt"
+            llm_path = schema_path.parent.parent / "prompts" / "schema_for_llm.txt"
             self.logger.info(f"Saving LLM format to {llm_path}")
             with open(llm_path, "w") as f:
                 f.write(self.format_for_llm(schema))

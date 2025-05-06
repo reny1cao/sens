@@ -1,0 +1,24 @@
+# Database Schema for LLM Context
+
+## Tables
+
+### users
+User account information
+- id (INTEGER, PK): Unique user identifier
+- email (VARCHAR(255), UNIQUE): User's email address
+- created_at (TIMESTAMP): Account creation timestamp
+
+### orders
+Customer order records
+- id (INTEGER, PK): Unique order identifier
+- user_id (INTEGER, FK->users.id): Reference to the user who placed the order
+- total_amount (DECIMAL(10,2)): Total order amount in dollars
+- status (VARCHAR(50)): Order status (pending, completed, cancelled)
+
+## Relationships
+- orders.user_id -> users.id (many-to-one): Each order belongs to one user
+
+## Usage Notes
+1. All monetary values are stored in USD
+2. Timestamps are in UTC
+3. Status values are lowercase

@@ -1,0 +1,70 @@
+{
+    "version": "1.0",
+    "database": "example_db",
+    "tables": [
+        {
+            "name": "users",
+            "description": "User account information",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INTEGER",
+                    "primary_key": true,
+                    "description": "Unique user identifier"
+                },
+                {
+                    "name": "email",
+                    "type": "VARCHAR(255)",
+                    "unique": true,
+                    "description": "User's email address"
+                },
+                {
+                    "name": "created_at",
+                    "type": "TIMESTAMP",
+                    "description": "Account creation timestamp"
+                }
+            ]
+        },
+        {
+            "name": "orders",
+            "description": "Customer order records",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INTEGER",
+                    "primary_key": true,
+                    "description": "Unique order identifier"
+                },
+                {
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "foreign_key": {
+                        "table": "users",
+                        "column": "id"
+                    },
+                    "description": "Reference to the user who placed the order"
+                },
+                {
+                    "name": "total_amount",
+                    "type": "DECIMAL(10,2)",
+                    "description": "Total order amount in dollars"
+                },
+                {
+                    "name": "status",
+                    "type": "VARCHAR(50)",
+                    "description": "Order status (pending, completed, cancelled)"
+                }
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "from_table": "orders",
+            "from_column": "user_id",
+            "to_table": "users",
+            "to_column": "id",
+            "type": "many_to_one",
+            "description": "Each order belongs to one user"
+        }
+    ]
+}
