@@ -138,6 +138,9 @@ def test_schema_list_format(index_dir):
         ]
     }
 
+    # Ensure the directory exists
+    index_dir.mkdir(parents=True, exist_ok=True)
+
     # Create temporary schema file
     schema_path = index_dir / "list_schema.json"
     with open(schema_path, "w") as f:
