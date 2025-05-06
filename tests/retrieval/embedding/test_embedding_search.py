@@ -14,15 +14,17 @@ from sens.retrieval.embedding import EmbeddingSearch, top_columns
 def sample_schema():
     """Create a sample schema for testing."""
     return {
-        "tables": [
-            {
+        "tables": {
+            "movie": {
                 "name": "movie",
                 "columns": [
                     {"name": "rating", "description": "Movie rating from 1 to 5 stars"},
                     {"name": "title", "description": "The title of the movie"},
                 ],
+                "primary_keys": ["id"],
+                "foreign_keys": [],
             },
-            {
+            "user": {
                 "name": "user",
                 "columns": [
                     {
@@ -31,8 +33,10 @@ def sample_schema():
                     },
                     {"name": "username", "description": "User's display name"},
                 ],
+                "primary_keys": ["user_id"],
+                "foreign_keys": [],
             },
-        ]
+        }
     }
 
 
@@ -103,3 +107,50 @@ def test_search_performance(schema_file, index_dir):
 
     # Verify latency requirement (relaxed for test dataset)
     assert duration_ms < 100, f"Search took {duration_ms:.2f}ms, exceeding 100ms limit"
+
+
+def test_schema_list_format(index_dir):
+    """Test that the search works with list-format schema."""
+    # Create schema with list format
+    list_schema = {
+        "tables": [
+            {
+                "name": "movie",
+                "columns": [
+                    {"name": "rating", "description": "Movie rating from 1 to 5 stars"},
+                    {"name": "title", "description": "The title of the movie"},
+                ],
+                "primary_keys": ["id"],
+                "foreign_keys": [],
+            },
+            {
+                "name": "user",
+                "columns": [
+                    {
+                        "name": "user_id",
+                        "description": "Unique identifier for the user",
+                    },
+                    {"name": "username", "description": "User's display name"},
+                ],
+                "primary_keys": ["user_id"],
+                "foreign_keys": [],
+            },
+        ]
+    }
+
+    # Create temporary schema file
+    schema_path = index_dir / "list_schema.json"
+    with open(schema_path, "w") as f:
+        json.dump(list_schema, f)
+
+    # Initialize search and build index
+    search = EmbeddingSearch(index_dir=str(index_dir))
+    search.build_index(str(schema_path))
+
+    # Test search functionality
+    results = search.search("rating", k=3)
+    assert len(results) == 3
+
+    # Verify movie.rating is in top results
+    top_hits = [(table, column) for table, column, _ in results]
+    assert ("movie", "rating") in top_hits

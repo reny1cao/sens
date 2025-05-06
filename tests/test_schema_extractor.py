@@ -45,10 +45,10 @@ def test_relationships(schema_extractor):
 
     # Check view_summary -> movie relationship
     view_to_movie = any(
-        rel["from_table"] == "view_summary"
-        and rel["to_table"] == "movie"
-        and rel["from_column"] == "movie_id"
-        and rel["to_column"] == "id"
+        rel.from_table == "view_summary"
+        and rel.to_table == "movie"
+        and rel.columns[0].from_column == "movie_id"
+        and rel.columns[0].to_column == "id"
         for rel in schema.relationships
     )
     assert view_to_movie, "View summary to movie relationship not found"
@@ -73,8 +73,15 @@ def test_llm_formatting(schema_extractor):
 
 def test_error_handling():
     """Test error handling with invalid connection."""
-    with pytest.raises(Exception):
-        extractor = SchemaExtractor(db_url="postgresql://invalid/db")
+    with pytest.raises(ValueError, match="Invalid database URL"):
+        extractor = SchemaExtractor(
+            db_url="postgresql://invalid:pass@localhost:5432/nonexistent"
+        )
+        extractor.extract_and_save()
+
+    # Test non-PostgreSQL URL
+    with pytest.raises(ValueError, match="Only PostgreSQL URLs are supported"):
+        extractor = SchemaExtractor(db_url="mysql://user:pass@localhost/db")
         extractor.extract_and_save()
 
 

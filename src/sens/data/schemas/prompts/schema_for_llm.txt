@@ -38,7 +38,7 @@ Table season {
     # The season title
   tv_show_id: bigint
     # The TV show that this season belongs to
-  → tv_show via (tv_show_id)
+  → tv_show via tv_show_id
 }
 
 Table movie {
@@ -87,6 +87,6 @@ Table view_summary {
     # The movie for this weekly summary
   season_id: bigint
     # The season for this weekly summary
-  → movie via (movie_id)
-  → season via (season_id)
+  → movie via movie_id
+  → season via season_id
 }

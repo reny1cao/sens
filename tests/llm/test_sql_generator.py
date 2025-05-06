@@ -194,7 +194,7 @@ def test_sql_generator_initialization(temp_prompt_file: Path):
     )
     assert generator.prompt_path.exists()
     assert generator.jinja_env is not None
-    assert generator.primary_model == "gpt-4"  # Default from settings
+    assert generator.primary_model == "openai/gpt-4"  # Default from settings
     assert generator.max_tokens == 500  # Default value
     assert generator.temperature == 0.1  # Default value
 
@@ -304,6 +304,22 @@ async def test_generate_extraction_error(sql_generator, valid_intent, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_call_llm_api_error(sql_generator, monkeypatch):
+    """Test LLM API error handling."""
+
+    async def mock_error(*args, **kwargs):
+        raise Exception("API Error")
+
+    mock_create = AsyncMock(side_effect=mock_error)
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    with pytest.raises(
+        SQLGenerationError, match="Failed to generate SQL with all available models"
+    ):
+        await sql_generator._call_llm("Test prompt")
+
+
+@pytest.mark.asyncio
 async def test_generate_validation_error(sql_generator, valid_intent, monkeypatch):
     """Test error during SQL validation."""
 
@@ -316,7 +332,7 @@ async def test_generate_validation_error(sql_generator, valid_intent, monkeypatc
         mock_validate,
     )
 
-    with pytest.raises(SQLGenerationError, match="Invalid SQL syntax"):
+    with pytest.raises(SQLGenerationError, match="Generated SQL failed validation"):
         await sql_generator.generate("Show me top shows", valid_intent)
 
 
@@ -345,7 +361,7 @@ def test_sql_generator_init(sql_generator):
     assert sql_generator.prompt_path.name == "sql_generation.prompt.txt"
     assert sql_generator.prompt_path.exists()
     assert sql_generator.jinja_env is not None
-    assert sql_generator.primary_model == "gpt-4"  # Default from settings
+    assert sql_generator.primary_model == "openai/gpt-4"  # Default from settings
     assert sql_generator.max_tokens == 500  # Default value
     assert sql_generator.temperature == 0.1  # Default value
 
@@ -360,20 +376,6 @@ async def test_call_llm_success(sql_generator, mock_openai_response, monkeypatch
     assert "SELECT u.name" in result
     assert "FROM users" in result
     mock_create.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_call_llm_api_error(sql_generator, monkeypatch):
-    """Test LLM API error handling."""
-
-    async def mock_error(*args, **kwargs):
-        raise Exception("API Error")
-
-    mock_create = AsyncMock(side_effect=mock_error)
-    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
-
-    with pytest.raises(SQLGenerationError, match="Failed to generate SQL using LLM"):
-        await sql_generator._call_llm("Test prompt")
 
 
 @pytest.mark.asyncio

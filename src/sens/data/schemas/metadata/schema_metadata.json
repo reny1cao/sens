@@ -9,7 +9,6 @@
           "is_nullable": false,
           "default_value": null,
           "is_primary": true,
-          "foreign_key": null,
           "description": "Primary unique identifier"
         },
         {
@@ -17,8 +16,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was created"
         },
         {
@@ -26,8 +23,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was last modified"
         },
         {
@@ -35,8 +30,6 @@
           "data_type": "boolean",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "A flag that indicates if this title is available outside US"
         },
         {
@@ -44,8 +37,6 @@
           "data_type": "character varying",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The original language/region of the TV show"
         },
         {
@@ -53,8 +44,6 @@
           "data_type": "character varying",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The TV show title in its original language"
         },
         {
@@ -62,8 +51,6 @@
           "data_type": "date",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this title was released"
         },
         {
@@ -71,8 +58,6 @@
           "data_type": "character varying",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The TV show title"
         }
       ],
@@ -92,7 +77,6 @@
           "is_nullable": false,
           "default_value": null,
           "is_primary": true,
-          "foreign_key": null,
           "description": "Primary unique identifier"
         },
         {
@@ -100,8 +84,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was created"
         },
         {
@@ -109,8 +91,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was last modified"
         },
         {
@@ -118,8 +98,6 @@
           "data_type": "character varying",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The season title in its original language"
         },
         {
@@ -127,8 +105,6 @@
           "data_type": "date",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this title was released"
         },
         {
@@ -136,8 +112,6 @@
           "data_type": "bigint",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The total runtime in minutes"
         },
         {
@@ -145,8 +119,6 @@
           "data_type": "integer",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The season number"
         },
         {
@@ -154,8 +126,6 @@
           "data_type": "character varying",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The season title"
         },
         {
@@ -163,8 +133,6 @@
           "data_type": "bigint",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The TV show that this season belongs to"
         }
       ],
@@ -196,7 +164,6 @@
           "is_nullable": false,
           "default_value": null,
           "is_primary": true,
-          "foreign_key": null,
           "description": "Primary unique identifier"
         },
         {
@@ -204,8 +171,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was created"
         },
         {
@@ -213,8 +178,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was last modified"
         },
         {
@@ -222,8 +185,6 @@
           "data_type": "boolean",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "A flag that indicates if this title is available outside US"
         },
         {
@@ -231,8 +192,6 @@
           "data_type": "character varying",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The original language/region of the movie"
         },
         {
@@ -240,8 +199,6 @@
           "data_type": "character varying",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The movie title in its original language"
         },
         {
@@ -249,8 +206,6 @@
           "data_type": "date",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this title was released"
         },
         {
@@ -258,8 +213,6 @@
           "data_type": "bigint",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The total runtime in minutes"
         },
         {
@@ -267,8 +220,6 @@
           "data_type": "character varying",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The movie title"
         }
       ],
@@ -288,7 +239,6 @@
           "is_nullable": false,
           "default_value": null,
           "is_primary": true,
-          "foreign_key": null,
           "description": "Primary unique identifier"
         },
         {
@@ -296,8 +246,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was created"
         },
         {
@@ -305,8 +253,6 @@
           "data_type": "timestamp with time zone",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "Date when this record was last modified"
         },
         {
@@ -314,8 +260,6 @@
           "data_type": "integer",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The number of cumulative weeks in top 10 list"
         },
         {
@@ -323,8 +267,6 @@
           "data_type": "character varying",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The duration of the period this summary refers to"
         },
         {
@@ -332,8 +274,6 @@
           "data_type": "date",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The last day of the period this summary refers to"
         },
         {
@@ -341,8 +281,6 @@
           "data_type": "integer",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The total hours viewed during this period"
         },
         {
@@ -350,8 +288,6 @@
           "data_type": "date",
           "is_nullable": false,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The first day of the period this summary refers to"
         },
         {
@@ -359,8 +295,6 @@
           "data_type": "integer",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The rank during this period"
         },
         {
@@ -368,8 +302,6 @@
           "data_type": "integer",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The number of views during this period"
         },
         {
@@ -377,8 +309,6 @@
           "data_type": "bigint",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The movie for this weekly summary"
         },
         {
@@ -386,8 +316,6 @@
           "data_type": "bigint",
           "is_nullable": true,
           "default_value": null,
-          "is_primary": false,
-          "foreign_key": null,
           "description": "The season for this weekly summary"
         }
       ],
@@ -458,7 +386,7 @@
     }
   ],
   "metadata": {
-    "extracted_at": "2025-05-06T11:38:11.881202",
+    "extracted_at": "2025-05-06T12:51:20.829468+00:00",
     "database": "netflixdb"
   }
 }

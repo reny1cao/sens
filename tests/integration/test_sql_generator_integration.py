@@ -41,6 +41,7 @@ SAMPLE_SCHEMA = {
                 {"name": "created_at", "data_type": "timestamp", "is_nullable": False},
             ],
             "primary_keys": ["id"],
+            "foreign_keys": [],
         },
         "orders": {
             "name": "orders",
@@ -56,6 +57,14 @@ SAMPLE_SCHEMA = {
                 {"name": "created_at", "data_type": "timestamp", "is_nullable": False},
             ],
             "primary_keys": ["id"],
+            "foreign_keys": [
+                {
+                    "constraint_name": "fk_orders_user",
+                    "from_table": "orders",
+                    "to_table": "users",
+                    "columns": [{"from_column": "user_id", "to_column": "id"}],
+                }
+            ],
         },
     },
     "relationships": [

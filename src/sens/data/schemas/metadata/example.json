@@ -1,8 +1,8 @@
 {
     "version": "1.0",
     "database": "example_db",
-    "tables": [
-        {
+    "tables": {
+        "users": {
             "name": "users",
             "description": "User account information",
             "columns": [
@@ -23,9 +23,11 @@
                     "type": "TIMESTAMP",
                     "description": "Account creation timestamp"
                 }
-            ]
+            ],
+            "primary_keys": ["id"],
+            "foreign_keys": []
         },
-        {
+        "orders": {
             "name": "orders",
             "description": "Customer order records",
             "columns": [
@@ -54,9 +56,18 @@
                     "type": "VARCHAR(50)",
                     "description": "Order status (pending, completed, cancelled)"
                 }
+            ],
+            "primary_keys": ["id"],
+            "foreign_keys": [
+                {
+                    "constraint_name": "fk_orders_user",
+                    "from_table": "orders",
+                    "to_table": "users",
+                    "columns": [{"from_column": "user_id", "to_column": "id"}]
+                }
             ]
         }
-    ],
+    },
     "relationships": [
         {
             "from_table": "orders",

@@ -21,7 +21,7 @@ def pytest_configure(config):
 @pytest.fixture(scope="session")
 def integration_env():
     """Verify and provide integration test environment variables."""
-    required_vars = ["SENS_LLM_API_KEY"]
+    required_vars = ["SENS_OPENROUTER_API_KEY"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
 
     if missing_vars:

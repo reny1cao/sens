@@ -74,9 +74,17 @@ class EmbeddingSearch:
         with open(schema_path) as f:
             schema = json.load(f)
 
+        # Handle both dict and list formats for tables
+        tables_data = schema["tables"]
+        if isinstance(tables_data, list):
+            # Convert list to dict format
+            tables_dict = {table["name"]: table for table in tables_data}
+        else:
+            tables_dict = tables_data
+
         # Build column texts
         columns = []
-        for table_details in schema["tables"].values():
+        for table_details in tables_dict.values():
             table_name = table_details["name"]
             for col in table_details.get("columns", []):
                 col_name = col["name"]

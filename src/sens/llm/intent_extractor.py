@@ -44,8 +44,8 @@ class IntentExtractor:
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
             default_headers={
-                "HTTP-Referer": str(cfg["referer"]),
-                "Title": cfg["title"],
+                "HTTP-Referer": str(cfg["headers"]["HTTP-Referer"]),
+                "X-Title": cfg["headers"]["X-Title"],
             },
         )
 

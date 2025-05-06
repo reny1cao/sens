@@ -63,7 +63,7 @@ class SQLGenerator:
 
         # Get SQL generator specific settings
         sql_config = llm_config["sql_generator"]
-        self.primary_model = sql_config.get("primary_model", "gpt-4")
+        self.primary_model = sql_config.get("primary_model", "openai/gpt-4")
         self.fallback_model = sql_config.get("fallback_model")
         self.max_tokens = max_tokens
         self.temperature = temperature
