@@ -11,8 +11,8 @@ from sens.llm.models import QueryType
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
-        "OPENROUTER_API_KEY" not in os.environ,
-        reason="Integration tests require OPENROUTER_API_KEY",
+        "SENS_OPENROUTER_API_KEY" not in os.environ,
+        reason="Integration tests require SENS_OPENROUTER_API_KEY",
     ),
 ]
 
@@ -20,8 +20,8 @@ pytestmark = [
 @pytest.fixture
 def real_extractor():
     """Create a real IntentExtractor instance."""
-    if "OPENROUTER_API_KEY" not in os.environ:
-        pytest.skip("OPENROUTER_API_KEY not set")
+    if "SENS_OPENROUTER_API_KEY" not in os.environ:
+        pytest.skip("SENS_OPENROUTER_API_KEY not set")
     return IntentExtractor()
 
 
