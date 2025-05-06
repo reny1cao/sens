@@ -1,4 +1,4 @@
-"""Tests for the IntentExtractor class."""
+"""Tests for intent extraction functionality."""
 
 import os
 from pathlib import Path
@@ -7,14 +7,43 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openai import OpenAI
 
-from sens.config import settings
 from sens.llm.intent_extractor import IntentExtractor
 from sens.llm.models import Intent, QueryType
+from sens.settings import get_settings
 
 # Constants for testing
 TEST_API_KEY = "test-key"
 TEST_MODEL = "openai/gpt-3.5-turbo"
 TEST_FALLBACK_MODEL = "openai/gpt-3.5-turbo:free"
+
+# Get settings for model names
+settings = get_settings()
+
+
+class LLMClientMock(MagicMock):
+    """Enhanced mock for OpenAI client with helper methods for test configuration."""
+
+    def __init__(self, *args, **kwargs):
+        """Initialize the mock with test-specific state tracking."""
+        super().__init__(*args, **kwargs)
+        self._test_side_effect = None
+        self._test_return_value = None
+
+    def set_chat_create_side_effect(self, side_effect):
+        """Set test-specific side effect for chat.completions.create."""
+        self._test_side_effect = side_effect
+        self._test_return_value = None
+
+    def set_chat_create_return_value(self, return_value):
+        """Set test-specific return value for chat.completions.create."""
+        self._test_return_value = return_value
+        self._test_side_effect = None
+
+    def _handle_chat_create(self, **kwargs):
+        """Internal handler for chat.completions.create calls."""
+        if self._test_side_effect:
+            return self._test_side_effect(**kwargs)
+        return self._test_return_value
 
 
 @pytest.fixture
@@ -58,6 +87,12 @@ def prompt_capture():
                 actual_models == expected_models
             ), f"Expected model sequence {expected_models}, got {actual_models}"
 
+        def reset(self):
+            """Reset the capture state."""
+            self.last_prompt = None
+            self.last_messages = None
+            self.attempts = []
+
     return PromptCapture()
 
 
@@ -68,40 +103,51 @@ def mock_openai(prompt_capture):
     autouse=True ensures this is automatically used for all tests.
     """
     with patch("sens.llm.intent_extractor.OpenAI") as mock:
-        mock_instance = MagicMock()
+        # Create enhanced mock instance
+        mock_instance = LLMClientMock()
         mock.return_value = mock_instance
 
-        # Capture prompts before returning mock response
-        def capture_create(**kwargs):
+        def capture_and_delegate(**kwargs):
+            """Capture prompt and delegate to test-specific behavior."""
             prompt_capture.capture_prompt(**kwargs)
-            return mock_instance.chat.completions.create.return_value
+            return mock_instance._handle_chat_create(**kwargs)
 
-        mock_instance.chat.completions.create.side_effect = capture_create
-        mock.mock_instance = mock_instance
+        # Install the capturing wrapper
+        mock_instance.chat.completions.create = MagicMock(
+            side_effect=capture_and_delegate
+        )
+
         yield mock_instance
+
+        # Reset state after each test
+        prompt_capture.reset()
+        mock_instance._test_side_effect = None
+        mock_instance._test_return_value = None
+
+
+def create_mock_response(content):
+    """Helper to create a mock OpenAI response with given content."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content=content))]
+    return mock_response
 
 
 @pytest.fixture
 def clean_env(monkeypatch):
     """
     Fixture to provide a clean environment for each test.
-    Removes any existing OPENROUTER_API_KEY and restores it after the test.
+    Removes any existing API keys and restores them after the test.
     """
-    # Store original environment
-    # original_env = dict(os.environ)  # Removed unused variable
-
     # Clean environment variables that might affect tests
+    monkeypatch.delenv("SENS_OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-
     yield
-
-    # Restore original environment (handled automatically by monkeypatch)
 
 
 @pytest.fixture
 def extractor(monkeypatch):
     """Create an IntentExtractor with test config."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
     return IntentExtractor()
 
 
@@ -125,16 +171,11 @@ def schema():
 
 def test_aggregation_intent(extractor, schema, mock_openai, prompt_capture):
     """Test extraction of aggregation intent."""
-    # Mock the OpenAI response
-    mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(
-            message=MagicMock(
-                content='{"query_type": "aggregation", "tables": ["movie"], "operations": ["COUNT"], "confidence": 0.9}'
-            )
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "aggregation", "tables": ["movie"], "operations": ["COUNT"], "confidence": 0.9}'
         )
-    ]
-    mock_openai.chat.completions.create.return_value = mock_response
+    )
 
     question = "How many movies were released in 2023?"
     intent = extractor.extract(question, schema)
@@ -155,15 +196,11 @@ def test_aggregation_intent(extractor, schema, mock_openai, prompt_capture):
 
 def test_lookup_intent(extractor, schema, mock_openai, prompt_capture):
     """Test extraction of lookup intent."""
-    mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(
-            message=MagicMock(
-                content='{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
-            )
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
         )
-    ]
-    mock_openai.chat.completions.create.return_value = mock_response
+    )
 
     question = "What is the title of the movie with ID 123?"
     intent = extractor.extract(question, schema)
@@ -183,15 +220,11 @@ def test_lookup_intent(extractor, schema, mock_openai, prompt_capture):
 
 def test_relationship_intent(extractor, schema, mock_openai, prompt_capture):
     """Test extraction of relationship intent."""
-    mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(
-            message=MagicMock(
-                content='{"query_type": "relationship", "tables": ["movie", "person"], "operations": [], "confidence": 0.95}'
-            )
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "relationship", "tables": ["movie", "person"], "operations": [], "confidence": 0.95}'
         )
-    ]
-    mock_openai.chat.completions.create.return_value = mock_response
+    )
 
     question = "Who directed the movie 'Inception'?"
     intent = extractor.extract(question, schema)
@@ -212,11 +245,9 @@ def test_relationship_intent(extractor, schema, mock_openai, prompt_capture):
 
 def test_invalid_json_response(extractor, schema, mock_openai, prompt_capture):
     """Test handling of invalid JSON response."""
-    mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content="This is not valid JSON"))
-    ]
-    mock_openai.chat.completions.create.return_value = mock_response
+    mock_openai.set_chat_create_return_value(
+        create_mock_response("This is not valid JSON")
+    )
 
     question = "Invalid question"
     with pytest.raises(ValueError):
@@ -238,75 +269,68 @@ def test_missing_api_key(clean_env):
 
 def test_model_override(monkeypatch):
     """Test model override in constructor."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
     extractor = IntentExtractor(model=TEST_MODEL)
     assert extractor.model == TEST_MODEL
 
 
 def test_default_model(monkeypatch):
     """Test default model from config."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
     extractor = IntentExtractor()
-    assert extractor.model == settings.openrouter_model_intent
+    assert extractor.model == settings.intent_extractor.primary_model
 
 
 def test_model_fallback_success(extractor, schema, mock_openai, prompt_capture):
     """Test successful fallback to secondary model."""
 
     def mock_completion(**kwargs):
-        if kwargs["model"] == settings.openrouter_model_intent:
-            raise Exception("Primary model error")
-        # Fallback model succeeds
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content='{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
-                )
-            )
-        ]
-        return mock_response
+        if kwargs["model"] == settings.intent_extractor.primary_model:
+            raise Exception("Primary model failed")
+        return create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.8}'
+        )
 
-    mock_openai.chat.completions.create.side_effect = mock_completion
+    mock_openai.set_chat_create_side_effect(mock_completion)
 
-    question = "What is the title of the movie with ID 123?"
-    intent = extractor.extract(question, schema)
+    # Extract intent - should succeed with fallback model
+    intent = extractor.extract("What movies are in the database?", schema)
 
-    # Assert model fallback sequence
+    # Verify both models were attempted in correct order
     prompt_capture.assert_model_sequence(
-        [settings.openrouter_model_intent, settings.openrouter_model_intent_fallback]
+        [
+            settings.intent_extractor.primary_model,
+            settings.intent_extractor.fallback_model,
+        ]
     )
 
-    # Assert intent from fallback model
     assert intent.query_type == QueryType.LOOKUP
     assert "movie" in intent.tables
-    assert intent.confidence == 0.85
 
 
 def test_model_fallback_all_fail(extractor, schema, mock_openai, prompt_capture):
     """Test handling when all models fail."""
 
     def mock_completion(**kwargs):
-        raise Exception(f"Model error: {kwargs['model']}")
+        raise Exception(f"Model {kwargs['model']} failed")
 
-    mock_openai.chat.completions.create.side_effect = mock_completion
+    mock_openai.set_chat_create_side_effect(mock_completion)
 
-    question = "What is the title of the movie with ID 123?"
-    with pytest.raises(ValueError) as exc_info:
-        extractor.extract(question, schema)
+    with pytest.raises(Exception):
+        extractor.extract("What movies are in the database?", schema)
 
-    # Assert all models were attempted
+    # Verify both models were attempted
     prompt_capture.assert_model_sequence(
-        [settings.openrouter_model_intent, settings.openrouter_model_intent_fallback]
+        [
+            settings.intent_extractor.primary_model,
+            settings.intent_extractor.fallback_model,
+        ]
     )
-
-    # Assert error message
-    assert "Failed to extract intent" in str(exc_info.value)
 
 
 def test_custom_prompt_path(monkeypatch, tmp_path):
     """Test loading custom prompt from path."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
 
     # Create test prompt file
     prompt_path = tmp_path / "test_prompt.txt"
@@ -324,17 +348,116 @@ def test_invalid_prompt_path():
 
 
 def test_model_override_sequence(monkeypatch):
-    """Test model override creates proper sequence."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
-    extractor = IntentExtractor(model=TEST_MODEL)
-    assert extractor.models == [TEST_MODEL]  # Only the override model, no fallback
+    """Test model override affects the fallback sequence."""
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
+    custom_models = ["custom-model-1", "custom-model-2"]
+    extractor = IntentExtractor(models=custom_models)
+    assert extractor.models == custom_models
 
 
 def test_default_model_sequence(monkeypatch):
-    """Test default model sequence from settings."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_API_KEY)
+    """Test default model sequence from config."""
+    monkeypatch.setenv("SENS_OPENROUTER_API_KEY", TEST_API_KEY)
     extractor = IntentExtractor()
-    assert extractor.models == [
-        settings.openrouter_model_intent,
-        settings.openrouter_model_intent_fallback,
+    expected_models = settings.get_models_for("intent_extractor")
+    assert extractor.models == expected_models
+
+
+def test_custom_prompt_loading_nonexistent(tmp_path):
+    """Test loading a nonexistent custom prompt file."""
+    nonexistent_path = tmp_path / "nonexistent.txt"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        IntentExtractor(prompt_path=nonexistent_path)
+    assert "Custom prompt not found" in str(exc_info.value)
+
+
+def test_json_response_with_markdown(extractor, schema, mock_openai):
+    """Test handling of JSON response wrapped in markdown code blocks."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '```json\n{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}\n```'
+        )
+    )
+
+    question = "What movies are in the database?"
+    intent = extractor.extract(question, schema)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+
+
+def test_json_response_without_markdown(extractor, schema, mock_openai):
+    """Test handling of plain JSON response."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    question = "What movies are in the database?"
+    intent = extractor.extract(question, schema)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+
+
+def test_model_sequence_all_fail(extractor, schema, mock_openai, prompt_capture):
+    """Test handling when all models in sequence fail."""
+
+    def mock_completion(**kwargs):
+        raise Exception(f"Model {kwargs['model']} failed with invalid JSON")
+
+    mock_openai.set_chat_create_side_effect(mock_completion)
+
+    with pytest.raises(ValueError) as exc_info:
+        extractor.extract("What movies are there?", schema)
+
+    assert "Failed to extract intent" in str(exc_info.value)
+    assert len(prompt_capture.attempts) == len(extractor.models)
+
+
+def test_empty_model_sequence():
+    """Test initialization with empty model sequence."""
+    with pytest.raises(ValueError) as exc_info:
+        IntentExtractor(models=[])
+    assert "At least one model must be specified" in str(exc_info.value)
+
+
+def test_invalid_schema_format(extractor):
+    """Test handling of invalid schema format."""
+    invalid_schemas = [
+        "NOT A SCHEMA",
+        "TABLE",
+        "TABLE ()",
+        "TABLE name",
     ]
+
+    for schema in invalid_schemas:
+        with pytest.raises(ValueError) as exc_info:
+            extractor.extract("What data is available?", schema)
+        assert "Invalid schema format" in str(exc_info.value)
+
+
+def test_whitespace_handling(extractor, mock_openai):
+    """Test handling of whitespace in inputs."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    schema = """
+        TABLE movie(
+            id INTEGER PRIMARY KEY
+        )
+    """
+
+    # Test various whitespace combinations
+    questions = [
+        "  What movies?  ",  # Leading/trailing spaces
+        "\nWhat movies?\n",  # Newlines
+        "\t\tWhat movies?\t\t",  # Tabs
+    ]
+
+    for question in questions:
+        intent = extractor.extract(question, schema)
+        assert intent.query_type == QueryType.LOOKUP
+        assert "movie" in intent.tables

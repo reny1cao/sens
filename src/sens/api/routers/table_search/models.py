@@ -66,9 +66,8 @@ class DetailedIndexResponse(BaseModel):
     total_tables: int = Field(..., description="Total number of indexed tables")
     total_tokens: int = Field(..., description="Total number of unique tokens")
     total_memory_bytes: int = Field(..., description="Total memory usage in bytes")
-    tokens: Dict[str, TokenDetail] = Field(..., description="Details for each token")
-    tables: Dict[str, TableTokenization] = Field(
-        ..., description="Details for each table"
+    tokens_details: Dict[str, TokenDetail] = Field(
+        ..., description="Details for each token"
     )
     most_common_tokens: List[TokenDetail] = Field(
         ..., description="Top 10 most frequent tokens"

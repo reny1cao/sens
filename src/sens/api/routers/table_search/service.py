@@ -9,17 +9,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends
 
 from sens.retrieval.token import TokenIndexBuilder
+from sens.settings import get_settings
 
 from ...common.errors import ServiceError
 
-# SchemaExtractor no longer needed here for initialization
-# from sens.schema import SchemaExtractor
-
-
 logger = logging.getLogger(__name__)
-
-# Define the schema path constant (consider moving to central config)
-SCHEMA_METADATA_PATH = "config/schema_metadata.json"
 
 
 class TableSearchService:
@@ -44,15 +38,16 @@ class TableSearchService:
                 "Creating new TableSearchService instance and loading token index..."
             )
             try:
+                settings = get_settings()
                 TableSearchService._index = TokenIndexBuilder()
                 # Load index directly from the authoritative schema file
-                TableSearchService._index.load_from_schema(SCHEMA_METADATA_PATH)
+                TableSearchService._index.load_from_schema(str(settings.schema_path))
                 TableSearchService._is_initialized = True
                 TableSearchService._instance = self
                 logger.info("TableSearchService initialized successfully.")
             except FileNotFoundError:
                 logger.error(
-                    f"Schema file not found at {SCHEMA_METADATA_PATH}. Token index could not be built."
+                    f"Schema file not found at {get_settings().schema_path}. Token index could not be built."
                 )
                 # Allow service to start, but log error. Search will likely fail.
                 TableSearchService._is_initialized = (
@@ -130,7 +125,7 @@ class TableSearchService:
         try:
             start_time = time.time()
             # Reload the index from the schema file
-            self._index.load_from_schema(SCHEMA_METADATA_PATH)
+            self._index.load_from_schema(str(get_settings().schema_path))
             execution_time = (time.time() - start_time) * 1000
             logger.info(
                 f"Token index refreshed successfully in {execution_time:.2f} ms."

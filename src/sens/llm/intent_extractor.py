@@ -1,15 +1,19 @@
-"""Intent extraction from natural language queries."""
+"""Intent extraction from natural language using LLMs."""
 
+import json
+import logging
+import os
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 import structlog
 from openai import OpenAI
 
-from sens.config import settings
+from sens.schema.graph import SchemaGraph
+from sens.settings import get_settings
 
-from .models import Intent
+from .models import Intent, IntentExtractionError, QueryType
 
 log = structlog.get_logger()
 
@@ -20,30 +24,57 @@ class IntentExtractor:
     Uses OpenRouter's API to parse questions and return validated Intent objects.
     """
 
-    def __init__(self, model: Optional[str] = None, prompt_path: Optional[Path] = None):
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        models: Optional[List[str]] = None,
+        prompt_path: Optional[Path] = None,
+    ):
         """
         Initialize the IntentExtractor.
 
         Args:
-            model: Optional override for the model to use
+            model: Optional override for the primary model to use
+            models: Optional list of models to use in sequence (overrides model parameter)
             prompt_path: Optional path to custom prompt template (as Path object)
 
         Raises:
-            ValueError: If required settings are missing
+            ValueError: If required settings are missing or if models list is empty
             FileNotFoundError: If prompt template cannot be found
         """
+        # Check for API key before initializing settings
+        api_key = os.getenv("SENS_OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("SENS_OPENROUTER_API_KEY must be set")
+
+        # Get settings instance
+        settings = get_settings()
+
         # Initialize OpenAI client with OpenRouter config
         cfg = settings.get_openrouter_config()
         self.client = OpenAI(
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
-            default_headers=cfg["headers"],
+            default_headers={
+                "HTTP-Referer": str(cfg["headers"]["HTTP-Referer"]),
+                "X-Title": cfg["headers"]["X-Title"],
+            },
         )
 
         # Get primary and fallback models
-        self.models = settings.get_models_for(
-            "intent_extractor", [model] if model else None
-        )
+        if models is not None:
+            if not models:
+                raise ValueError("At least one model must be specified")
+            self.models = models
+        else:
+            self.models = settings.get_models_for(
+                "intent_extractor", [model] if model else None
+            )
+            if not self.models:
+                raise ValueError("No models configured for intent_extractor")
+
+        # Store primary model for test access
+        self.model = self.models[0] if self.models else None
         self._load_prompt(prompt_path)
 
     def _load_prompt(self, path: Optional[Path] = None) -> None:

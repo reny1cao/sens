@@ -20,7 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Environment
 .env
 .venv
 env/
@@ -34,7 +34,14 @@ ENV/
 *.swo
 
 # Project specific
-config/
-.coverage
-coverage.xml
-htmlcov/
+/var/indices/  # Embedding indices
+/src/sens/data/schemas/metadata/*.json  # Instance-specific schema metadata
+/src/sens/data/schemas/prompts/*.txt    # Instance-specific LLM prompts
+
+# Keep these files in version control
+!/src/sens/data/schemas/metadata/example.json
+!/src/sens/data/schemas/prompts/example.txt
+
+# Logs
+*.log
+logs/

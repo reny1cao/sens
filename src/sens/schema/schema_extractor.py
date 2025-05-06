@@ -5,13 +5,15 @@ Extracts and formats database schema information for LLM consumption.
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel, Field
+
+from sens.settings import get_settings
 
 # Configure logging
 logging.basicConfig(
@@ -78,18 +80,75 @@ class DatabaseSchema(BaseModel):
 class SchemaExtractor:
     """Extracts and manages database schema information."""
 
-    def __init__(self, db_url: str = "postgresql://localhost/netflixdb"):
-        """Initialize the schema extractor.
+    def __init__(
+        self,
+        db_url: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        dbname: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
+        """Initialize with database connection parameters.
 
         Args:
-            db_url: Database connection URL
+            db_url: Optional database URL in format postgresql://user:pass@host:port/dbname
+            host: Optional database host
+            port: Optional database port
+            dbname: Optional database name
+            user: Optional database user
+            password: Optional database password
+
+        If db_url is provided, it takes precedence over individual parameters.
+        If neither is provided, falls back to settings.
         """
-        self.db_url = db_url
+        settings = get_settings()
+
+        if db_url:
+            # Parse db_url into components
+            try:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(db_url)
+                if not parsed.scheme == "postgresql":
+                    raise ValueError("Only PostgreSQL URLs are supported")
+
+                # Extract components from URL
+                self.db_config = {
+                    "host": parsed.hostname,
+                    "port": parsed.port or 5432,
+                    "dbname": parsed.path.lstrip("/"),
+                    "user": parsed.username,
+                    "password": parsed.password,
+                }
+            except Exception as e:
+                raise ValueError(f"Invalid database URL: {e}")
+        else:
+            # Use provided values or fall back to settings
+            self.db_config = {
+                "host": host or settings.db_host,
+                "port": port or settings.db_port,
+                "dbname": dbname or settings.db_name,
+                "user": user or settings.db_user,
+                "password": password or settings.db_password,
+            }
+
         self.logger = logging.getLogger(__name__)
 
     def _get_connection(self):
         """Create a database connection."""
-        return psycopg2.connect(self.db_url)
+        try:
+            return psycopg2.connect(
+                host=self.db_config["host"],
+                port=self.db_config["port"],
+                dbname=self.db_config["dbname"],
+                user=self.db_config["user"],
+                password=self.db_config["password"],
+            )
+        except psycopg2.OperationalError as e:
+            raise ValueError(f"Invalid database URL: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Database connection failed: {str(e)}")
 
     def extract_basic_schema(self) -> Dict[str, TableInfo]:
         """Extract basic table and column information."""
@@ -302,17 +361,22 @@ class SchemaExtractor:
                 # Just show the referenced table and the first FK column for brevity
                 # Could be enhanced to show all columns `(col1, col2) -> tableB (ref1, ref2)`
                 from_cols_str = ", ".join([c.from_column for c in fk.columns])
-                output.append(f"  → {fk.to_table} via ({from_cols_str})")
+                output.append(f"  → {fk.to_table} via {from_cols_str}")
 
             output.append("}")
 
         return "\n".join(output)
 
-    def extract_and_save(self, config_dir: str = "config") -> DatabaseSchema:
+    def extract_and_save(self, config_dir: Optional[str] = None) -> DatabaseSchema:
         """Extract schema and save to files."""
         try:
-            # Ensure config directory exists
-            Path(config_dir).mkdir(parents=True, exist_ok=True)
+            settings = get_settings()
+            schema_path = (
+                Path(config_dir) / "schema_metadata.json"
+                if config_dir
+                else settings.schema_path
+            )
+            schema_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Extract basic schema
             self.logger.info("Extracting basic schema information...")
@@ -331,19 +395,20 @@ class SchemaExtractor:
                 tables=tables,
                 relationships=relationships,
                 metadata={
-                    "extracted_at": datetime.utcnow().isoformat(),
-                    "database": self.db_url.split("/")[-1],
+                    "extracted_at": datetime.now(UTC).isoformat(),
+                    "database": self.db_config["dbname"],
                 },
             )
 
             # Save full schema
-            schema_path = Path(config_dir) / "schema_metadata.json"
             self.logger.info(f"Saving full schema to {schema_path}")
             with open(schema_path, "w") as f:
-                json.dump(schema.model_dump(), f, indent=2)
+                json.dump(
+                    schema.model_dump(mode="json", exclude_unset=True), f, indent=2
+                )
 
             # Save LLM-friendly version
-            llm_path = Path(config_dir) / "schema_for_llm.txt"
+            llm_path = schema_path.parent.parent / "prompts" / "schema_for_llm.txt"
             self.logger.info(f"Saving LLM format to {llm_path}")
             with open(llm_path, "w") as f:
                 f.write(self.format_for_llm(schema))

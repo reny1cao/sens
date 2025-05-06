@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from typing import ClassVar, Dict, List, Optional, Set, Tuple
 
+from sens.settings import get_settings
+
 # Use the Pydantic models for schema validation and structure
 from .schema_extractor import (
     ColumnInfo,
@@ -14,13 +16,22 @@ from .schema_extractor import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SCHEMA_PATH = "config/schema_metadata.json"
+# Get schema path from settings
+settings = get_settings()
+DEFAULT_SCHEMA_PATH = str(settings.schema_path)
 
 
 class SchemaGraph:
     # ... (Keep singleton logic and __init__ declaration) ...
     _instance: ClassVar[Optional["SchemaGraph"]] = None
     _initialized: ClassVar[bool] = False
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the singleton instance. Primarily used for testing."""
+        cls._instance = None
+        cls._initialized = False
+        logger.info("SchemaGraph singleton instance reset.")
 
     @classmethod
     def get_instance(cls, schema_path: str = DEFAULT_SCHEMA_PATH) -> "SchemaGraph":
@@ -86,6 +97,9 @@ class SchemaGraph:
             tables_data: Dict[str, TableInfo] = schema_data.tables
             relationships: List[ForeignKeyConstraint] = schema_data.relationships
 
+            # Store the full schema data
+            self._schema_data = schema_data
+
             # Build PK map, Column Comments map, initialize maps
             for table_name, table_info in tables_data.items():
                 self._all_tables.add(table_name)
@@ -141,6 +155,19 @@ class SchemaGraph:
             A list of primary key column names.
         """
         return self._pk_map.get(table_name, [])
+
+    def get_table_columns(self, table_name: str) -> List[str]:
+        """Get all column names for a given table.
+
+        Args:
+            table_name: The name of the table to get columns for.
+
+        Returns:
+            A list of column names.
+        """
+        if hasattr(self, "_schema_data") and table_name in self._schema_data.tables:
+            return [col.name for col in self._schema_data.tables[table_name].columns]
+        return []
 
     def get_table_fks_involved(
         self, table_name: str, involved_tables: Set[str]

@@ -5,11 +5,13 @@ from pathlib import Path
 import pytest
 
 from sens.schema import DatabaseSchema, SchemaExtractor
+from sens.settings import get_settings
 
 
 def test_schema_extraction(schema_extractor):
     """Test basic schema extraction."""
     schema = schema_extractor.extract_and_save()
+    settings = get_settings()
 
     # Basic validation
     assert isinstance(schema, DatabaseSchema)
@@ -18,8 +20,8 @@ def test_schema_extraction(schema_extractor):
     assert "metadata" in schema.model_dump()
 
     # Check if files were created
-    assert Path("config/schema_metadata.json").exists()
-    assert Path("config/schema_for_llm.txt").exists()
+    assert settings.schema_path.exists()
+    assert settings.llm_schema_path.exists()
 
 
 def test_table_structure(schema_extractor):
@@ -43,10 +45,10 @@ def test_relationships(schema_extractor):
 
     # Check view_summary -> movie relationship
     view_to_movie = any(
-        rel["from_table"] == "view_summary"
-        and rel["to_table"] == "movie"
-        and rel["from_column"] == "movie_id"
-        and rel["to_column"] == "id"
+        rel.from_table == "view_summary"
+        and rel.to_table == "movie"
+        and rel.columns[0].from_column == "movie_id"
+        and rel.columns[0].to_column == "id"
         for rel in schema.relationships
     )
     assert view_to_movie, "View summary to movie relationship not found"
@@ -71,8 +73,15 @@ def test_llm_formatting(schema_extractor):
 
 def test_error_handling():
     """Test error handling with invalid connection."""
-    with pytest.raises(Exception):
-        extractor = SchemaExtractor(db_url="postgresql://invalid/db")
+    with pytest.raises(ValueError, match="Invalid database URL"):
+        extractor = SchemaExtractor(
+            db_url="postgresql://invalid:pass@localhost:5432/nonexistent"
+        )
+        extractor.extract_and_save()
+
+    # Test non-PostgreSQL URL
+    with pytest.raises(ValueError, match="Only PostgreSQL URLs are supported"):
+        extractor = SchemaExtractor(db_url="mysql://user:pass@localhost/db")
         extractor.extract_and_save()
 
 

@@ -58,19 +58,20 @@ def mock_schema_data():
                 "primary_keys": ["id"],
                 "foreign_keys": [
                     {
-                        "column": "movie_id",
-                        "references_table": "movie",
-                        "references_column": "id",
+                        "constraint_name": "fk_view_summary_movie",
+                        "from_table": "view_summary",
+                        "to_table": "movie",
+                        "columns": [{"from_column": "movie_id", "to_column": "id"}],
                     }
                 ],
             },
         },
         "relationships": [
             {
+                "constraint_name": "fk_view_summary_movie",
                 "from_table": "view_summary",
-                "from_column": "movie_id",
                 "to_table": "movie",
-                "to_column": "id",
+                "columns": [{"from_column": "movie_id", "to_column": "id"}],
             }
         ],
         "metadata": {"database": "netflixdb", "extracted_at": "2024-03-19T10:00:00Z"},

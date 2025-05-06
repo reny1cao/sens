@@ -1,32 +1,23 @@
-You are an expert at analyzing natural language questions about database schemas and extracting their intent.
-Given a question and a relevant portion of the database schema, determine the query type and relevant details.
+You are an expert in understanding natural language questions about databases and extracting structured intent from them.
+
+Given a database schema and a natural language question, your task is to identify the type of query needed and which tables are involved.
 
 Schema:
 {schema_snippet}
 
-Question: {question}
+Question:
+{question}
 
-Analyze the question and return a JSON object with the following structure:
+Respond with a JSON object containing:
+- query_type: One of ["lookup", "aggregation", "relationship"]
+- tables: List of table names involved in the query
+- operations: List of operations (e.g., ["COUNT", "SUM", "AVG"] for aggregations, empty for lookups)
+- confidence: Number between 0 and 1 indicating confidence in the interpretation
+
+Example response:
 {{
-    "query_type": "aggregation" | "lookup" | "relationship",
-    "tables": ["table1", "table2", ...],
-    "operations": ["COUNT", "SUM", "AVG", ...],
-    "confidence": 0.0-1.0
+    "query_type": "aggregation",
+    "tables": ["orders"],
+    "operations": ["COUNT"],
+    "confidence": 0.9
 }}
-
-Rules:
-1. query_type must be one of:
-   - "aggregation": For counting, summing, averaging, etc.
-   - "lookup": For finding specific records by ID or exact match
-   - "relationship": For queries involving multiple tables or relationships between entities
-2. tables must be a list of table names from the schema
-3. operations must be a list of SQL operations (empty for lookup/relationship)
-4. confidence must be a float between 0.0 and 1.0
-
-Examples:
-- "How many orders do we have?" -> aggregation (COUNT)
-- "Find customer with ID 123" -> lookup (single table)
-- "Show all orders for customer John" -> relationship (involves customer-order relationship)
-- "What is the total amount spent by each customer?" -> aggregation (SUM) with relationship
-
-Response:

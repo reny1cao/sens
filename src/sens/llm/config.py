@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 # Default per-task model config
 DEFAULT_MODELS: Dict[str, str] = {
     "intent_extractor": os.getenv("OPENROUTER_MODEL_INTENT", "openai/gpt-3.5-turbo"),
-    "sql_generator": os.getenv("OPENROUTER_MODEL_SQL", "openai/gpt-4o"),
+    "sql_generator": os.getenv("OPENROUTER_MODEL_SQL", "anthropic/claude-3-sonnet"),
 }
 
 # Optional fallback models for OpenRouter's multi-model support
@@ -12,7 +12,7 @@ FALLBACK_MODELS: Dict[str, str] = {
     "intent_extractor": os.getenv(
         "OPENROUTER_MODEL_INTENT_FALLBACK", "openai/gpt-3.5-turbo:free"
     ),
-    "sql_generator": os.getenv("OPENROUTER_MODEL_SQL_FALLBACK", "openai/gpt-4o:free"),
+    "sql_generator": os.getenv("OPENROUTER_MODEL_SQL_FALLBACK", "openai/gpt-4o"),
 }
 
 
@@ -56,11 +56,11 @@ def get_openrouter_config() -> Dict:
         Dict containing OpenRouter configuration
 
     Raises:
-        ValueError: If OPENROUTER_API_KEY is not set
+        ValueError: If SENS_OPENROUTER_API_KEY is not set
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("SENS_OPENROUTER_API_KEY")
     if not api_key:
-        raise ValueError("OPENROUTER_API_KEY must be set")
+        raise ValueError("SENS_OPENROUTER_API_KEY must be set")
 
     return {
         "api_key": api_key,

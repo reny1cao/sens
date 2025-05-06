@@ -89,8 +89,8 @@ class TokenIndex:
         overhead = sys.getsizeof(self.token_map) + sys.getsizeof(self.table_formats)
         memory_distribution = {
             "tokens": token_memory,
-            "table_formats": table_format_memory,  # Memory for table names & their formats
-            "index_overhead": overhead,  # Memory for the dict structures themselves
+            "table_formats": table_format_memory,
+            "index_overhead": overhead,
             "total_approx": token_memory + table_format_memory + overhead,
         }
 
@@ -101,8 +101,7 @@ class TokenIndex:
             "total_tables": len(self.table_formats),
             "total_tokens": len(self.token_map),
             "total_memory_bytes": self._current_size_bytes,
-            "tokens_details": tokens_details,  # Renamed from 'tokens' for clarity
-            # "tables_details": tables_details, # Omitted for now
+            "tokens_details": tokens_details,
             "most_common_tokens": most_common,
             "memory_distribution": memory_distribution,
         }

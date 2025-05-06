@@ -1,5 +1,7 @@
+"""Data models for LLM interactions, intents, and schema context."""
+
 from enum import Enum
-from typing import List
+from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, confloat
 
@@ -58,3 +60,137 @@ class Intent(BaseModel):
         },
         "use_enum_values": True,
     }
+
+
+class SchemaContext(BaseModel):
+    """Focused view of database schema information relevant for SQL generation."""
+
+    tables: Dict[str, List[str]] = Field(
+        ...,
+        description="Dictionary mapping table names to their column names",
+    )
+    primary_keys: Dict[str, List[str]] = Field(
+        ...,
+        description="Dictionary mapping table names to their primary key column(s)",
+    )
+    foreign_keys: List[Dict[str, Union[str, List[str]]]] = Field(
+        default_factory=list,
+        description="List of foreign key relationships between tables",
+    )
+    column_descriptions: Dict[str, Dict[str, str]] = Field(
+        default_factory=dict,
+        description="Nested dictionary mapping table.column to its description",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "tables": {
+                    "users": ["id", "name", "email"],
+                    "orders": ["id", "user_id", "total"],
+                },
+                "primary_keys": {
+                    "users": ["id"],
+                    "orders": ["id"],
+                },
+                "foreign_keys": [
+                    {
+                        "from_table": "orders",
+                        "from_columns": ["user_id"],
+                        "to_table": "users",
+                        "to_columns": ["id"],
+                    }
+                ],
+                "column_descriptions": {
+                    "users": {
+                        "id": "Unique identifier for the user",
+                        "name": "User's full name",
+                    }
+                },
+            }
+        }
+    }
+
+
+class TokenUsage(BaseModel):
+    """Token usage information for LLM API calls."""
+
+    prompt_tokens: int = Field(
+        ...,
+        description="Number of tokens in the prompt",
+    )
+    completion_tokens: int = Field(
+        ...,
+        description="Number of tokens in the completion",
+    )
+
+    @property
+    def total_tokens(self) -> int:
+        """Calculate total tokens used."""
+        return self.prompt_tokens + self.completion_tokens
+
+
+class GeneratedSQL(BaseModel):
+    """Container for a generated SQL query and its associated metadata."""
+
+    sql: str = Field(
+        ...,
+        description="The generated SQL query string",
+    )
+    tables_used: List[str] = Field(
+        ...,
+        description="List of tables referenced in the generated query",
+    )
+    columns_used: Dict[str, List[str]] = Field(
+        ...,
+        description="Dictionary mapping tables to their columns used in the query",
+    )
+    token_usage: Optional[TokenUsage] = Field(
+        None,
+        description="Token usage information for the generation",
+    )
+    model_used: str = Field(
+        ...,
+        description="Identifier of the LLM model used for generation",
+    )
+    generation_ms: Optional[int] = Field(
+        None,
+        description="Time taken to generate the SQL in milliseconds",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "sql": "SELECT name, COUNT(*) as order_count FROM users u JOIN orders o ON u.id = o.user_id GROUP BY name",
+                "tables_used": ["users", "orders"],
+                "columns_used": {"users": ["id", "name"], "orders": ["user_id"]},
+                "token_usage": {
+                    "prompt_tokens": 150,
+                    "completion_tokens": 50,
+                    "total_tokens": 200,
+                },
+                "model_used": "gpt-4",
+                "generation_ms": 2500,
+            }
+        }
+    }
+
+
+class SQLGenerationError(Exception):
+    """Custom exception for errors during SQL generation."""
+
+    def __init__(self, message: str, details: Optional[Dict] = None):
+        """Initialize the SQL generation error with a message and optional details."""
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)
+
+
+class IntentExtractionError(Exception):
+    """Custom exception for errors during intent extraction."""
+
+    def __init__(self, message: str, details: Optional[Dict] = None):
+        """Initialize the intent extraction error with a message and optional details."""
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)
