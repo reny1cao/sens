@@ -39,7 +39,7 @@ class IntentExtractor:
             prompt_path: Optional path to custom prompt template (as Path object)
 
         Raises:
-            ValueError: If required settings are missing
+            ValueError: If required settings are missing or if models list is empty
             FileNotFoundError: If prompt template cannot be found
         """
         # Check for API key before initializing settings
@@ -62,12 +62,17 @@ class IntentExtractor:
         )
 
         # Get primary and fallback models
-        if models:
+        if models is not None:
+            if not models:
+                raise ValueError("At least one model must be specified")
             self.models = models
         else:
             self.models = settings.get_models_for(
                 "intent_extractor", [model] if model else None
             )
+            if not self.models:
+                raise ValueError("No models configured for intent_extractor")
+
         # Store primary model for test access
         self.model = self.models[0] if self.models else None
         self._load_prompt(prompt_path)

@@ -361,3 +361,103 @@ def test_default_model_sequence(monkeypatch):
     extractor = IntentExtractor()
     expected_models = settings.get_models_for("intent_extractor")
     assert extractor.models == expected_models
+
+
+def test_custom_prompt_loading_nonexistent(tmp_path):
+    """Test loading a nonexistent custom prompt file."""
+    nonexistent_path = tmp_path / "nonexistent.txt"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        IntentExtractor(prompt_path=nonexistent_path)
+    assert "Custom prompt not found" in str(exc_info.value)
+
+
+def test_json_response_with_markdown(extractor, schema, mock_openai):
+    """Test handling of JSON response wrapped in markdown code blocks."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '```json\n{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}\n```'
+        )
+    )
+
+    question = "What movies are in the database?"
+    intent = extractor.extract(question, schema)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+
+
+def test_json_response_without_markdown(extractor, schema, mock_openai):
+    """Test handling of plain JSON response."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    question = "What movies are in the database?"
+    intent = extractor.extract(question, schema)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+
+
+def test_model_sequence_all_fail(extractor, schema, mock_openai, prompt_capture):
+    """Test handling when all models in sequence fail."""
+
+    def mock_completion(**kwargs):
+        raise Exception(f"Model {kwargs['model']} failed with invalid JSON")
+
+    mock_openai.set_chat_create_side_effect(mock_completion)
+
+    with pytest.raises(ValueError) as exc_info:
+        extractor.extract("What movies are there?", schema)
+
+    assert "Failed to extract intent" in str(exc_info.value)
+    assert len(prompt_capture.attempts) == len(extractor.models)
+
+
+def test_empty_model_sequence():
+    """Test initialization with empty model sequence."""
+    with pytest.raises(ValueError) as exc_info:
+        IntentExtractor(models=[])
+    assert "At least one model must be specified" in str(exc_info.value)
+
+
+def test_invalid_schema_format(extractor):
+    """Test handling of invalid schema format."""
+    invalid_schemas = [
+        "NOT A SCHEMA",
+        "TABLE",
+        "TABLE ()",
+        "TABLE name",
+    ]
+
+    for schema in invalid_schemas:
+        with pytest.raises(ValueError) as exc_info:
+            extractor.extract("What data is available?", schema)
+        assert "Invalid schema format" in str(exc_info.value)
+
+
+def test_whitespace_handling(extractor, mock_openai):
+    """Test handling of whitespace in inputs."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    schema = """
+        TABLE movie(
+            id INTEGER PRIMARY KEY
+        )
+    """
+
+    # Test various whitespace combinations
+    questions = [
+        "  What movies?  ",  # Leading/trailing spaces
+        "\nWhat movies?\n",  # Newlines
+        "\t\tWhat movies?\t\t",  # Tabs
+    ]
+
+    for question in questions:
+        intent = extractor.extract(question, schema)
+        assert intent.query_type == QueryType.LOOKUP
+        assert "movie" in intent.tables
