@@ -131,16 +131,30 @@ class IntentValidator:
         log.debug("validating_intent", intent=intent.model_dump())
 
         # Run validation checks in sequence
-        for check in [
-            self._check_confidence,
-            self._validate_tables,
-            self._validate_operations,
-        ]:
-            if result := check(intent):
-                log.info(
-                    "validation_failed", reason=result.reason, message=result.message
-                )
-                return result
+        # 1. Check confidence first
+        if result := self._check_confidence(intent):
+            log.info("validation_failed", reason=result.reason, message=result.message)
+            return result
+
+        # 2. Check if tables are present (missing tables)
+        if not intent.tables:
+            result = self._validate_tables(
+                intent
+            )  # This will return missing_tables error
+            log.info("validation_failed", reason=result.reason, message=result.message)
+            return result
+
+        # 3. Check operations before table validation to catch missing operations early
+        if result := self._validate_operations(intent):
+            log.info("validation_failed", reason=result.reason, message=result.message)
+            return result
+
+        # 4. Finally validate table existence
+        if result := self._validate_tables(
+            intent
+        ):  # This will return invalid_tables error
+            log.info("validation_failed", reason=result.reason, message=result.message)
+            return result
 
         # If all checks pass, enhance with metadata and return
         enhanced_metadata = self._enhance_metadata(intent)

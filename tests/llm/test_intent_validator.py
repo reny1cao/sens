@@ -41,17 +41,24 @@ def validator():
 
 def create_intent(
     query_type: QueryType = QueryType.LOOKUP,
-    tables: list[str] = None,
-    operations: list[str] = None,
-    conditions: list[str] = None,
+    tables: list[str] | None = None,
+    operations: list[str] | None = None,
+    conditions: list[str] | None = None,
     confidence: float = 0.9,
 ) -> Intent:
     """Helper to create Intent objects for testing."""
+    if tables is None:
+        tables = ["orders"]
+    if operations is None:
+        operations = []
+    if conditions is None:
+        conditions = []
+
     return Intent(
         query_type=query_type,
-        tables=tables or ["orders"],
-        operations=operations or [],
-        conditions=conditions or [],
+        tables=tables,  # Use the tables list as is, allowing empty list
+        operations=operations,
+        conditions=conditions,
         confidence=confidence,
     )
 
