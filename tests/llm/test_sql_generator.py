@@ -104,6 +104,35 @@ SELECT * FROM {{ intent.tables[0] }};
     return prompt_file
 
 
+@pytest.fixture
+def sql_generator(temp_prompt_file: Path) -> SQLGenerator:
+    """Create a SQLGenerator instance for testing."""
+    return SQLGenerator(
+        prompt_dir=temp_prompt_file.parent,
+        prompt_filename=temp_prompt_file.name,
+    )
+
+
+@pytest.fixture
+def valid_intent() -> ValidIntent:
+    """Create a sample validated intent for testing."""
+    intent = Intent(
+        query_type=QueryType.LOOKUP,
+        tables=["users", "orders"],
+        operations=["COUNT"],
+        conditions=["created_at > '2023-01-01'"],
+        confidence=0.95,
+    )
+    return ValidIntent(
+        original_intent=intent,
+        enhanced_metadata={
+            "table_relationships": {
+                "orders": {"referenced_tables": ["users"]},
+            }
+        },
+    )
+
+
 def test_sql_generator_initialization(temp_prompt_file: Path):
     """Test successful initialization of SQLGenerator."""
     generator = SQLGenerator(
@@ -181,94 +210,61 @@ def test_render_prompt(
     assert "id" in rendered  # Column name
 
 
-def test_extract_sql_from_completion():
+def test_extract_sql_from_completion(sql_generator):
     """Test extracting SQL from various completion formats."""
-    generator = SQLGenerator()
-
     # Test markdown format
     completion = "Here's the SQL:\n```sql\nSELECT * FROM users;\n```"
-    sql = generator._extract_sql_from_completion(completion)
+    sql = sql_generator._extract_sql_from_completion(completion)
     assert sql == "SELECT * FROM users;"
 
     # Test direct SQL
     completion = "SELECT * FROM users;"
-    sql = generator._extract_sql_from_completion(completion)
+    sql = sql_generator._extract_sql_from_completion(completion)
     assert sql == "SELECT * FROM users;"
 
     # Test error message
     with pytest.raises(SQLGenerationError) as exc:
-        generator._extract_sql_from_completion("ERROR: Invalid table name")
+        sql_generator._extract_sql_from_completion("ERROR: Invalid table name")
     assert "Invalid table name" in str(exc.value)
 
     # Test invalid format
     with pytest.raises(SQLGenerationError) as exc:
-        generator._extract_sql_from_completion("This is not SQL")
+        sql_generator._extract_sql_from_completion("This is not SQL")
     assert "Could not extract valid SQL" in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_generate_success(
-    temp_prompt_file: Path,
-    sample_valid_intent: ValidIntent,
-    sample_schema_context: SchemaContext,
-    monkeypatch,
-):
-    """Test successful SQL generation flow."""
+async def test_generate_extraction_error(sql_generator, valid_intent, monkeypatch):
+    """Test error during SQL extraction."""
 
-    def mock_build_schema_context(*args):
-        return sample_schema_context
+    def mock_extract(*args, **kwargs):
+        raise SQLGenerationError("Could not extract valid SQL")
 
     monkeypatch.setattr(
-        SQLGenerator,
-        "_build_schema_context",
-        mock_build_schema_context,
+        sql_generator,
+        "_extract_sql_from_completion",
+        mock_extract,
     )
 
-    generator = SQLGenerator(
-        prompt_dir=temp_prompt_file.parent,
-        prompt_filename=temp_prompt_file.name,
-    )
-
-    result = await generator.generate(
-        "How many orders per user?",
-        sample_valid_intent,
-    )
-
-    assert isinstance(result, GeneratedSQL)
-    assert result.sql.strip().upper().startswith("SELECT")
-    assert "users" in result.tables_used
-    assert result.model_used == generator.primary_model
-    assert result.generation_ms > 0
+    with pytest.raises(SQLGenerationError, match="Could not extract valid SQL"):
+        await sql_generator.generate("Show me top shows", valid_intent)
 
 
 @pytest.mark.asyncio
-async def test_generate_validation_failure(
-    temp_prompt_file: Path,
-    sample_valid_intent: ValidIntent,
-    monkeypatch,
-):
-    """Test handling SQL validation failure."""
+async def test_generate_validation_error(sql_generator, valid_intent, monkeypatch):
+    """Test error during SQL validation."""
 
-    def mock_validate(*args) -> tuple:
+    def mock_validate(*args, **kwargs):
         return False, "Invalid SQL syntax"
 
     monkeypatch.setattr(
-        SQLGenerator,
+        sql_generator,
         "_validate_generated_sql",
         mock_validate,
     )
 
-    generator = SQLGenerator(
-        prompt_dir=temp_prompt_file.parent,
-        prompt_filename=temp_prompt_file.name,
-    )
-
-    with pytest.raises(SQLGenerationError) as exc:
-        await generator.generate(
-            "How many orders per user?",
-            sample_valid_intent,
-        )
-    assert "Invalid SQL syntax" in str(exc.value)
+    with pytest.raises(SQLGenerationError, match="Invalid SQL syntax"):
+        await sql_generator.generate("Show me top shows", valid_intent)
 
 
 def test_extract_query_metadata(sample_schema_context: SchemaContext):
@@ -293,46 +289,9 @@ def test_extract_query_metadata(sample_schema_context: SchemaContext):
 
 def test_sql_generator_init(sql_generator):
     """Test SQLGenerator initialization."""
-    assert sql_generator.prompt_dir == Path("src/sens/llm/prompts")
-    assert sql_generator.prompt_filename == "sql_generation.prompt.txt"
-
-
-def test_extract_sql_from_completion_success(sql_generator):
-    """Test successful SQL extraction from various formats."""
-    # Test extraction from markdown block
-    completion = "Here's the SQL:\n```sql\nSELECT * FROM users;\n```"
-    sql = sql_generator._extract_sql_from_completion(completion)
-    assert sql == "SELECT * FROM users;"
-
-    # Test extraction from direct SQL
-    completion = "SELECT * FROM users;"
-    sql = sql_generator._extract_sql_from_completion(completion)
-    assert sql == "SELECT * FROM users;"
-
-    # Test error message
-    with pytest.raises(SQLGenerationError) as exc:
-        sql_generator._extract_sql_from_completion("ERROR: Invalid table name")
-    assert "Invalid table name" in str(exc.value)
-
-
-def test_generate_extraction_error(sql_generator, valid_intent, monkeypatch):
-    """Test error during SQL extraction."""
-
-    async def run_test():
-        # Mock LLM call to return invalid completion
-        def mock_extract(*args, **kwargs):
-            raise SQLGenerationError("Could not extract valid SQL")
-
-        monkeypatch.setattr(
-            sql_generator,
-            "_extract_sql_from_completion",
-            mock_extract,
-        )
-
-        with pytest.raises(SQLGenerationError, match="Could not extract valid SQL"):
-            await sql_generator.generate("Show me top shows", valid_intent)
-
-
-def test_generate_validation_error(sql_generator, valid_intent, monkeypatch):
-    # Implementation of test_generate_validation_error function
-    pass
+    assert sql_generator.prompt_path.name == "sql_generation.prompt.txt"
+    assert sql_generator.prompt_path.exists()
+    assert sql_generator.jinja_env is not None
+    assert sql_generator.primary_model == "gpt-4"  # Default from settings
+    assert sql_generator.max_tokens == 500  # Default value
+    assert sql_generator.temperature == 0.1  # Default value

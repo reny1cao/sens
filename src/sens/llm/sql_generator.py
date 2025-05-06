@@ -7,8 +7,8 @@ from typing import Dict, List, Optional, Set, Tuple
 import structlog
 from jinja2 import Environment, FileSystemLoader
 
+from sens.config.settings import get_llm_settings
 from sens.schema.graph import SchemaGraph
-from sens.settings import get_llm_settings
 
 from .intent_validator import ValidIntent
 from .models import GeneratedSQL, SchemaContext, SQLGenerationError
