@@ -112,6 +112,24 @@ class SchemaContext(BaseModel):
     }
 
 
+class TokenUsage(BaseModel):
+    """Token usage information for LLM API calls."""
+
+    prompt_tokens: int = Field(
+        ...,
+        description="Number of tokens in the prompt",
+    )
+    completion_tokens: int = Field(
+        ...,
+        description="Number of tokens in the completion",
+    )
+
+    @property
+    def total_tokens(self) -> int:
+        """Calculate total tokens used."""
+        return self.prompt_tokens + self.completion_tokens
+
+
 class GeneratedSQL(BaseModel):
     """Container for a generated SQL query and its associated metadata."""
 
@@ -127,13 +145,9 @@ class GeneratedSQL(BaseModel):
         ...,
         description="Dictionary mapping tables to their columns used in the query",
     )
-    prompt_tokens: Optional[int] = Field(
+    token_usage: Optional[TokenUsage] = Field(
         None,
-        description="Number of tokens used in the generation prompt",
-    )
-    completion_tokens: Optional[int] = Field(
-        None,
-        description="Number of tokens in the LLM completion",
+        description="Token usage information for the generation",
     )
     model_used: str = Field(
         ...,
@@ -150,8 +164,11 @@ class GeneratedSQL(BaseModel):
                 "sql": "SELECT name, COUNT(*) as order_count FROM users u JOIN orders o ON u.id = o.user_id GROUP BY name",
                 "tables_used": ["users", "orders"],
                 "columns_used": {"users": ["id", "name"], "orders": ["user_id"]},
-                "prompt_tokens": 150,
-                "completion_tokens": 50,
+                "token_usage": {
+                    "prompt_tokens": 150,
+                    "completion_tokens": 50,
+                    "total_tokens": 200,
+                },
                 "model_used": "gpt-4",
                 "generation_ms": 2500,
             }

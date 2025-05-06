@@ -13,7 +13,7 @@ from sens.schema.graph import SchemaGraph
 from sens.settings import get_llm_settings, get_settings
 
 from .intent_validator import ValidIntent
-from .models import GeneratedSQL, SchemaContext, SQLGenerationError
+from .models import GeneratedSQL, SchemaContext, SQLGenerationError, TokenUsage
 
 log = structlog.get_logger()
 
@@ -119,6 +119,8 @@ class SQLGenerator:
         for table in relevant_tables:
             # Get actual columns from schema
             columns = self.schema.get_table_columns(table)
+            if not columns:  # Skip tables with no columns
+                continue
             tables_dict[table] = columns
 
             # Get primary keys
@@ -139,15 +141,22 @@ class SQLGenerator:
             # Get foreign keys for each table
             for ref_table in self.schema.get_referenced_tables(table):
                 if ref_table in relevant_tables:
+                    # Get the full constraint info
                     fk_cols = self.schema.get_table_fks_involved(table, {ref_table})
                     if fk_cols:
+                        # For each FK relationship
                         fk_list.append(
                             {
                                 "from_table": table,
                                 "to_table": ref_table,
-                                "columns": fk_cols,
+                                "from_columns": fk_cols,
+                                "to_columns": self.schema.get_table_pks(ref_table),
                             }
                         )
+
+        # Filter out any tables that don't have columns
+        tables_dict = {k: v for k, v in tables_dict.items() if v}
+        pk_dict = {k: v for k, v in pk_dict.items() if k in tables_dict}
 
         return SchemaContext(
             tables=tables_dict,
@@ -195,82 +204,72 @@ class SQLGenerator:
                 details={"context": context},
             )
 
-    async def _call_llm(self, prompt: str) -> str:
+    async def _call_llm(self, prompt: str) -> Tuple[str, str, Optional[TokenUsage]]:
         """
-        Call the LLM to generate SQL.
+        Call the LLM to generate SQL, with fallback handling.
 
         Args:
             prompt: The rendered prompt with question and schema context
 
         Returns:
-            The LLM completion text
+            Tuple of (completion text, model used, token usage)
 
         Raises:
-            SQLGenerationError: If the LLM call fails
+            SQLGenerationError: If both primary and fallback models fail
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.primary_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a SQL expert that generates safe and efficient SQL queries.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                response_format={"type": "text"},  # Ensure we get raw text back
-            )
+        models_to_try = [self.primary_model]
+        if self.fallback_model:
+            models_to_try.append(self.fallback_model)
 
-            completion = response.choices[0].message.content
+        last_error = None
+        for model in models_to_try:
+            try:
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a SQL expert that generates safe and efficient SQL queries.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    response_format={"type": "text"},  # Ensure we get raw text back
+                )
 
-            # Log token usage
-            usage = response.usage
-            log.info(
-                "llm_call_success",
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-                total_tokens=usage.total_tokens,
-            )
+                completion = response.choices[0].message.content
 
-            return completion
+                # Create TokenUsage object
+                usage = TokenUsage(
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                )
 
-        except Exception as e:
-            log.error(
-                "llm_call_failed",
-                error=str(e),
-                model=self.primary_model,
-            )
+                log.info(
+                    "llm_call_success",
+                    model=model,
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                    total_tokens=usage.total_tokens,
+                )
 
-            # Try fallback model if configured
-            if self.fallback_model:
-                try:
-                    response = self.client.chat.completions.create(
-                        model=self.fallback_model,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a SQL expert that generates safe and efficient SQL queries.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        temperature=self.temperature,
-                        max_tokens=self.max_tokens,
-                        response_format={"type": "text"},
-                    )
-                    return response.choices[0].message.content
-                except Exception as fallback_error:
-                    log.error(
-                        "fallback_llm_call_failed",
-                        error=str(fallback_error),
-                        model=self.fallback_model,
-                    )
+                return completion, model, usage
 
-            raise SQLGenerationError(
-                f"Failed to generate SQL using LLM: {e}",
-                details={"model": self.primary_model},
-            )
+            except Exception as e:
+                log.error(
+                    "llm_call_failed",
+                    error=str(e),
+                    model=model,
+                )
+                last_error = e
+                continue  # Try next model if available
+
+        # If we get here, all models failed
+        raise SQLGenerationError(
+            "Failed to generate SQL with all available models",
+            details={"last_error": str(last_error)},
+        )
 
     def _extract_sql_from_completion(self, completion: str) -> str:
         """
@@ -335,16 +334,26 @@ class SQLGenerator:
 
         Args:
             sql: The generated SQL query
-            schema: The schema context
+            schema: The schema context used for generation
 
         Returns:
-            Tuple of (tables_used, columns_used)
+            Tuple of (list of tables used, dict of table -> list of columns used)
         """
-        # This is a placeholder implementation
-        # In practice, you'd want to properly parse the SQL
-        # and extract exact tables and columns used
-        tables_used = list(schema.tables.keys())
-        columns_used = {table: columns for table, columns in schema.tables.items()}
+        tables_used = []
+        columns_used = {}
+
+        # Extract tables from schema context
+        for table in schema.tables:
+            if table.lower() in sql.lower():
+                tables_used.append(table)
+                # Extract columns for this table
+                columns = []
+                for col in schema.tables[table]:
+                    if col.lower() in sql.lower():
+                        columns.append(col)
+                if columns:
+                    columns_used[table] = columns
+
         return tables_used, columns_used
 
     async def generate(self, question: str, intent: ValidIntent) -> GeneratedSQL:
@@ -353,53 +362,49 @@ class SQLGenerator:
 
         Args:
             question: The original user question
-            intent: The validated intent with schema metadata
+            intent: The validated intent with metadata
 
         Returns:
             GeneratedSQL object containing the query and metadata
 
         Raises:
-            SQLGenerationError: If generation fails
+            SQLGenerationError: If query generation fails
         """
-        start_time = time.time()
-
         try:
-            # Build schema context
-            schema_context = self._build_schema_context(intent)
+            start_time = time.time()
 
-            # Render the prompt
-            rendered_prompt = self._render_prompt(question, intent, schema_context)
+            # Build schema context for relevant tables
+            schema = self._build_schema_context(intent)
 
-            # Call LLM
-            completion = await self._call_llm(rendered_prompt)
+            # Render prompt with question, intent, and schema
+            prompt = self._render_prompt(question, intent, schema)
+
+            # Generate SQL using LLM
+            completion, model_used, token_usage = await self._call_llm(prompt)
 
             # Extract SQL from completion
             sql = self._extract_sql_from_completion(completion)
 
             # Validate the generated SQL
-            is_valid, error = self._validate_generated_sql(sql, schema_context)
+            is_valid, error = self._validate_generated_sql(sql, schema)
             if not is_valid:
                 raise SQLGenerationError(
-                    f"Generated SQL failed validation: {error}",
+                    "Generated SQL failed validation",
                     details={"sql": sql, "error": error},
                 )
 
-            # Extract query metadata
-            tables_used, columns_used = self._extract_query_metadata(
-                sql, schema_context
-            )
+            # Extract tables and columns used in the query
+            tables_used, columns_used = self._extract_query_metadata(sql, schema)
 
             # Calculate generation time
             generation_ms = int((time.time() - start_time) * 1000)
 
-            # Create and return GeneratedSQL object
-            generated = GeneratedSQL(
+            result = GeneratedSQL(
                 sql=sql,
                 tables_used=tables_used,
                 columns_used=columns_used,
-                prompt_tokens=0,  # Will be updated from LLM response
-                completion_tokens=0,  # Will be updated from LLM response
-                model_used=self.primary_model,
+                token_usage=token_usage,
+                model_used=model_used,
                 generation_ms=generation_ms,
             )
 
@@ -407,22 +412,17 @@ class SQLGenerator:
                 "sql_generated",
                 question=question,
                 tables=tables_used,
-                model=self.primary_model,
+                model=model_used,
                 generation_ms=generation_ms,
             )
 
-            return generated
+            return result
 
         except Exception as e:
-            log.exception(
+            log.error(
                 "sql_generation_failed",
                 error=str(e),
                 question=question,
-                intent_type=intent.original_intent.query_type,
+                intent=intent.model_dump(),
             )
-            if isinstance(e, SQLGenerationError):
-                raise
-            raise SQLGenerationError(
-                f"Unexpected error during SQL generation: {e}",
-                details={"question": question},
-            ) from e
+            raise SQLGenerationError(str(e), details={"question": question})

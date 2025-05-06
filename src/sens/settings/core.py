@@ -236,8 +236,10 @@ class Settings(BaseSettings):
         return {
             "api_key": self.openrouter.api_key,
             "base_url": str(self.openrouter.base_url),
-            "referer": str(self.openrouter.referer),
-            "title": self.openrouter.title,
+            "headers": {
+                "HTTP-Referer": str(self.openrouter.referer),
+                "X-Title": self.openrouter.title,
+            },
         }
 
     def get_database_config(self) -> Dict[str, Any]:

@@ -27,6 +27,13 @@ class SchemaGraph:
     _initialized: ClassVar[bool] = False
 
     @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the singleton instance. Primarily used for testing."""
+        cls._instance = None
+        cls._initialized = False
+        logger.info("SchemaGraph singleton instance reset.")
+
+    @classmethod
     def get_instance(cls, schema_path: str = DEFAULT_SCHEMA_PATH) -> "SchemaGraph":
         """Gets the singleton instance, initializing it on first call."""
         if cls._instance is None:
@@ -89,6 +96,9 @@ class SchemaGraph:
 
             tables_data: Dict[str, TableInfo] = schema_data.tables
             relationships: List[ForeignKeyConstraint] = schema_data.relationships
+
+            # Store the full schema data
+            self._schema_data = schema_data
 
             # Build PK map, Column Comments map, initialize maps
             for table_name, table_info in tables_data.items():
@@ -155,13 +165,8 @@ class SchemaGraph:
         Returns:
             A list of column names.
         """
-        try:
-            with open(self.schema_path, "r") as f:
-                schema_data = DatabaseSchema.model_validate_json(f.read())
-                if table_name in schema_data.tables:
-                    return [col.name for col in schema_data.tables[table_name].columns]
-        except Exception as e:
-            logger.error(f"Failed to get columns for table {table_name}: {e}")
+        if hasattr(self, "_schema_data") and table_name in self._schema_data.tables:
+            return [col.name for col in self._schema_data.tables[table_name].columns]
         return []
 
     def get_table_fks_involved(
