@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -68,6 +68,7 @@ def mock_openai_response(mock_llm_response):
         def __init__(self):
             self.choices = [MockChoice()]
             self.usage = MockUsage()
+            self.model = "openai/gpt-4"
 
     return MockResponse()
 
@@ -222,22 +223,55 @@ def test_build_schema_context(sample_valid_intent: ValidIntent, monkeypatch):
                 return {"orders"}
             return set()
 
+        def get_table_columns(self, table: str) -> List[str]:
+            if table == "users":
+                return ["id", "name", "email"]
+            elif table == "orders":
+                return ["id", "user_id", "total"]
+            return []
+
         def get_table_pks(self, table: str) -> List[str]:
             return ["id"]
 
         def get_column_comment(self, table: str, column: str) -> str:
-            return f"Comment for {table}.{column}"
+            return f"Description for {table}.{column}"
 
-    monkeypatch.setattr("sens.schema.graph.SchemaGraph", MockSchemaGraph)
+        def get_table_fks_involved(self, table: str, ref_tables: Set[str]) -> List[str]:
+            if table == "orders" and "users" in ref_tables:
+                return ["user_id"]
+            return []
 
+    mock_graph = MockSchemaGraph()
+    monkeypatch.setattr(SchemaGraph, "get_instance", mock_graph.get_instance)
+
+    # Create generator with mocked schema
     generator = SQLGenerator()
-    schema_context = generator._build_schema_context(sample_valid_intent)
+    context = generator._build_schema_context(sample_valid_intent)
 
-    assert isinstance(schema_context, SchemaContext)
-    assert "users" in schema_context.tables
-    assert "orders" in schema_context.tables
-    assert schema_context.primary_keys["users"] == ["id"]
-    assert schema_context.primary_keys["orders"] == ["id"]
+    # Verify tables are included
+    assert "users" in context.tables
+    assert "orders" in context.tables
+
+    # Verify columns
+    assert "id" in context.tables["users"]
+    assert "name" in context.tables["users"]
+    assert "user_id" in context.tables["orders"]
+
+    # Verify primary keys
+    assert context.primary_keys["users"] == ["id"]
+    assert context.primary_keys["orders"] == ["id"]
+
+    # Verify foreign keys
+    assert len(context.foreign_keys) == 1
+    fk = context.foreign_keys[0]
+    assert fk["from_table"] == "orders"
+    assert fk["to_table"] == "users"
+    assert fk["from_columns"] == ["user_id"]
+    assert fk["to_columns"] == ["id"]
+
+    # Verify column descriptions
+    assert "users" in context.column_descriptions
+    assert "orders" in context.column_descriptions
 
 
 def test_render_prompt(
@@ -320,9 +354,43 @@ async def test_call_llm_api_error(sql_generator, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_validation_error(sql_generator, valid_intent, monkeypatch):
-    """Test error during SQL validation."""
+async def test_generate_validation_error(
+    sql_generator, valid_intent, mock_openai_response, monkeypatch
+):
+    def mock_create(*args, **kwargs):
+        return mock_openai_response
 
+    monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    # Mock the schema graph to return valid data
+    class MockSchemaGraph:
+        def get_instance(self):
+            return self
+
+        def get_referenced_tables(self, table: str) -> set:
+            return set()
+
+        def get_referencing_tables(self, table: str) -> set:
+            return set()
+
+        def get_table_columns(self, table: str) -> List[str]:
+            if table == "users":
+                return ["id", "name"]
+            return []
+
+        def get_table_pks(self, table: str) -> List[str]:
+            return ["id"]
+
+        def get_column_comment(self, table: str, column: str) -> str:
+            return ""
+
+        def get_table_fks_involved(self, table: str, ref_tables: Set[str]) -> List[str]:
+            return []
+
+    mock_graph = MockSchemaGraph()
+    monkeypatch.setattr(SchemaGraph, "get_instance", mock_graph.get_instance)
+
+    # Mock the validation to return False
     def mock_validate(*args, **kwargs):
         return False, "Invalid SQL syntax"
 
@@ -369,33 +437,33 @@ def test_sql_generator_init(sql_generator):
 @pytest.mark.asyncio
 async def test_call_llm_success(sql_generator, mock_openai_response, monkeypatch):
     """Test successful LLM API call."""
-    mock_create = AsyncMock(return_value=mock_openai_response)
+
+    def mock_create(*args, **kwargs):
+        return mock_openai_response
+
     monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
 
     result = await sql_generator._call_llm("Test prompt")
-    assert "SELECT u.name" in result
-    assert "FROM users" in result
-    mock_create.assert_called_once()
+    assert "SELECT u.name" in result[0]
+    assert "FROM users" in result[0]
 
 
 @pytest.mark.asyncio
 async def test_call_llm_fallback(sql_generator, mock_openai_response, monkeypatch):
     """Test fallback to secondary model on primary model failure."""
-    call_count = 0
+    call_count = {"count": 0}
 
-    async def mock_api_call(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:  # First call (primary model)
+    def mock_create(*args, **kwargs):
+        call_count["count"] += 1
+        if call_count["count"] == 1:
             raise Exception("Primary model error")
-        return mock_openai_response  # Second call (fallback model)
+        return mock_openai_response
 
-    mock_create = AsyncMock(side_effect=mock_api_call)
     monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
 
     result = await sql_generator._call_llm("Test prompt")
-    assert call_count == 2  # Verify both models were tried
-    assert "SELECT u.name" in result
+    assert call_count["count"] == 2  # Verify both models were tried
+    assert "SELECT u.name" in result[0]
 
 
 @pytest.mark.asyncio
@@ -403,8 +471,34 @@ async def test_generate_end_to_end(
     sql_generator, valid_intent, mock_openai_response, monkeypatch
 ):
     """Test the complete generation flow with mocked LLM."""
-    mock_create = AsyncMock(return_value=mock_openai_response)
+
+    def mock_create(*args, **kwargs):
+        return mock_openai_response
+
     monkeypatch.setattr(sql_generator.client.chat.completions, "create", mock_create)
+
+    # Patch _build_schema_context to return a schema context matching the mock SQL
+    from sens.llm.models import SchemaContext, TokenUsage
+
+    schema_context = SchemaContext(
+        tables={"users": ["id", "name"], "orders": ["id", "user_id"]},
+        primary_keys={"users": ["id"], "orders": ["id"]},
+        foreign_keys=[
+            {
+                "from_table": "orders",
+                "from_columns": ["user_id"],
+                "to_table": "users",
+                "to_columns": ["id"],
+            }
+        ],
+        column_descriptions={
+            "users": {"id": "", "name": ""},
+            "orders": {"id": "", "user_id": ""},
+        },
+    )
+    monkeypatch.setattr(
+        sql_generator, "_build_schema_context", lambda intent: schema_context
+    )
 
     result = await sql_generator.generate(
         "How many orders does each user have?",
