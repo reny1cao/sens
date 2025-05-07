@@ -231,6 +231,7 @@ def handle_execute(args: argparse.Namespace) -> None:
     """
     try:
         from sens.execution import SQLExecutor
+        from sens.execution.types import serialize_value
 
         # Initialize executor
         executor = SQLExecutor()
@@ -257,7 +258,9 @@ def handle_execute(args: argparse.Namespace) -> None:
                 widths = [len(col) for col in result.columns]
                 for row in result.rows:
                     for i, val in enumerate(row):
-                        widths[i] = max(widths[i], len(str(val)))
+                        # Serialize value before calculating width
+                        str_val = str(serialize_value(val))
+                        widths[i] = max(widths[i], len(str_val))
 
                 # Print header
                 header = " | ".join(
@@ -270,7 +273,8 @@ def handle_execute(args: argparse.Namespace) -> None:
                 for row in result.rows:
                     print(
                         " | ".join(
-                            f"{str(val):{widths[i]}}" for i, val in enumerate(row)
+                            f"{str(serialize_value(val)):{widths[i]}}"
+                            for i, val in enumerate(row)
                         )
                     )
 
