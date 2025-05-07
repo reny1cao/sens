@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import structlog
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from sens.schema.graph import SchemaGraph
 from sens.settings import get_settings
@@ -52,7 +52,7 @@ class IntentExtractor:
 
         # Initialize OpenAI client with OpenRouter config
         cfg = settings.get_openrouter_config()
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
             default_headers={
@@ -67,11 +67,8 @@ class IntentExtractor:
                 raise ValueError("At least one model must be specified")
             self.models = models
         else:
-            self.models = settings.get_models_for(
-                "intent_extractor", [model] if model else None
-            )
-            if not self.models:
-                raise ValueError("No models configured for intent_extractor")
+            # Use only gpt-3.5-turbo without the :free suffix
+            self.models = ["openai/gpt-3.5-turbo"]
 
         # Store primary model for test access
         self.model = self.models[0] if self.models else None
@@ -133,12 +130,16 @@ class IntentExtractor:
             raise ValueError("Schema cannot be empty")
 
         # Basic schema validation - must contain at least one TABLE definition
-        if not re.search(r"TABLE\s+\w+\s*\(", schema_snippet, re.IGNORECASE):
+        # Accept both formats: TABLE name (cols) and Table name { cols }
+        if not (
+            re.search(r"TABLE\s+\w+\s*\(", schema_snippet, re.IGNORECASE)
+            or re.search(r"Table\s+\w+\s*\{", schema_snippet)
+        ):
             raise ValueError(
                 "Invalid schema format: must contain at least one TABLE definition"
             )
 
-    def extract(self, question: str, schema_snippet: str) -> Intent:
+    async def extract(self, question: str, schema_snippet: str) -> Intent:
         """
         Extract intent from a natural language question about a database schema.
 
@@ -160,7 +161,7 @@ class IntentExtractor:
         # Try primary model first, fall back if needed
         for model in self.models:
             try:
-                resp = self.client.chat.completions.create(
+                resp = await self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
