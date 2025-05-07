@@ -7,9 +7,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import faiss
+# Defer FAISS and SentenceTransformer imports
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from sens.settings import get_settings
 
@@ -33,7 +32,8 @@ class EmbeddingSearch:
             index_dir: Directory to store/load the FAISS index and lookup map. If None, uses settings.
             dimension: Embedding dimension (384 for MiniLM-L6)
         """
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self._model = None
         if index_dir is None:
             self.index_dir = get_settings().index_dir
         else:
@@ -41,8 +41,17 @@ class EmbeddingSearch:
         self.index_dir.mkdir(parents=True, exist_ok=True)
 
         self.dimension = dimension
-        self.index: Optional[faiss.IndexHNSWFlat] = None
+        self.index = None
         self.lookup: Dict[int, Tuple[str, str]] = {}  # id -> (table, column)
+
+    @property
+    def model(self):
+        """Lazy load the SentenceTransformer model."""
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+
+            self._model = SentenceTransformer(self.model_name)
+        return self._model
 
     def _build_column_text(self, table: str, column: str, description: str = "") -> str:
         """Build the text representation for a column.
@@ -70,6 +79,8 @@ class EmbeddingSearch:
         Args:
             schema_path: Path to the schema metadata JSON file
         """
+        import faiss  # Import only when needed
+
         # Load schema metadata
         with open(schema_path) as f:
             schema = json.load(f)
@@ -129,6 +140,8 @@ class EmbeddingSearch:
 
     def load_index(self) -> None:
         """Load the pre-built index and lookup map from disk."""
+        import faiss  # Import only when needed
+
         index_path = self.index_dir / "columns.index"
         lookup_path = self.index_dir / "lookup.npy"
 
@@ -199,6 +212,21 @@ class EmbeddingSearch:
 _embedding_search: Optional[EmbeddingSearch] = None
 
 
+def get_embedding_search() -> EmbeddingSearch:
+    """Get or create the global EmbeddingSearch instance.
+
+    This function is used internally by the top_columns API and should not be
+    called directly unless you need explicit control over the instance lifecycle.
+
+    Returns:
+        The global EmbeddingSearch instance
+    """
+    global _embedding_search
+    if _embedding_search is None:
+        _embedding_search = EmbeddingSearch()
+    return _embedding_search
+
+
 def top_columns(query: str, k: int = 20) -> List[Tuple[str, str, float]]:
     """Get the top-K most relevant columns for a query.
 
@@ -211,9 +239,5 @@ def top_columns(query: str, k: int = 20) -> List[Tuple[str, str, float]]:
     Returns:
         List of (table, column, score) tuples sorted by relevance
     """
-    global _embedding_search
-
-    if _embedding_search is None:
-        _embedding_search = EmbeddingSearch()
-
-    return _embedding_search.search(query, k)
+    search = get_embedding_search()
+    return search.search(query, k)
