@@ -6,6 +6,9 @@ authors = ["renyicao <renyi.cao@qq.com>"]
 readme = "README.md"
 packages = [{include = "sens", from = "src"}]
 
+[tool.poetry.scripts]
+sens = "sens.cli.main:main"
+
 [tool.poetry.dependencies]
 python = "^3.12"
 psycopg2 = "^2.9.10"
