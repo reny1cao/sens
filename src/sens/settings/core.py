@@ -76,6 +76,11 @@ class Settings(BaseSettings):
         default="", description="Database password", validation_alias="SENS_DB_PASSWORD"
     )
 
+    @property
+    def db_url(self) -> str:
+        """Get the database URL constructed from components."""
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+
     # OpenRouter Configuration
     # -----------------------
     openrouter: Optional[OpenRouterConfig] = Field(

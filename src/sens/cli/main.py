@@ -223,6 +223,72 @@ def handle_validate(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def handle_execute(args: argparse.Namespace) -> None:
+    """Handle SQL execution command.
+
+    Args:
+        args: Command line arguments
+    """
+    try:
+        from sens.execution import SQLExecutor
+        from sens.execution.types import serialize_value
+
+        # Initialize executor
+        executor = SQLExecutor()
+
+        # Get SQL input
+        if args.file:
+            with open(args.file) as f:
+                sql = f.read().strip()
+        else:
+            sql = args.sql.strip()
+
+        if not sql:
+            log.error("empty_sql_input")
+            sys.exit(1)
+
+        # Execute query
+        result = executor.execute(sql)
+
+        # Format output
+        if args.pretty:
+            # Pretty print table format
+            if not result.error and result.columns:
+                # Calculate column widths
+                widths = [len(col) for col in result.columns]
+                for row in result.rows:
+                    for i, val in enumerate(row):
+                        # Serialize value before calculating width
+                        str_val = str(serialize_value(val))
+                        widths[i] = max(widths[i], len(str_val))
+
+                # Print header
+                header = " | ".join(
+                    f"{col:{widths[i]}}" for i, col in enumerate(result.columns)
+                )
+                print(header)
+                print("-" * len(header))
+
+                # Print rows
+                for row in result.rows:
+                    print(
+                        " | ".join(
+                            f"{str(serialize_value(val)):{widths[i]}}"
+                            for i, val in enumerate(row)
+                        )
+                    )
+
+                print(f"\nTotal rows: {result.row_count}")
+            else:
+                print(json.dumps(result.to_dict(), indent=2))
+        else:
+            print(json.dumps(result.to_dict()))
+
+    except Exception as e:
+        log.error("sql_execution_failed", error=str(e))
+        sys.exit(1)
+
+
 def main() -> None:
     """Main CLI entrypoint."""
     parser = argparse.ArgumentParser(
@@ -360,6 +426,14 @@ def main() -> None:
         help="Pretty print output",
     )
 
+    # SQL execution
+    execute_parser = subparsers.add_parser("execute", help="Execute SQL query")
+    execute_parser.add_argument("sql", nargs="?", help="SQL query to execute")
+    execute_parser.add_argument("-f", "--file", type=Path, help="Read SQL from file")
+    execute_parser.add_argument(
+        "--pretty", action="store_true", help="Pretty print output in table format"
+    )
+
     args = parser.parse_args()
 
     # Configure logging
@@ -381,7 +455,13 @@ def main() -> None:
         elif args.command == "build-index":
             handle_build_index(args)
         elif args.command == "validate":
+            if not args.sql and not args.file:
+                validate_parser.error("either SQL query or --file is required")
             handle_validate(args)
+        elif args.command == "execute":
+            if not args.sql and not args.file:
+                execute_parser.error("either SQL query or --file is required")
+            handle_execute(args)
 
     except Exception as e:
         log.error("command_failed", command=args.command, error=str(e))
