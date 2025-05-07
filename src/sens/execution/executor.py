@@ -1,3 +1,5 @@
+"""SQL execution module for safe, read-only query processing."""
+
 import logging
 from typing import Optional
 
@@ -8,7 +10,6 @@ from sens.execution.types import QueryResult
 from sens.settings import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 class SQLExecutor:
@@ -20,6 +21,7 @@ class SQLExecutor:
         Args:
             db_url: Optional database URL. If not provided, uses settings.
         """
+        settings = get_settings()
         self.db_url = db_url or settings.db_url
         self._conn: Optional[pg_connection] = None
 
@@ -27,9 +29,13 @@ class SQLExecutor:
     def conn(self) -> pg_connection:
         """Lazy connection initialization with read-only mode enforced."""
         if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(
-                self.db_url, options="-c default_transaction_read_only=on"
-            )
+            try:
+                self._conn = psycopg2.connect(
+                    self.db_url, options="-c default_transaction_read_only=on"
+                )
+            except Exception as e:
+                logger.error(f"Failed to connect to database: {str(e)}")
+                raise
         return self._conn
 
     def execute(self, sql: str) -> QueryResult:
