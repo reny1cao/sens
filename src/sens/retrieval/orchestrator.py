@@ -26,7 +26,7 @@ class RetrievalOrchestrator:
         self.schema_graph = schema_graph
         logger.info("RetrievalOrchestrator initialized.")
 
-    def get_relevant_context(self, question: str, k: int = 5) -> RetrievedContext:
+    async def get_relevant_context(self, question: str, k: int = 5) -> RetrievedContext:
         """Retrieves relevant schema context for a given natural language question.
 
         Combines results from token and embedding indices, deduplicates,
@@ -45,7 +45,7 @@ class RetrievalOrchestrator:
         # 1. Call token index
         try:
             # Fetch more initially to allow for merging/ranking (e.g., 2*k or more)
-            token_hits = self.token_index.search(question, k=k * 2)
+            token_hits = await self.token_index.search(question, k=k * 2)
         except AttributeError:
             logger.error("token_index.search method not found or failed.")
             token_hits: List[RetrievedColumn] = []
@@ -56,9 +56,11 @@ class RetrievalOrchestrator:
 
         # 2. Call embedding index
         try:
-            embedding_hits = self.embedding_index.search(question, k=k * 2)
+            embedding_hits = await self.embedding_index.search_similar(
+                question, k=k * 2
+            )
         except AttributeError:
-            logger.error("embedding_index.search method not found or failed.")
+            logger.error("embedding_index.search_similar method not found or failed.")
             embedding_hits: List[RetrievedColumn] = []
         except Exception as e:
             logger.error(f"Error calling embedding index: {e}")

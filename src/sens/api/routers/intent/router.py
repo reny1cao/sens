@@ -107,7 +107,7 @@ async def extract_intent_endpoint(
         schema_snippet_str = "\n\n".join(formatted_snippets)
 
         # Extract intent using the IntentExtractor instance
-        intent_result = intent_extractor_instance.extract(
+        intent_result = await intent_extractor_instance.extract(
             question=request.query, schema_snippet=schema_snippet_str
         )
 
