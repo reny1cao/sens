@@ -61,14 +61,19 @@ class IntentExtractor:
             },
         )
 
-        # Get primary and fallback models
+        # Get primary and fallback models from settings
         if models is not None:
             if not models:
                 raise ValueError("At least one model must be specified")
             self.models = models
+        elif model is not None:
+            self.models = [model]
         else:
-            # Use only gpt-3.5-turbo without the :free suffix
-            self.models = ["openai/gpt-3.5-turbo"]
+            # Use configured models from settings
+            intent_config = settings.intent_extractor
+            self.models = [intent_config.primary_model]
+            if intent_config.fallback_model:
+                self.models.append(intent_config.fallback_model)
 
         # Store primary model for test access
         self.model = self.models[0] if self.models else None
@@ -158,13 +163,18 @@ class IntentExtractor:
 
         prompt = self.template.format(question=question, schema_snippet=schema_snippet)
 
+        # Get settings for LLM parameters
+        settings = get_settings()
+        intent_config = settings.intent_extractor
+
         # Try primary model first, fall back if needed
         for model in self.models:
             try:
                 resp = await self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
+                    temperature=intent_config.temperature,
+                    max_tokens=intent_config.max_tokens,
                     response_format={"type": "json_object"},
                 )
                 raw_json = resp.choices[0].message.content.strip()
