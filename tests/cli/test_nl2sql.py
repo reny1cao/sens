@@ -1,56 +1,112 @@
-"""Tests for the NL2SQL CLI module."""
+"""Tests for NL2SQL pipeline CLI module."""
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sens.cli.nl2sql import (
-    EmbeddingSearchCLIAdapter,
-    NL2SQLPipeline,
-    TokenIndexCLIAdapter,
-)
+from sens.cli.nl2sql import NL2SQLPipeline
+from sens.execution.types import QueryResult
+from sens.llm.models import Intent, TokenUsage
+from sens.postprocessing.response_builder import FinalResponse
 
 
 @pytest.fixture
 def mock_schema_graph():
-    """Mock SchemaGraph instance."""
+    """Mock schema graph instance."""
     with patch("sens.cli.nl2sql.SchemaGraph") as mock:
-        mock_instance = MagicMock()
-        mock.get_instance.return_value = mock_instance
-        yield mock_instance
+        instance = MagicMock()
+        instance.schema_path = "/tmp/schema.json"
+        mock.get_instance.return_value = instance
+        yield instance
 
 
 @pytest.fixture
 def mock_token_index():
-    """Mock TokenIndexCLIAdapter."""
-    mock = AsyncMock(spec=TokenIndexCLIAdapter)
+    """Mock token index adapter."""
+    mock = MagicMock()
+    mock.initialize = AsyncMock()
+    mock.search = AsyncMock(return_value=[])
     return mock
 
 
 @pytest.fixture
 def mock_embedding_search():
-    """Mock EmbeddingSearchCLIAdapter."""
-    mock = AsyncMock(spec=EmbeddingSearchCLIAdapter)
+    """Mock embedding search adapter."""
+    mock = MagicMock()
+    mock.initialize = AsyncMock()
+    mock.search_similar = AsyncMock(return_value=[])
     return mock
 
 
 @pytest.fixture
 def mock_intent_extractor():
-    """Mock IntentExtractor."""
-    with patch("sens.cli.nl2sql.IntentExtractor") as mock:
-        mock_instance = AsyncMock()
-        mock.return_value = mock_instance
-        yield mock_instance
+    """Mock intent extractor."""
+    mock = MagicMock()
+    mock.extract = AsyncMock(
+        return_value=Intent(
+            query_type="lookup",
+            tables=["users"],
+            operations=[],
+            conditions=[],
+            confidence=0.9,
+        )
+    )
+    return mock
 
 
 @pytest.fixture
 def mock_sql_generator():
-    """Mock SQLGenerator."""
-    with patch("sens.cli.nl2sql.SQLGenerator") as mock:
-        mock_instance = AsyncMock()
-        mock.return_value = mock_instance
-        yield mock_instance
+    """Mock SQL generator."""
+    mock = MagicMock()
+    mock.generate = AsyncMock(
+        return_value=MagicMock(
+            sql="SELECT * FROM users",
+            tables_used=["users"],
+            columns_used={"users": ["id", "name"]},
+            model_used="gpt-4",
+            generation_ms=100,
+            token_usage=TokenUsage(prompt_tokens=50, completion_tokens=20),
+        )
+    )
+    return mock
+
+
+@pytest.fixture
+def mock_sql_executor():
+    """Mock SQL executor."""
+    mock = MagicMock()
+    mock.execute = MagicMock(
+        return_value=QueryResult(
+            columns=["id", "name"],
+            rows=[(1, "Alice"), (2, "Bob")],
+            row_count=2,
+        )
+    )
+    return mock
+
+
+@pytest.fixture
+def mock_response_builder():
+    """Mock response builder."""
+    mock = MagicMock()
+    mock.build = MagicMock(
+        return_value=FinalResponse(
+            summary="Found 2 users.",
+            table_preview=[(1, "Alice"), (2, "Bob")],
+            row_count=2,
+            sql="SELECT * FROM users",
+            execution_time_ms=50.0,
+            generated_at="2024-03-14T12:00:00Z",
+            metadata={
+                "intent_type": "lookup",
+                "columns": ["id", "name"],
+                "total_rows": 2,
+                "truncated": False,
+            },
+        )
+    )
+    return mock
 
 
 @pytest.fixture
@@ -60,15 +116,20 @@ async def pipeline(
     mock_embedding_search,
     mock_intent_extractor,
     mock_sql_generator,
+    mock_sql_executor,
+    mock_response_builder,
 ):
     """Create a pipeline instance with mocked components."""
     with (
         patch("sens.cli.nl2sql.TokenIndexCLIAdapter") as mock_token_cls,
         patch("sens.cli.nl2sql.EmbeddingSearchCLIAdapter") as mock_embedding_cls,
+        patch("sens.cli.nl2sql.SQLExecutor") as mock_executor_cls,
+        patch("sens.cli.nl2sql.ResponseBuilder") as mock_builder_cls,
     ):
-
         mock_token_cls.return_value = mock_token_index
         mock_embedding_cls.return_value = mock_embedding_search
+        mock_executor_cls.return_value = mock_sql_executor
+        mock_builder_cls.return_value = mock_response_builder
 
         pipeline = NL2SQLPipeline()
         await pipeline.initialize()
@@ -76,76 +137,35 @@ async def pipeline(
 
 
 @pytest.mark.asyncio
-async def test_pipeline_initialization(pipeline):
-    """Test that pipeline initializes all components correctly."""
-    assert pipeline.schema_graph is not None
-    assert pipeline.token_index is not None
-    assert pipeline.embedding_search is not None
-    assert pipeline.orchestrator is not None
-
-
-@pytest.mark.asyncio
 async def test_pipeline_process_question_success(pipeline):
     """Test successful question processing through the pipeline."""
-    # Mock the orchestrator's get_relevant_context
-    pipeline.orchestrator.get_relevant_context = AsyncMock(
-        return_value=MagicMock(tables=["users", "orders"])
-    )
-
-    # Mock schema extraction
-    pipeline.schema_extractor.format_for_llm = MagicMock(return_value="mock schema")
-
-    # Mock intent extraction
-    mock_intent = MagicMock()
-    pipeline.intent_extractor.extract.return_value = mock_intent
-
-    # Mock intent validation
-    mock_validated_intent = MagicMock(needs_clarification=False)
-    pipeline.intent_validator.validate = MagicMock(return_value=mock_validated_intent)
-
-    # Mock SQL generation
-    mock_sql_result = MagicMock(
-        sql="SELECT * FROM users",
-        tables_used=["users"],
-        columns_used={"users": ["id", "name"]},
-        model_used="gpt-4",
-        generation_ms=100,
-        token_usage=None,
-    )
-    pipeline.sql_generator.generate.return_value = mock_sql_result
-
     # Process a test question
     result = await pipeline.process_question("List all users")
 
     assert result["status"] == "success"
+    assert result["summary"] == "Found 2 users."
     assert result["sql"] == "SELECT * FROM users"
+    assert result["result"]["preview"] == [(1, "Alice"), (2, "Bob")]
+    assert result["result"]["row_count"] == 2
     assert result["metadata"]["tables_used"] == ["users"]
     assert result["metadata"]["columns_used"] == {"users": ["id", "name"]}
+    assert result["metadata"]["model_used"] == "gpt-4"
+    assert result["metadata"]["generation_ms"] == 100
+    assert result["metadata"]["execution_ms"] > 0
+    assert result["metadata"]["intent_type"] == "lookup"
 
 
 @pytest.mark.asyncio
 async def test_pipeline_process_question_needs_clarification(pipeline):
     """Test question processing that requires clarification."""
-    # Mock the orchestrator's get_relevant_context
-    pipeline.orchestrator.get_relevant_context = AsyncMock(
-        return_value=MagicMock(tables=["users"])
-    )
-
-    # Mock schema extraction
-    pipeline.schema_extractor.format_for_llm = MagicMock(return_value="mock schema")
-
-    # Mock intent extraction
-    mock_intent = MagicMock()
-    pipeline.intent_extractor.extract.return_value = mock_intent
-
     # Mock intent validation to request clarification
-    mock_validated_intent = MagicMock(
-        needs_clarification=True,
-        clarification_request=MagicMock(
-            message="Please be more specific", reason="ambiguous_intent"
-        ),
+    pipeline.intent_validator.validate = MagicMock(
+        return_value=MagicMock(
+            needs_clarification=True,
+            message="Please be more specific",
+            reason="ambiguous_intent",
+        )
     )
-    pipeline.intent_validator.validate = MagicMock(return_value=mock_validated_intent)
 
     # Process a test question
     result = await pipeline.process_question("Show me everything")
@@ -153,6 +173,27 @@ async def test_pipeline_process_question_needs_clarification(pipeline):
     assert result["status"] == "clarification_needed"
     assert result["message"] == "Please be more specific"
     assert result["reason"] == "ambiguous_intent"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_process_question_execution_error(pipeline):
+    """Test error handling during query execution."""
+    # Mock executor to return error
+    pipeline.sql_executor.execute = MagicMock(
+        return_value=QueryResult(
+            columns=[],
+            rows=[],
+            row_count=0,
+            error="Table 'users' does not exist",
+        )
+    )
+
+    # Process a test question
+    result = await pipeline.process_question("List all users")
+
+    assert result["status"] == "error"
+    assert "Table 'users' does not exist" in result["message"]
+    assert result["sql"] == "SELECT * FROM users"
 
 
 @pytest.mark.asyncio
