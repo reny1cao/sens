@@ -40,14 +40,18 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-async def handle_nl2sql(args: argparse.Namespace) -> None:
+async def handle_nl2sql(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
     """Handle natural language to SQL conversion command.
 
     Args:
         args: Command line arguments
+        parser: The argument parser instance
     """
     try:
         # Import here to avoid loading dependencies unless needed
+        from sens.cli.formatters import format_nl2sql_response
         from sens.cli.nl2sql import NL2SQLPipeline
 
         pipeline = NL2SQLPipeline()
@@ -66,7 +70,14 @@ async def handle_nl2sql(args: argparse.Namespace) -> None:
                         k=args.k,
                     )
                     print("\nResult:")
-                    print(json.dumps(result, indent=2 if args.pretty else None))
+                    formatted = format_nl2sql_response(
+                        result,
+                        format=args.format,
+                        show_preview=not args.no_preview,
+                        max_rows=args.max_rows,
+                        pretty=args.pretty,
+                    )
+                    print(formatted)
 
                 except (EOFError, KeyboardInterrupt):
                     print("\nExiting interactive mode...")
@@ -74,11 +85,21 @@ async def handle_nl2sql(args: argparse.Namespace) -> None:
                 except Exception as e:
                     print(f"\nError: {e}")
         else:
+            if not args.question:
+                parser.error("either --question or --interactive must be specified")
+
             result = await pipeline.process_question(
                 question=args.question,
                 k=args.k,
             )
-            print(json.dumps(result, indent=2 if args.pretty else None))
+            formatted = format_nl2sql_response(
+                result,
+                format=args.format,
+                show_preview=not args.no_preview,
+                max_rows=args.max_rows,
+                pretty=args.pretty,
+            )
+            print(formatted)
 
     except Exception as e:
         log.error("nl2sql_command_failed", error=str(e))
@@ -332,6 +353,23 @@ def main() -> None:
         help="Enter interactive mode for multiple queries",
     )
     nl2sql_parser.add_argument(
+        "--format",
+        choices=["json", "table", "summary"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    nl2sql_parser.add_argument(
+        "--no-preview",
+        action="store_true",
+        help="Skip table preview in output",
+    )
+    nl2sql_parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=5,
+        help="Maximum preview rows (default: 5)",
+    )
+    nl2sql_parser.add_argument(
         "-p",
         "--pretty",
         action="store_true",
@@ -449,7 +487,7 @@ def main() -> None:
                 nl2sql_parser.error(
                     "either --question or --interactive must be specified"
                 )
-            asyncio.run(handle_nl2sql(args))
+            asyncio.run(handle_nl2sql(args, parser))
         elif args.command == "extract-schema":
             handle_extract_schema(args)
         elif args.command == "build-index":

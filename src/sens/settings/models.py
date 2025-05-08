@@ -136,3 +136,28 @@ class DatabaseConfig(BaseModel):
         if not v:
             raise ValueError("Database password cannot be empty")
         return v
+
+
+class ResponseBuilderConfig(ModelConfig):
+    """Response builder component configuration."""
+
+    primary_model: str = Field(
+        default="openai/gpt-4",
+        description="Primary model for response generation",
+    )
+    fallback_model: Optional[str] = Field(
+        default="openai/gpt-3.5-turbo",
+        description="Fallback model for response generation",
+    )
+    max_tokens: int = Field(
+        default=300,
+        description="Maximum tokens for response generation",
+    )
+    temperature: float = Field(
+        default=0.3,
+        description="Temperature for response generation",
+    )
+    timeout_seconds: int = Field(
+        default=30,
+        description="Timeout in seconds for response generation requests",
+    )

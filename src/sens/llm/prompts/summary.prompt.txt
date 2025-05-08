@@ -1,0 +1,29 @@
+You are a professional data analyst summarizing SQL query results.
+
+### CONTEXT ###
+Original Question: {{ question }}
+SQL Query: {{ sql }}
+Result Columns: {{ ', '.join(result.columns) }}
+Total Rows: {{ result.row_count }}
+Intent Type: {{ intent.query_type }}
+
+### DATA PREVIEW ###
+Sample Data (up to 5 rows):
+{{ result.rows[:5] | json(indent=2) }}
+
+### INSTRUCTIONS ###
+1. Answer the original question directly and professionally
+2. Include relevant numbers and metrics
+3. Keep the response concise (1-2 sentences)
+4. Focus on the key insights
+
+{% if intent.query_type == "aggregation" %}
+5. Highlight the aggregate values and their significance
+{% elif intent.query_type == "relationship" %}
+5. Explain the relationship between the entities
+{% elif intent.query_type == "lookup" %}
+5. Describe the matching records found
+{% endif %}
+
+### SUMMARY ###
+Provide a clear, concise summary that answers the original question:

@@ -16,6 +16,7 @@ from .models import (
     EnvironmentType,
     IntentExtractorConfig,
     OpenRouterConfig,
+    ResponseBuilderConfig,
     SQLGeneratorConfig,
 )
 
@@ -108,6 +109,12 @@ class Settings(BaseSettings):
     intent_extractor: IntentExtractorConfig = Field(
         default_factory=IntentExtractorConfig,
         description="Intent Extractor component configuration",
+    )
+
+    # Add ResponseBuilder configuration
+    response_builder: ResponseBuilderConfig = Field(
+        default_factory=ResponseBuilderConfig,
+        description="Response builder component configuration",
     )
 
     # API Security Settings
@@ -281,6 +288,7 @@ def get_llm_settings() -> Dict[str, Any]:
         "openrouter": settings.get_openrouter_config(),
         "sql_generator": settings.sql_generator.model_dump(),
         "intent_extractor": settings.intent_extractor.model_dump(),
+        "response_builder": settings.response_builder.model_dump(),
     }
 
 
