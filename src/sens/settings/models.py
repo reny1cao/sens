@@ -71,10 +71,11 @@ class SQLGeneratorConfig(ModelConfig):
     """SQL Generator component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-4", description="Primary model for SQL generation"
+        default="openai/gpt-4o", description="Primary model for SQL generation"
     )
     fallback_model: Optional[str] = Field(
-        default="openai/gpt-4:free", description="Fallback model for SQL generation"
+        default="deepseek/deepseek-chat-v3-0324",
+        description="Fallback model for SQL generation",
     )
     max_tokens: int = Field(
         default=500, description="Maximum tokens for SQL generation"
@@ -91,11 +92,11 @@ class IntentExtractorConfig(ModelConfig):
     """Intent Extractor component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-3.5-turbo",
+        default="openai/gpt-4o",
         description="Primary model for intent extraction",
     )
     fallback_model: Optional[str] = Field(
-        default="openai/gpt-3.5-turbo:free",
+        default="deepseek/deepseek-chat-v3-0324",
         description="Fallback model for intent extraction",
     )
     confidence_threshold: float = Field(
@@ -142,11 +143,11 @@ class ResponseBuilderConfig(ModelConfig):
     """Response builder component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-4",
+        default="openai/gpt-4o",
         description="Primary model for response generation",
     )
     fallback_model: Optional[str] = Field(
-        default="openai/gpt-3.5-turbo",
+        default="deepseek/deepseek-chat-v3-0324",
         description="Fallback model for response generation",
     )
     max_tokens: int = Field(
