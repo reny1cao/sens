@@ -10,14 +10,17 @@ import asyncio
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import structlog
 
+from sens.execution import SQLExecutor
 from sens.llm.intent_extractor import IntentExtractor
 from sens.llm.intent_validator import ClarificationRequest, IntentValidator
 from sens.llm.sql_generator import SQLGenerator
+from sens.postprocessing.response_builder import ResponseBuilder
 from sens.retrieval.embedding.search import EmbeddingSearch
 from sens.retrieval.models import RetrievedColumn
 from sens.retrieval.orchestrator import RetrievalOrchestrator
@@ -114,6 +117,8 @@ class NL2SQLPipeline:
         self.intent_extractor = IntentExtractor()
         self.intent_validator = IntentValidator()
         self.sql_generator = SQLGenerator()
+        self.sql_executor = SQLExecutor()
+        self.response_builder = ResponseBuilder()
 
         # Initialize orchestrator after adapters are ready
         self.orchestrator = None
@@ -187,24 +192,59 @@ class NL2SQLPipeline:
 
             # Step 4: SQL Generation
             log.info("generating_sql")
+            start_time = time.time()
             sql_result = await self.sql_generator.generate(
                 question=question,
                 intent=validation_result,  # validation_result is ValidIntent here
             )
 
+            # Step 5: Execute SQL
+            log.info("executing_sql", sql=sql_result.sql)
+            query_result = self.sql_executor.execute(sql_result.sql)
+            execution_time_ms = (time.time() - start_time) * 1000
+
+            if query_result.error:
+                return {
+                    "status": "error",
+                    "message": f"Query execution failed: {query_result.error}",
+                    "sql": sql_result.sql,
+                }
+
+            # Step 6: Build Response
+            log.info("building_response")
+            response = self.response_builder.build(
+                question=question,
+                intent=intent,
+                result=query_result,
+                sql=sql_result.sql,
+                execution_time_ms=execution_time_ms,
+            )
+
             return {
                 "status": "success",
+                "summary": response.summary,
                 "sql": sql_result.sql,
+                "result": {
+                    "preview": response.table_preview,
+                    "row_count": response.row_count,
+                    "columns": query_result.columns,
+                },
                 "metadata": {
                     "tables_used": sql_result.tables_used,
                     "columns_used": sql_result.columns_used,
                     "model_used": sql_result.model_used,
                     "generation_ms": sql_result.generation_ms,
+                    "execution_ms": execution_time_ms,
                     "token_usage": (
                         sql_result.token_usage.model_dump()
                         if sql_result.token_usage
                         else None
                     ),
+                    "intent_type": intent.query_type,
+                    "tables": intent.tables,
+                    "operations": intent.operations,
+                    "confidence": intent.confidence,
+                    "generated_at": response.generated_at,
                 },
             }
 
