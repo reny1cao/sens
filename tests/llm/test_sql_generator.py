@@ -511,3 +511,61 @@ async def test_generate_end_to_end(
     assert "orders" in result.tables_used
     assert result.model_used == sql_generator.primary_model
     assert result.generation_ms > 0
+
+
+@pytest.fixture
+def sample_schema():
+    """Create a sample schema for testing."""
+    return SchemaContext(
+        tables={
+            "users": ["id", "name", "email"],
+            "orders": ["id", "user_id", "total"],
+        },
+        primary_keys={
+            "users": ["id"],
+            "orders": ["id"],
+        },
+        foreign_keys=[
+            {
+                "from_table": "orders",
+                "from_columns": ["user_id"],
+                "to_table": "users",
+                "to_columns": ["id"],
+            }
+        ],
+        column_descriptions={
+            "users": {
+                "id": "User ID",
+                "name": "User's full name",
+            }
+        },
+    )
+
+
+def test_validate_generated_sql(sample_schema):
+    """Test SQL validation with schema conversion."""
+    generator = SQLGenerator()
+
+    # Test valid SQL
+    sql = "SELECT name, email FROM users WHERE id = 1"
+    is_valid, error = generator._validate_generated_sql(sql, sample_schema)
+    assert is_valid
+    assert error is None
+
+    # Test invalid table
+    sql = "SELECT name FROM non_existent_table"
+    is_valid, error = generator._validate_generated_sql(sql, sample_schema)
+    assert not is_valid
+    assert "non_existent_table" in error.lower()
+
+    # Test invalid column
+    sql = "SELECT non_existent_column FROM users"
+    is_valid, error = generator._validate_generated_sql(sql, sample_schema)
+    assert not is_valid
+    assert "non_existent_column" in error.lower()
+
+    # Test join with foreign key
+    sql = "SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id"
+    is_valid, error = generator._validate_generated_sql(sql, sample_schema)
+    assert is_valid
+    assert error is None

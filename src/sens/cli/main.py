@@ -19,8 +19,10 @@ from typing import Optional, Set
 
 import structlog
 
+from sens.cli.metrics_store import MetricsStore
+from sens.schema.context import ValidatorSchemaContext
 from sens.settings import get_settings
-from sens.validation.sql_validator import SchemaContext, SQLValidator, ValidationLevel
+from sens.validation.sql_validator import SQLValidator, ValidationLevel
 
 # Configure structured logging
 log = structlog.get_logger()
@@ -51,11 +53,15 @@ async def handle_nl2sql(
     """
     try:
         # Import here to avoid loading dependencies unless needed
+        from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
         from sens.cli.formatters import format_nl2sql_response
-        from sens.cli.nl2sql import NL2SQLPipeline
 
-        pipeline = NL2SQLPipeline()
-        await pipeline.initialize()
+        # Initialize enhanced pipeline with options
+        pipeline = EnhancedNL2SQLPipeline(
+            conversation_id=args.conversation_id,
+            metrics_enabled=args.metrics,
+            debug_mode=args.debug,
+        )
 
         if args.interactive:
             print("Enter your questions (Ctrl+D or Ctrl+C to exit):")
@@ -67,7 +73,9 @@ async def handle_nl2sql(
 
                     result = await pipeline.process_question(
                         question=question,
-                        k=args.k,
+                        format_type=args.format,
+                        show_preview=not args.no_preview,
+                        max_rows=args.max_rows,
                     )
                     print("\nResult:")
                     formatted = format_nl2sql_response(
@@ -76,6 +84,8 @@ async def handle_nl2sql(
                         show_preview=not args.no_preview,
                         max_rows=args.max_rows,
                         pretty=args.pretty,
+                        show_metrics=args.metrics,
+                        show_debug=args.debug,
                     )
                     print(formatted)
 
@@ -90,7 +100,9 @@ async def handle_nl2sql(
 
             result = await pipeline.process_question(
                 question=args.question,
-                k=args.k,
+                format_type=args.format,
+                show_preview=not args.no_preview,
+                max_rows=args.max_rows,
             )
             formatted = format_nl2sql_response(
                 result,
@@ -98,6 +110,8 @@ async def handle_nl2sql(
                 show_preview=not args.no_preview,
                 max_rows=args.max_rows,
                 pretty=args.pretty,
+                show_metrics=args.metrics,
+                show_debug=args.debug,
             )
             print(formatted)
 
@@ -189,7 +203,9 @@ def handle_validate(args: argparse.Namespace) -> None:
         columns_per_table = {
             table: set(schema_graph.get_table_columns(table)) for table in tables
         }
-        schema = SchemaContext(tables=set(tables), columns_per_table=columns_per_table)
+        schema = ValidatorSchemaContext(
+            tables=set(tables), columns_per_table=columns_per_table
+        )
 
         # Initialize validator with options
         validator = SQLValidator(
@@ -375,6 +391,24 @@ def main() -> None:
         action="store_true",
         help="Pretty print JSON output",
     )
+    # Add new options for enhanced pipeline
+    nl2sql_parser.add_argument(
+        "--conversation-id",
+        type=str,
+        help="Specify a conversation ID for continuity",
+    )
+    nl2sql_parser.add_argument(
+        "-m",
+        "--metrics",
+        action="store_true",
+        help="Show pipeline metrics in output",
+    )
+    nl2sql_parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Show debug information in output",
+    )
 
     # extract-schema command
     extract_parser = subparsers.add_parser(
@@ -472,6 +506,56 @@ def main() -> None:
         "--pretty", action="store_true", help="Pretty print output in table format"
     )
 
+    # debug command
+    debug_parser = subparsers.add_parser(
+        "debug",
+        help="Debug system components and conversations",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    debug_parser.add_argument(
+        "-c",
+        "--conversation-id",
+        type=str,
+        help="Show debug information for a specific conversation",
+    )
+    debug_parser.add_argument(
+        "--component",
+        choices=["schema", "indices", "database"],
+        help="Show debug information for a specific component",
+    )
+
+    # metrics command
+    metrics_parser = subparsers.add_parser(
+        "metrics",
+        help="Show system metrics",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    metrics_parser.add_argument(
+        "-c",
+        "--conversation-id",
+        type=str,
+        help="Show metrics for a specific conversation",
+    )
+    metrics_parser.add_argument(
+        "-d",
+        "--detailed",
+        action="store_true",
+        help="Show detailed metrics",
+    )
+
+    # status command
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show system status",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    status_parser.add_argument(
+        "-j",
+        "--json",
+        action="store_true",
+        help="Output in JSON format",
+    )
+
     args = parser.parse_args()
 
     # Configure logging
@@ -481,7 +565,12 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
+    # Record command invocation
+    metrics_store = MetricsStore()
+    metrics_store.record_command(args.command)
+
     try:
+        # Import handlers here to avoid loading all dependencies
         if args.command == "nl2sql":
             if not args.question and not args.interactive:
                 nl2sql_parser.error(
@@ -500,9 +589,22 @@ def main() -> None:
             if not args.sql and not args.file:
                 execute_parser.error("either SQL query or --file is required")
             handle_execute(args)
+        elif args.command == "debug":
+            from sens.cli.commands.system import handle_debug
+
+            handle_debug(args)
+        elif args.command == "metrics":
+            from sens.cli.commands.system import handle_metrics
+
+            handle_metrics(args)
+        elif args.command == "status":
+            from sens.cli.commands.system import handle_status
+
+            handle_status(args)
 
     except Exception as e:
         log.error("command_failed", command=args.command, error=str(e))
+        metrics_store.record_error()
         sys.exit(1)
 
 

@@ -4,7 +4,7 @@ SQL Validator for ensuring query correctness, safety, and schema alignment.
 This module provides validation for SQL queries to ensure they are:
 1. Syntactically correct
 2. Schema-aligned (using only existing tables/columns)
-3. Safe (no destructive operations unless explicitly allowed).
+3. Safe (no destructive operations unless explicitly allowed)
 """
 
 import logging
@@ -191,24 +191,22 @@ class SQLValidator:
     def _extract_schema_references_with_sqlglot(
         self, parsed_sql_statement: exp.Expression
     ) -> Tuple[Set[str], Dict[str, Set[str]], Dict[str, str]]:
-        """Extract actual table names, columns per actual table, and table aliases from a single parsed sqlglot expression.
+        """Extracts actual table names, columns per actual table, and table aliases.
 
         Args:
             parsed_sql_statement: A parsed SQL statement (sqlglot.Expression)
 
         Returns:
             A tuple containing:
-            - Set of actual table names
-            - Dict mapping table names to sets of column names
-            - Dict mapping table aliases to actual table names
+            - referenced_actual_tables: Set of actual table names (lowercase)
+            - columns_per_actual_table: Dict mapping actual table name (lowercase)
+                                      to a set of referenced column names (lowercase)
+            - table_aliases: Dict mapping alias name (lowercase) to actual
+                           table name (lowercase)
         """
         referenced_actual_tables = set()
-        columns_per_actual_table = (
-            {}
-        )  # Maps actual table name to set of referenced column names
-        table_aliases = (
-            {}
-        )  # Maps alias name (lowercase) to actual table name (lowercase)
+        columns_per_actual_table = {}  # Maps actual table name to set of column names
+        table_aliases = {}  # Maps alias to actual table name
 
         # Extract table names and their aliases
         for table_node in parsed_sql_statement.find_all(exp.Table):

@@ -48,6 +48,8 @@ sens nl2sql -i
 sens execute "SELECT * FROM users LIMIT 5"
 ```
 
+For more details on system administration commands like `debug`, `metrics`, and `status`, as well as advanced CLI configuration options, please see the [Sens CLI Commands and Configuration](./docs/cli_commands.md) documentation.
+
 ### Output Formatting
 
 The `nl2sql` command supports different output formats:

@@ -1,7 +1,7 @@
 """Data models for LLM interactions, intents, and schema context."""
 
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, confloat
 
@@ -81,6 +81,43 @@ class SchemaContext(BaseModel):
         default_factory=dict,
         description="Nested dictionary mapping table.column to its description",
     )
+
+    def to_validator_schema(self) -> "SchemaContext":
+        """Convert to validator's SchemaContext format."""
+        from sens.validation.sql_validator import (
+            SchemaContext as ValidatorSchemaContext,
+        )
+
+        # Convert tables and columns
+        tables = set(self.tables.keys())
+        columns_per_table = {
+            table: set(columns) for table, columns in self.tables.items()
+        }
+
+        # Convert foreign keys to validator format
+        foreign_keys = {}
+        for fk in self.foreign_keys:
+            from_table = fk["from_table"]
+            to_table = fk["to_table"]
+            from_cols = fk["from_columns"]
+            to_cols = fk["to_columns"]
+
+            # Handle both single column and multi-column foreign keys
+            if isinstance(from_cols, str) and isinstance(to_cols, str):
+                from_cols = [from_cols]
+                to_cols = [to_cols]
+
+            # Add each column pair as a foreign key
+            if from_table not in foreign_keys:
+                foreign_keys[from_table] = {}
+            for from_col, to_col in zip(from_cols, to_cols):
+                foreign_keys[from_table][from_col] = (to_table, to_col)
+
+        return ValidatorSchemaContext(
+            tables=tables,
+            columns_per_table=columns_per_table,
+            foreign_keys=foreign_keys,
+        )
 
     model_config = {
         "json_schema_extra": {
@@ -171,6 +208,62 @@ class GeneratedSQL(BaseModel):
                 },
                 "model_used": "gpt-4",
                 "generation_ms": 2500,
+            }
+        }
+    }
+
+
+class RetrievedSchemaContext(BaseModel):
+    """Schema context from retrieval system."""
+
+    query: str = Field(..., description="The original query")
+    tables: List[Dict[str, Any]] = Field(
+        ..., description="Retrieved tables with metadata"
+    )
+    columns: List[Dict[str, Any]] = Field(
+        ..., description="Retrieved columns with metadata"
+    )
+
+    def format_for_llm(self) -> str:
+        """Format the schema context for LLM consumption."""
+        parts = []
+
+        # Group columns by table
+        table_columns: Dict[str, List[str]] = {}
+        for col in self.columns:
+            table_name = col["table_name"]
+            column_name = col["column_name"]
+            if table_name not in table_columns:
+                table_columns[table_name] = []
+            table_columns[table_name].append(column_name)
+
+        # Format each table
+        for table in self.tables:
+            table_name = table["table_name"]
+            columns_str = ", ".join(table_columns.get(table_name, []))
+            table_def = f"TABLE {table_name} ({columns_str})"
+            if table.get("metadata", {}).get("description"):
+                table_def += f"\n-- {table['metadata']['description']}"
+            parts.append(table_def)
+
+        return "\n\n".join(parts)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "query": "Show top movies",
+                "tables": [
+                    {"table_name": "movie", "reason": "direct_hit", "metadata": {}}
+                ],
+                "columns": [
+                    {
+                        "table_name": "movie",
+                        "column_name": "title",
+                        "score": 0.8,
+                        "source": "embedding",
+                        "metadata": {},
+                    }
+                ],
             }
         }
     }
