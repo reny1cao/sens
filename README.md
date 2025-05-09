@@ -9,6 +9,8 @@ A natural language to SQL conversion tool with semantic understanding.
 - Safe, read-only query execution
 - Rich, formatted output options
 - Interactive mode for multiple queries
+- Persistent conversation state with Redis session management
+- Horizontal scalability with distributed session storage
 
 ## Installation
 
@@ -22,7 +24,7 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Create a `.env` file with your database and LLM settings:
+Create a `.env` file with your database, LLM, and Redis settings:
 
 ```env
 # Database
@@ -31,7 +33,13 @@ SENS_DB_URL=postgresql://user:pass@localhost:5432/dbname
 # OpenRouter LLM
 SENS_OPENROUTER_API_KEY=your_api_key
 SENS_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+
+# Redis Session Management (optional)
+SENS_REDIS_URL=redis://localhost:6379
+SENS_SESSION_TTL_SECONDS=86400  # 24 hours
 ```
+
+If Redis is not available, Sens will operate in a degraded mode with in-memory session state.
 
 ## Usage
 
