@@ -7,8 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openai import OpenAI
 
+from sens.exceptions import IntentExtractionError
 from sens.llm.intent_extractor import IntentExtractor
 from sens.llm.models import Intent, QueryType
+from sens.retrieval.models import RetrievedSchemaContext
 from sens.settings import get_settings
 
 # Constants for testing
@@ -461,3 +463,78 @@ def test_whitespace_handling(extractor, mock_openai):
         intent = extractor.extract(question, schema)
         assert intent.query_type == QueryType.LOOKUP
         assert "movie" in intent.tables
+
+
+def test_dict_schema_input(extractor, mock_openai):
+    """Test handling of dictionary schema input."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    schema_dict = {
+        "query": "Show top movies",
+        "tables": [{"table_name": "movie", "reason": "direct_hit", "metadata": {}}],
+        "columns": [
+            {
+                "table_name": "movie",
+                "column_name": "title",
+                "score": 0.8,
+                "source": "embedding",
+                "metadata": {},
+            }
+        ],
+    }
+
+    intent = extractor.extract("Show top movies", schema_dict)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+    assert intent.confidence == 0.85
+
+
+def test_invalid_dict_schema(extractor):
+    """Test handling of invalid dictionary schema."""
+    invalid_schema = {
+        "query": "Show top movies",
+        "invalid_key": [],  # Missing required fields
+    }
+
+    with pytest.raises(IntentExtractionError) as exc_info:
+        extractor.extract("Show top movies", invalid_schema)
+    assert "schema_validation_failed" in str(exc_info.value)
+
+
+def test_retrieved_schema_context_input(extractor, mock_openai):
+    """Test handling of RetrievedSchemaContext input."""
+    mock_openai.set_chat_create_return_value(
+        create_mock_response(
+            '{"query_type": "lookup", "tables": ["movie"], "operations": [], "confidence": 0.85}'
+        )
+    )
+
+    schema_context = RetrievedSchemaContext(
+        query="Show top movies",
+        tables=[{"table_name": "movie", "reason": "direct_hit", "metadata": {}}],
+        columns=[
+            {
+                "table_name": "movie",
+                "column_name": "title",
+                "score": 0.8,
+                "source": "embedding",
+                "metadata": {},
+            }
+        ],
+    )
+
+    intent = extractor.extract("Show top movies", schema_context)
+    assert intent.query_type == QueryType.LOOKUP
+    assert "movie" in intent.tables
+    assert intent.confidence == 0.85
+
+
+def test_unsupported_schema_type(extractor):
+    """Test handling of unsupported schema type."""
+    with pytest.raises(ValueError) as exc_info:
+        extractor.extract("Show top movies", 123)  # Integer is not a supported type
+    assert "Unsupported schema_snippet type" in str(exc_info.value)

@@ -32,3 +32,47 @@ class RetrievedContext:
     tables: List[RetrievedTable] = field(default_factory=list)
     columns: List[RetrievedColumn] = field(default_factory=list)
     # Optional: Add overall confidence or other top-level metadata if needed
+
+    def format_for_llm(self) -> Dict[str, Any]:
+        """Format the retrieved context in a structure suitable for LLM consumption."""
+        return {
+            "query": self.query,
+            "tables": [
+                {"name": table.table_name, "reason": table.reason, **table.metadata}
+                for table in self.tables
+            ],
+            "columns": [
+                {
+                    "table": column.table_name,
+                    "column": column.column_name,
+                    "score": column.score,
+                    "source": column.source,
+                    **column.metadata,
+                }
+                for column in self.columns
+            ],
+        }
+
+    def model_dump(self) -> Dict[str, Any]:
+        """Convert the instance to a dictionary representation."""
+        return {
+            "query": self.query,
+            "tables": [
+                {
+                    "table_name": table.table_name,
+                    "reason": table.reason,
+                    "metadata": table.metadata,
+                }
+                for table in self.tables
+            ],
+            "columns": [
+                {
+                    "table_name": column.table_name,
+                    "column_name": column.column_name,
+                    "score": column.score,
+                    "source": column.source,
+                    "metadata": column.metadata,
+                }
+                for column in self.columns
+            ],
+        }

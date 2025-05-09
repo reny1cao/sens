@@ -1,9 +1,14 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+import structlog
+
+from sens.exceptions import RetrievalError
 
 from .models import RetrievedColumn, RetrievedContext, RetrievedTable
 
 logger = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 
 class RetrievalOrchestrator:
@@ -42,93 +47,125 @@ class RetrievalOrchestrator:
         """
         logger.debug(f"Orchestrating retrieval for question: '{question}' with k={k}")
 
-        # 1. Call token index
         try:
-            # Fetch more initially to allow for merging/ranking (e.g., 2*k or more)
-            token_hits = await self.token_index.search(question, k=k * 2)
-        except AttributeError:
-            logger.error("token_index.search method not found or failed.")
-            token_hits: List[RetrievedColumn] = []
-        except Exception as e:
-            logger.error(f"Error calling token index: {e}")
-            token_hits: List[RetrievedColumn] = []
-        logger.debug(f"Token index returned {len(token_hits)} hits.")
+            # 1. Call token index
+            try:
+                token_hits = await self.token_index.search(question, k=k * 2)
+            except AttributeError:
+                logger.error("token_index.search method not found or failed.")
+                token_hits: List[RetrievedColumn] = []
+            except Exception as e:
+                logger.error(f"Error calling token index: {e}")
+                token_hits: List[RetrievedColumn] = []
+            logger.debug(f"Token index returned {len(token_hits)} hits.")
 
-        # 2. Call embedding index
-        try:
-            embedding_hits = await self.embedding_index.search_similar(
-                question, k=k * 2
+            # 2. Call embedding index
+            try:
+                embedding_hits = await self.embedding_index.search(question, k=k * 2)
+            except AttributeError:
+                logger.error("embedding_index.search method not found or failed.")
+                embedding_hits: List[RetrievedColumn] = []
+            except Exception as e:
+                logger.error(f"Error calling embedding index: {e}")
+                embedding_hits: List[RetrievedColumn] = []
+            logger.debug(f"Embedding index returned {len(embedding_hits)} hits.")
+
+            # 3. Merge scores and deduplicate columns (sorted by score)
+            merged_columns = self._merge_and_deduplicate(token_hits, embedding_hits)
+            logger.debug(f"Merged and deduplicated to {len(merged_columns)} columns.")
+
+            # 4. Expand schema (adds related tables and PK/FK columns)
+            # Returns all involved tables and columns (original + schema), sorted by score
+            all_involved_tables, all_involved_columns = self._expand_schema(
+                merged_columns
             )
-        except AttributeError:
-            logger.error("embedding_index.search_similar method not found or failed.")
-            embedding_hits: List[RetrievedColumn] = []
-        except Exception as e:
-            logger.error(f"Error calling embedding index: {e}")
-            embedding_hits: List[RetrievedColumn] = []
-        logger.debug(f"Embedding index returned {len(embedding_hits)} hits.")
+            logger.debug(
+                f"Schema expanded to {len(all_involved_tables)} tables and {len(all_involved_columns)} columns."
+            )
 
-        # 3. Merge scores and deduplicate columns (sorted by score)
-        merged_columns = self._merge_and_deduplicate(token_hits, embedding_hits)
-        logger.debug(f"Merged and deduplicated to {len(merged_columns)} columns.")
+            # 5. Rank and select top k columns based on score
+            # Note: This selects the top *columns*. The tables included are those
+            # associated with these columns plus any added during expansion.
+            selected_columns = self._rank_and_select(all_involved_columns, k)
+            logger.debug(f"Ranked and selected top {len(selected_columns)} columns.")
 
-        # 4. Expand schema (adds related tables and PK/FK columns)
-        # Returns all involved tables and columns (original + schema), sorted by score
-        all_involved_tables, all_involved_columns = self._expand_schema(merged_columns)
-        logger.debug(
-            f"Schema expanded to {len(all_involved_tables)} tables and {len(all_involved_columns)} columns."
-        )
-
-        # 5. Rank and select top k columns based on score
-        # Note: This selects the top *columns*. The tables included are those
-        # associated with these columns plus any added during expansion.
-        selected_columns = self._rank_and_select(all_involved_columns, k)
-        logger.debug(f"Ranked and selected top {len(selected_columns)} columns.")
-
-        # 6. Determine final tables based *only* on the selected columns and expansion results
-        final_table_names = {col.table_name for col in selected_columns}
-        # Ensure all tables from the expansion step that contained a selected column are included
-        final_tables = [
-            tbl for tbl in all_involved_tables if tbl.table_name in final_table_names
-        ]
-
-        # 7. Construct RetrievedContext
-        final_context = RetrievedContext(
-            query=question,
-            tables=final_tables,
-            columns=selected_columns,  # Already sorted and capped
-        )
-
-        # 8. Structured Logging (AC5)
-        # Helper to format column lists for logging
-        def format_cols(cols):
-            return [
-                (c.table_name, c.column_name, round(c.score, 4), c.source) for c in cols
+            # 6. Determine final tables based *only* on the selected columns and expansion results
+            final_table_names = {col.table_name for col in selected_columns}
+            # Ensure all tables from the expansion step that contained a selected column are included
+            final_tables = [
+                tbl
+                for tbl in all_involved_tables
+                if tbl.table_name in final_table_names
             ]
 
-        log_data = {
-            "phase": "retrieval_orchestration",
-            "question": question,
-            "k_requested": k,
-            "retrieval_inputs": {
-                "token_hits": format_cols(token_hits),
-                "embedding_hits": format_cols(embedding_hits),
-            },
-            "intermediate_results": {
-                "merged_deduplicated_columns": format_cols(merged_columns),
-                "schema_expanded_columns": format_cols(all_involved_columns),
-                "schema_expanded_tables": [
-                    (t.table_name, t.reason) for t in all_involved_tables
-                ],
-            },
-            "final_context": {
-                "selected_columns": format_cols(selected_columns),
-                "included_tables": [(t.table_name, t.reason) for t in final_tables],
-            },
-        }
-        # Consider using json.dumps for more robust serialization if logging complex metadata
-        logger.info(log_data)
+            # 7. Construct RetrievedContext
+            final_context = RetrievedContext(
+                query=question,
+                tables=final_tables,
+                columns=selected_columns,  # Already sorted and capped
+            )
 
-        return final_context
+            # 8. Structured Logging (AC5)
+            # Helper to format column lists for logging
+            def format_cols(cols):
+                return [
+                    (c.table_name, c.column_name, round(c.score, 4), c.source)
+                    for c in cols
+                ]
+
+            results = {
+                "retrieval_inputs": {
+                    "token_hits": format_cols(token_hits),
+                    "embedding_hits": format_cols(embedding_hits),
+                },
+                "intermediate_results": {
+                    "merged_deduplicated_columns": format_cols(merged_columns),
+                    "schema_expanded_columns": format_cols(all_involved_columns),
+                    "schema_expanded_tables": [
+                        (t.table_name, t.reason) for t in all_involved_tables
+                    ],
+                },
+                "final_context": {
+                    "selected_columns": format_cols(selected_columns),
+                    "included_tables": [(t.table_name, t.reason) for t in final_tables],
+                },
+            }
+            # Consider using json.dumps for more robust serialization if logging complex metadata
+            log.info(results)
+
+            # Validate results
+            if not token_hits and not embedding_hits:
+                raise RetrievalError(
+                    "No schema matches found",
+                    details={"question": question, "k_requested": k},
+                )
+
+            # After expansion, validate final context
+            if not results["final_context"]["included_tables"]:
+                raise RetrievalError(
+                    "Schema expansion produced no valid tables",
+                    details={
+                        "question": question,
+                        "initial_hits": len(token_hits) + len(embedding_hits),
+                    },
+                )
+
+            log.info(
+                "schema_retrieval_complete",
+                table_count=len(results["final_context"]["included_tables"]),
+                column_count=len(results["final_context"]["selected_columns"]),
+            )
+
+            return final_context
+
+        except Exception as e:
+            log.error("schema_retrieval_failed", error=str(e), question=question)
+            if isinstance(e, RetrievalError):
+                raise
+            raise RetrievalError(
+                "Failed to retrieve schema context",
+                details={"question": question, "original_error": str(e)},
+            )
 
     def _merge_and_deduplicate(
         self, token_hits: List[RetrievedColumn], embedding_hits: List[RetrievedColumn]

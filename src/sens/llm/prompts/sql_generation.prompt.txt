@@ -10,13 +10,21 @@ You are an expert SQL query generator. Your task is to convert a natural languag
 6. Include column table prefixes when multiple tables are involved
 7. Use meaningful table aliases if needed (e.g., 'users AS u')
 8. Format the SQL query for readability (newlines, indentation)
-9. If the query cannot be generated with the given schema, respond with:
-   "ERROR: Cannot generate query. Reason: <specific reason>"
+9. For top-N queries:
+   - Use ORDER BY with LIMIT for ranking
+   - Include meaningful sorting criteria (e.g., views, rating)
+   - Always specify an explicit ORDER direction (ASC/DESC)
+10. For movie rankings:
+   - Join view_summary with movie to get titles
+   - Use hours_viewed or views for popularity metrics
+   - Consider using DISTINCT to avoid duplicates
+11. If the query cannot be generated with the given schema, respond with:
+    "ERROR: Cannot generate query. Reason: <specific reason>"
 
 ### DATABASE SCHEMA ###
 
 Available Tables and Columns:
-{% for table, columns in schema.tables.items() %}
+{% for table, columns in schema.tables_columns.items() %}
 - {{ table }}:
   Columns: {{ columns|join(', ') }}
   {% if table in schema.primary_keys %}
@@ -50,6 +58,20 @@ Conditions: {{ intent.conditions|join(', ') }}
 ### GENERATE SQL QUERY ###
 Based on the schema and intent above, generate a single SQL query that answers the user's question.
 The query must be valid SQL and use only the schema elements provided above.
+
+Example patterns for common queries:
+1. Top N movies by views:
+   SELECT m.title, vs.views
+   FROM movie m
+   JOIN view_summary vs ON vs.movie_id = m.id
+   ORDER BY vs.views DESC
+   LIMIT N
+
+2. Latest movies:
+   SELECT title, release_date
+   FROM movie
+   ORDER BY release_date DESC
+   LIMIT N
 
 SQL Query:
 ```sql

@@ -8,11 +8,14 @@ This module provides validation for SQL queries to ensure they are:
 """
 
 import logging
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Set, Tuple
 
+import sqlglot
 import sqlparse
+from sqlglot import expressions as exp
 from sqlparse.sql import (
     Comment,
     Identifier,
@@ -23,6 +26,8 @@ from sqlparse.sql import (
     Where,
 )
 from sqlparse.tokens import DDL, DML, Keyword, Name, Punctuation, Whitespace
+
+from sens.schema.context import ValidatorSchemaContext
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -35,27 +40,6 @@ class ValidationLevel(Enum):
     SCHEMA = auto()
     SAFETY = auto()
     ALL = auto()
-
-
-@dataclass
-class SchemaContext:
-    """Database schema representation for validation."""
-
-    tables: Set[str]
-    columns_per_table: Dict[str, Set[str]]
-    foreign_keys: Dict[str, Dict[str, Tuple[str, str]]] = field(default_factory=dict)
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "SchemaContext":
-        """Create SchemaContext from a dictionary representation."""
-        return cls(
-            tables=set(data.get("tables", [])),
-            columns_per_table={
-                table: set(columns)
-                for table, columns in data.get("columns_per_table", {}).items()
-            },
-            foreign_keys=data.get("foreign_keys", {}),
-        )
 
 
 @dataclass
@@ -204,144 +188,69 @@ class SQLValidator:
 
         return errors
 
-    def _extract_table_column_references(
-        self, stmt: Statement
-    ) -> Tuple[Set[str], Dict[str, Set[str]]]:
-        referenced_tables = set()
-        referenced_columns = {}
-        table_aliases = {}
-        current_tables = []
+    def _extract_schema_references_with_sqlglot(
+        self, parsed_sql_statement: exp.Expression
+    ) -> Tuple[Set[str], Dict[str, Set[str]], Dict[str, str]]:
+        """Extracts actual table names, columns per actual table, and table aliases.
 
-        def clean_identifier(value: str) -> str:
-            value = value.split("--", 1)[0].strip()
-            return value.strip("`\"' ")
+        Args:
+            parsed_sql_statement: A parsed SQL statement (sqlglot.Expression)
 
-        def collect_columns(token, current_tables):
-            # Recursively collect columns from TokenList, Identifier, or Name
-            if isinstance(token, TokenList):
-                for subtoken in token.tokens:
-                    collect_columns(subtoken, current_tables)
-            elif isinstance(token, Identifier):
-                name = clean_identifier(
-                    token.get_real_name() or token.get_name() or token.value
-                )
-                if "." in name:
-                    tbl, col = name.split(".", 1)
-                    tbl = tbl.lower()
-                    col = col.lower()
-                    if tbl in table_aliases:
-                        tbl = table_aliases[tbl]
-                    if tbl not in referenced_columns:
-                        referenced_columns[tbl] = set()
-                    referenced_columns[tbl].add(col)
-                else:
-                    if len(current_tables) == 1:
-                        real_tbl = table_aliases.get(
-                            current_tables[0], current_tables[0]
-                        )
-                        if real_tbl not in referenced_columns:
-                            referenced_columns[real_tbl] = set()
-                        referenced_columns[real_tbl].add(name.lower())
-                    else:
-                        for tbl in current_tables:
-                            real_tbl = table_aliases.get(tbl, tbl)
-                            if real_tbl not in referenced_columns:
-                                referenced_columns[real_tbl] = set()
-                            referenced_columns[real_tbl].add(name.lower())
-            elif token.ttype in (Name,):
-                name = clean_identifier(token.value)
-                if len(current_tables) == 1:
-                    real_tbl = table_aliases.get(current_tables[0], current_tables[0])
-                    if real_tbl not in referenced_columns:
-                        referenced_columns[real_tbl] = set()
-                    referenced_columns[real_tbl].add(name.lower())
-                else:
-                    for tbl in current_tables:
-                        real_tbl = table_aliases.get(tbl, tbl)
-                        if real_tbl not in referenced_columns:
-                            referenced_columns[real_tbl] = set()
-                        referenced_columns[real_tbl].add(name.lower())
-
-        tokens = list(stmt.tokens)
-        # First pass: collect tables and aliases from FROM, JOIN, UPDATE, INTO, and DDL (DROP, ALTER, etc.)
-        for idx, token in enumerate(tokens):
-            if isinstance(token, Comment):
-                continue
-            # DDL statements (DROP TABLE ...)
-            if token.ttype == DDL:
-                # Look for the first Name or Identifier token after the DDL keyword
-                j = idx + 1
-                while j < len(tokens):
-                    t = tokens[j]
-                    if (
-                        isinstance(t, Comment)
-                        or t.is_whitespace
-                        or (t.ttype == Keyword)
-                    ):
-                        j += 1
-                        continue
-                    if isinstance(t, Identifier):
-                        real_name = clean_identifier(
-                            t.get_real_name() or t.get_name() or t.value
-                        )
-                        referenced_tables.add(real_name.lower())
-                        break
-                    elif t.ttype in (Name, None):
-                        name = clean_identifier(t.value)
-                        referenced_tables.add(name.lower())
-                        break
-                    j += 1
-            if token.ttype == Keyword and token.value.upper() in {
-                "FROM",
-                "JOIN",
-                "UPDATE",
-                "INTO",
-            }:
-                j = idx + 1
-                while j < len(tokens) and (
-                    tokens[j].is_whitespace or isinstance(tokens[j], Comment)
-                ):
-                    j += 1
-                if j < len(tokens):
-                    next_token = tokens[j]
-                    if isinstance(next_token, Identifier):
-                        real_name = clean_identifier(
-                            next_token.get_real_name()
-                            or next_token.get_name()
-                            or next_token.value
-                        )
-                        alias = clean_identifier(next_token.get_alias() or real_name)
-                        referenced_tables.add(real_name.lower())
-                        table_aliases[alias.lower()] = real_name.lower()
-                        current_tables.append(alias.lower())
-                    elif next_token.ttype in (Name, None):
-                        name = clean_identifier(next_token.value)
-                        referenced_tables.add(name.lower())
-                        table_aliases[name.lower()] = name.lower()
-                        current_tables.append(name.lower())
-
-        # Second pass: collect columns from SELECT, WHERE, etc.
-        found_from = False
-        for token in stmt.tokens:
-            if isinstance(token, Comment):
-                continue
-            # SELECT columns: collect all IdentifierList/Identifier tokens before FROM
-            if not found_from:
-                if token.ttype is Keyword and token.value.upper() == "FROM":
-                    found_from = True
-                elif isinstance(token, (IdentifierList, Identifier)):
-                    collect_columns(token, current_tables)
-            # WHERE clause
-            if isinstance(token, Where):
-                for t in token.tokens:
-                    if isinstance(t, Identifier) or t.ttype in (Name,):
-                        collect_columns(t, current_tables)
-
-        return referenced_tables, referenced_columns
-
-    def _check_schema(self, sql: str, schema: SchemaContext) -> List[ValidationError]:
+        Returns:
+            A tuple containing:
+            - referenced_actual_tables: Set of actual table names (lowercase)
+            - columns_per_actual_table: Dict mapping actual table name (lowercase)
+                                      to a set of referenced column names (lowercase)
+            - table_aliases: Dict mapping alias name (lowercase) to actual
+                           table name (lowercase)
         """
-        Validate SQL against schema context.
+        referenced_actual_tables = set()
+        columns_per_actual_table = {}  # Maps actual table name to set of column names
+        table_aliases = {}  # Maps alias to actual table name
+
+        # Extract table names and their aliases
+        for table_node in parsed_sql_statement.find_all(exp.Table):
+            actual_table_name = table_node.name.lower()
+            referenced_actual_tables.add(actual_table_name)
+
+            if table_node.alias:
+                table_aliases[table_node.alias.lower()] = actual_table_name
+            else:
+                # Table used without an explicit alias, maps to itself
+                table_aliases[actual_table_name] = actual_table_name
+
+        # Extract columns and map them to actual tables via aliases
+        for column_node in parsed_sql_statement.find_all(exp.Column):
+            col_name = column_node.name.lower()
+
+            # Skip if this is a derived column (e.g., result of an aggregation or any SQL function)
+            if isinstance(column_node.parent, exp.Func):
+                continue
+
+            # Determine the table qualifier (alias or actual table name)
+            table_qualifier = None
+            if column_node.table:  # e.g., alias.column or table.column
+                table_qualifier = column_node.table.lower()
+
+            actual_table_name_for_col = None
+            if table_qualifier:
+                actual_table_name_for_col = table_aliases.get(table_qualifier)
+            elif len(table_aliases) == 1:
+                # Unqualified column and only one table in context
+                actual_table_name_for_col = list(table_aliases.values())[0]
+
+            if actual_table_name_for_col:
+                if actual_table_name_for_col not in columns_per_actual_table:
+                    columns_per_actual_table[actual_table_name_for_col] = set()
+                columns_per_actual_table[actual_table_name_for_col].add(col_name)
+
+        return referenced_actual_tables, columns_per_actual_table, table_aliases
+
+    def _check_schema(
+        self, sql: str, schema: ValidatorSchemaContext
+    ) -> List[ValidationError]:
+        """
+        Validate SQL against schema context using sqlglot for robust parsing.
 
         Args:
             sql: SQL query string
@@ -351,51 +260,71 @@ class SQLValidator:
             List of ValidationError objects for any schema mismatches
         """
         errors = []
-        statements = sqlparse.parse(sql)
 
         schema_tables_lower = {t.lower() for t in schema.tables}
-        schema_columns_lower = {
+        schema_columns_per_table_lower = {
             table.lower(): {col.lower() for col in columns}
             for table, columns in schema.columns_per_table.items()
         }
 
-        for stmt in statements:
-            referenced_tables, referenced_columns = (
-                self._extract_table_column_references(stmt)
+        try:
+            parsed_statements = sqlglot.parse(sql)
+            if not parsed_statements:
+                errors.append(
+                    ValidationError(
+                        level=ValidationLevel.SYNTAX,
+                        message="No valid SQL statements found in input",
+                    )
+                )
+                return errors
+        except sqlglot.errors.ParseError as e:
+            errors.append(
+                ValidationError(
+                    level=ValidationLevel.SYNTAX,
+                    message=f"SQL parsing failed: {str(e)}",
+                    details=sql[:200],  # Show snippet of SQL
+                )
             )
+            return errors
 
-            # Check tables
-            for table in referenced_tables:
-                if table not in schema_tables_lower:
+        for stmt_idx, parsed_sql_statement in enumerate(parsed_statements):
+            if parsed_sql_statement is None:
+                continue
+
+            # Extract references for the current statement
+            (
+                referenced_actual_tables,
+                columns_per_actual_table,
+                current_table_aliases,
+            ) = self._extract_schema_references_with_sqlglot(parsed_sql_statement)
+
+            # 1. Validate Tables
+            for table_name in referenced_actual_tables:
+                if table_name not in schema_tables_lower:
                     errors.append(
                         ValidationError(
                             level=ValidationLevel.SCHEMA,
-                            message=f"Referenced table '{table}' does not exist in schema",
-                            details=f"Available tables: {', '.join(sorted(schema.tables))}",
+                            message=f"Table '{table_name}' referenced in statement {stmt_idx+1} does not exist in the schema",
+                            details=f"Available tables: {', '.join(sorted(schema_tables_lower))}",
                         )
                     )
 
-            # Check columns
-            for table, columns in referenced_columns.items():
-                if table in schema_tables_lower:
-                    valid_columns = schema_columns_lower[table]
-                    for col in columns:
-                        if col not in valid_columns:
-                            errors.append(
-                                ValidationError(
-                                    level=ValidationLevel.SCHEMA,
-                                    message=f"Column '{col}' does not exist in table '{table}'",
-                                    details=f"Available columns: {', '.join(sorted(schema.columns_per_table[table]))}",
-                                )
-                            )
-                else:
-                    # If table doesn't exist, report column errors with a note about the invalid table
-                    for col in columns:
+            # 2. Validate Columns
+            for actual_table, column_names in columns_per_actual_table.items():
+                if actual_table not in schema_tables_lower:
+                    # This table should have already been caught as an error above
+                    continue
+
+                valid_columns_for_table = schema_columns_per_table_lower.get(
+                    actual_table, set()
+                )
+                for col_name in column_names:
+                    if col_name not in valid_columns_for_table:
                         errors.append(
                             ValidationError(
                                 level=ValidationLevel.SCHEMA,
-                                message=f"Cannot validate column '{col}' as table '{table}' does not exist",
-                                details=f"Available tables: {', '.join(sorted(schema.tables))}",
+                                message=f"Column '{col_name}' in statement {stmt_idx+1} does not exist in table '{actual_table}'",
+                                details=f"Available columns for '{actual_table}': {', '.join(sorted(valid_columns_for_table))}",
                             )
                         )
 
@@ -541,23 +470,34 @@ class SQLValidator:
     def validate(
         self,
         sql: str,
-        schema: SchemaContext,
+        schema: ValidatorSchemaContext,
         levels: Optional[Set[ValidationLevel]] = None,
     ) -> ValidatedSQL:
         """
-        Validate SQL query against all specified validation levels.
+        Validate SQL query.
 
         Args:
-            sql: SQL query string to validate
-            schema: SchemaContext object containing valid tables and columns
-            levels: Set of ValidationLevel to check (defaults to ALL)
+            sql: SQL query to validate
+            schema: Schema context for validation
+            levels: Set of validation levels to apply
 
         Returns:
-            ValidatedSQL object containing validation results
+            ValidatedSQL result
+
+        Raises:
+            TypeError: If schema is not a ValidatorSchemaContext
         """
+        if not isinstance(schema, ValidatorSchemaContext):
+            raise TypeError(
+                f"Expected ValidatorSchemaContext, got {type(schema).__name__}"
+            )
+
         if levels is None:
             levels = {ValidationLevel.ALL}
 
+        errors = []
+
+        # Expand ALL to include all levels
         if ValidationLevel.ALL in levels:
             levels = {
                 ValidationLevel.SYNTAX,
@@ -565,22 +505,159 @@ class SQLValidator:
                 ValidationLevel.SAFETY,
             }
 
-        errors = []
-
-        # Always do syntax check first as other checks depend on valid syntax
-        syntax_errors = self._check_syntax(sql)
+        # Run requested validations
         if ValidationLevel.SYNTAX in levels:
-            errors.extend(syntax_errors)
+            errors.extend(self._check_syntax(sql))
+        if ValidationLevel.SCHEMA in levels:
+            errors.extend(self._check_schema(sql, schema))
+        if ValidationLevel.SAFETY in levels:
+            errors.extend(self._check_safety(sql))
 
-        # Only proceed with other checks if syntax is valid
-        if not syntax_errors:
-            # Always run both schema and safety checks for DDL
-            if ValidationLevel.SCHEMA in levels:
-                schema_errors = self._check_schema(sql, schema)
-                errors.extend(schema_errors)
-            if ValidationLevel.SAFETY in levels:
-                safety_errors = self._check_safety(sql)
-                errors.extend(safety_errors)
+        return ValidatedSQL(sql=sql, is_valid=len(errors) == 0, errors=errors)
 
-        is_valid = len(errors) == 0
-        return ValidatedSQL(sql=sql, is_valid=is_valid, errors=errors)
+    def _extract_table_column_references(
+        self, stmt: Statement
+    ) -> Tuple[Set[str], Dict[str, Set[str]]]:
+        """DEPRECATED: Use _extract_schema_references_with_sqlglot instead.
+        This method will be removed in a future version.
+
+        Original method kept for backward compatibility.
+        """
+        warnings.warn(
+            "_extract_table_column_references is deprecated and will be removed in "
+            "a future version. Use _extract_schema_references_with_sqlglot instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        referenced_tables = set()
+        referenced_columns = {}
+        table_aliases = {}
+        current_tables = []
+
+        def clean_identifier(value: str) -> str:
+            value = value.split("--", 1)[0].strip()
+            return value.strip("`\"' ")
+
+        def collect_columns(token, current_tables):
+            # Recursively collect columns from TokenList, Identifier, or Name
+            if isinstance(token, TokenList):
+                for subtoken in token.tokens:
+                    collect_columns(subtoken, current_tables)
+            elif isinstance(token, Identifier):
+                name = clean_identifier(
+                    token.get_real_name() or token.get_name() or token.value
+                )
+                if "." in name:
+                    tbl, col = name.split(".", 1)
+                    tbl = tbl.lower()
+                    col = col.lower()
+                    if tbl in table_aliases:
+                        tbl = table_aliases[tbl]
+                    if tbl not in referenced_columns:
+                        referenced_columns[tbl] = set()
+                    referenced_columns[tbl].add(col)
+                else:
+                    if len(current_tables) == 1:
+                        real_tbl = table_aliases.get(
+                            current_tables[0], current_tables[0]
+                        )
+                        if real_tbl not in referenced_columns:
+                            referenced_columns[real_tbl] = set()
+                        referenced_columns[real_tbl].add(name.lower())
+                    else:
+                        for tbl in current_tables:
+                            real_tbl = table_aliases.get(tbl, tbl)
+                            if real_tbl not in referenced_columns:
+                                referenced_columns[real_tbl] = set()
+                            referenced_columns[real_tbl].add(name.lower())
+            elif token.ttype in (Name,):
+                name = clean_identifier(token.value)
+                if len(current_tables) == 1:
+                    real_tbl = table_aliases.get(current_tables[0], current_tables[0])
+                    if real_tbl not in referenced_columns:
+                        referenced_columns[real_tbl] = set()
+                    referenced_columns[real_tbl].add(name.lower())
+                else:
+                    for tbl in current_tables:
+                        real_tbl = table_aliases.get(tbl, tbl)
+                        if real_tbl not in referenced_columns:
+                            referenced_columns[real_tbl] = set()
+                        referenced_columns[real_tbl].add(name.lower())
+
+        tokens = list(stmt.tokens)
+        # First pass: collect tables and aliases from FROM, JOIN, UPDATE, INTO, and DDL
+        for idx, token in enumerate(tokens):
+            if isinstance(token, Comment):
+                continue
+            # DDL statements (DROP TABLE ...)
+            if token.ttype == DDL:
+                # Look for the first Name or Identifier token after the DDL keyword
+                j = idx + 1
+                while j < len(tokens):
+                    t = tokens[j]
+                    if (
+                        isinstance(t, Comment)
+                        or t.is_whitespace
+                        or (t.ttype == Keyword)
+                    ):
+                        j += 1
+                        continue
+                    if isinstance(t, Identifier):
+                        real_name = clean_identifier(
+                            t.get_real_name() or t.get_name() or t.value
+                        )
+                        referenced_tables.add(real_name.lower())
+                        break
+                    elif t.ttype in (Name, None):
+                        name = clean_identifier(t.value)
+                        referenced_tables.add(name.lower())
+                        break
+                    j += 1
+            if token.ttype == Keyword and token.value.upper() in {
+                "FROM",
+                "JOIN",
+                "UPDATE",
+                "INTO",
+            }:
+                j = idx + 1
+                while j < len(tokens) and (
+                    tokens[j].is_whitespace or isinstance(tokens[j], Comment)
+                ):
+                    j += 1
+                if j < len(tokens):
+                    next_token = tokens[j]
+                    if isinstance(next_token, Identifier):
+                        real_name = clean_identifier(
+                            next_token.get_real_name()
+                            or next_token.get_name()
+                            or next_token.value
+                        )
+                        alias = clean_identifier(next_token.get_alias() or real_name)
+                        referenced_tables.add(real_name.lower())
+                        table_aliases[alias.lower()] = real_name.lower()
+                        current_tables.append(alias.lower())
+                    elif next_token.ttype in (Name, None):
+                        name = clean_identifier(next_token.value)
+                        referenced_tables.add(name.lower())
+                        table_aliases[name.lower()] = name.lower()
+                        current_tables.append(name.lower())
+
+        # Second pass: collect columns from SELECT, WHERE, etc.
+        found_from = False
+        for token in stmt.tokens:
+            if isinstance(token, Comment):
+                continue
+            # SELECT columns: collect all IdentifierList/Identifier tokens before FROM
+            if not found_from:
+                if token.ttype is Keyword and token.value.upper() == "FROM":
+                    found_from = True
+                elif isinstance(token, (IdentifierList, Identifier)):
+                    collect_columns(token, current_tables)
+            # WHERE clause
+            if isinstance(token, Where):
+                for t in token.tokens:
+                    if isinstance(t, Identifier) or t.ttype in (Name,):
+                        collect_columns(t, current_tables)
+
+        return referenced_tables, referenced_columns

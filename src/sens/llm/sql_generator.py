@@ -9,11 +9,13 @@ import structlog
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
 
+from sens.schema.context import LLMSchemaContext
 from sens.schema.graph import SchemaGraph
 from sens.settings import get_llm_settings, get_settings
+from sens.validation.sql_validator import SQLValidator, ValidationLevel
 
 from .intent_validator import ValidIntent
-from .models import GeneratedSQL, SchemaContext, SQLGenerationError, TokenUsage
+from .models import GeneratedSQL, SQLGenerationError, TokenUsage
 
 log = structlog.get_logger()
 
@@ -45,17 +47,39 @@ class SQLGenerator:
             prompt_filename: Name of the SQL generation prompt template
             max_tokens: Maximum tokens for LLM completion
             temperature: LLM temperature (0.0-1.0, lower = more deterministic)
-        """
-        self.prompt_path = prompt_dir / prompt_filename
-        if not self.prompt_path.exists():
-            raise FileNotFoundError(f"Prompt template not found: {self.prompt_path}")
 
-        self.jinja_env = Environment(
-            loader=FileSystemLoader(str(prompt_dir)),
-            autoescape=False,
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
+        Raises:
+            FileNotFoundError: If prompt template cannot be found
+            SQLGenerationError: If template loading fails
+        """
+        self.prompt_dir = prompt_dir
+        self.prompt_filename = prompt_filename
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.schema = SchemaGraph.get_instance()
+
+        # Verify template exists before initializing Jinja
+        template_path = prompt_dir / prompt_filename
+        if not template_path.exists():
+            raise FileNotFoundError(
+                f"SQL generation template not found at: {template_path}"
+            )
+
+        try:
+            # Initialize Jinja environment
+            self.env = Environment(
+                loader=FileSystemLoader(str(prompt_dir)),
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+
+            # Verify template can be loaded
+            self.env.get_template(prompt_filename)
+        except Exception as e:
+            raise SQLGenerationError(
+                f"Failed to load SQL generation template: {e}",
+                details={"template_path": str(template_path)},
+            )
 
         # Load LLM configuration
         settings = get_settings()
@@ -65,8 +89,6 @@ class SQLGenerator:
         sql_config = llm_config["sql_generator"]
         self.primary_model = sql_config.get("primary_model", "openai/gpt-4")
         self.fallback_model = sql_config.get("fallback_model")
-        self.max_tokens = max_tokens
-        self.temperature = temperature
 
         # Initialize OpenRouter client with configuration from settings
         openrouter_config = settings.get_openrouter_config()
@@ -76,19 +98,18 @@ class SQLGenerator:
             default_headers=openrouter_config["headers"],
         )
 
-        # Initialize schema graph for metadata lookups
-        self.schema = SchemaGraph.get_instance()
-
         log.info(
             "sql_generator_initialized",
-            prompt_path=str(self.prompt_path),
+            prompt_dir=str(self.prompt_dir),
+            prompt_filename=self.prompt_filename,
+            template_exists=template_path.exists(),
             primary_model=self.primary_model,
             fallback_model=self.fallback_model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
 
-    def _build_schema_context(self, intent: ValidIntent) -> SchemaContext:
+    def _build_schema_context(self, intent: ValidIntent) -> LLMSchemaContext:
         """
         Build a focused SchemaContext for the tables involved in the query.
 
@@ -96,22 +117,20 @@ class SQLGenerator:
             intent: The validated intent containing target tables
 
         Returns:
-            SchemaContext with relevant schema information
+            LLMSchemaContext with relevant schema information
         """
         # Start with explicitly mentioned tables
         relevant_tables = set(intent.original_intent.tables)
 
         # Add any tables needed for joins based on relationships
-        for table in list(
-            relevant_tables
-        ):  # Convert to list to avoid modification during iteration
+        for table in list(relevant_tables):
             referenced = self.schema.get_referenced_tables(table)
             referencing = self.schema.get_referencing_tables(table)
             relevant_tables.update(referenced)
             relevant_tables.update(referencing)
 
         # Build the schema context
-        tables_dict = {}
+        tables_columns = {}
         pk_dict = {}
         column_descriptions = {}
 
@@ -121,7 +140,7 @@ class SQLGenerator:
             columns = self.schema.get_table_columns(table)
             if not columns:  # Skip tables with no columns
                 continue
-            tables_dict[table] = columns
+            tables_columns[table] = columns
 
             # Get primary keys
             pk_dict[table] = self.schema.get_table_pks(table)
@@ -138,35 +157,28 @@ class SQLGenerator:
         # Build foreign key information
         fk_list = []
         for table in relevant_tables:
-            # Get foreign keys for each table
-            for ref_table in self.schema.get_referenced_tables(table):
-                if ref_table in relevant_tables:
-                    # Get the full constraint info
-                    fk_cols = self.schema.get_table_fks_involved(table, {ref_table})
-                    if fk_cols:
-                        # For each FK relationship
-                        fk_list.append(
-                            {
-                                "from_table": table,
-                                "to_table": ref_table,
-                                "from_columns": fk_cols,
-                                "to_columns": self.schema.get_table_pks(ref_table),
-                            }
-                        )
+            for ref_table in relevant_tables:
+                fk_cols = self.schema.get_table_fks_involved(table, {ref_table})
+                if fk_cols:
+                    fk_list.append(
+                        {
+                            "from_table": table,
+                            "from_columns": fk_cols,
+                            "to_table": ref_table,
+                            "to_columns": self.schema.get_table_pks(ref_table),
+                        }
+                    )
 
-        # Filter out any tables that don't have columns
-        tables_dict = {k: v for k, v in tables_dict.items() if v}
-        pk_dict = {k: v for k, v in pk_dict.items() if k in tables_dict}
-
-        return SchemaContext(
-            tables=tables_dict,
+        return LLMSchemaContext(
+            tables=relevant_tables,
+            tables_columns=tables_columns,
             primary_keys=pk_dict,
             foreign_keys=fk_list,
             column_descriptions=column_descriptions,
         )
 
     def _render_prompt(
-        self, question: str, intent: ValidIntent, schema: SchemaContext
+        self, question: str, intent: ValidIntent, schema: LLMSchemaContext
     ) -> str:
         """
         Render the SQL generation prompt template with the provided context.
@@ -179,7 +191,7 @@ class SQLGenerator:
         Returns:
             The rendered prompt string
         """
-        template = self.jinja_env.get_template(DEFAULT_PROMPT_NAME)
+        template = self.env.get_template(self.prompt_filename)
 
         # Prepare the template context
         context = {
@@ -194,7 +206,7 @@ class SQLGenerator:
                 "prompt_rendered",
                 question=question,
                 intent_type=intent.original_intent.query_type,
-                schema_tables=list(schema.tables.keys()),
+                schema_tables=list(schema.tables_columns.keys()),
             )
             return rendered
         except Exception as e:
@@ -289,24 +301,31 @@ class SQLGenerator:
             error_msg = completion.split("ERROR:")[1].strip()
             raise SQLGenerationError(f"LLM indicated generation error: {error_msg}")
 
-        # Try to extract SQL from markdown code block
-        if "```sql" in completion:
-            sql_parts = completion.split("```sql")
-            if len(sql_parts) > 1:
-                sql = sql_parts[1].split("```")[0].strip()
-                return sql
+        # Clean the completion text
+        sql = completion.strip()
 
-        # Try to extract just the SQL if it starts with SELECT
-        if completion.strip().upper().startswith("SELECT"):
-            return completion.strip()
+        # Remove markdown code block delimiters if present
+        if sql.startswith("```sql"):
+            sql = sql[6:]  # Remove leading ```sql
+        if sql.endswith("```"):
+            sql = sql[:-3]  # Remove trailing ```
 
-        raise SQLGenerationError(
-            "Could not extract valid SQL from LLM completion",
-            details={"completion": completion},
-        )
+        # Remove any remaining markdown markers
+        sql = sql.replace("```", "").strip()
+
+        # Verify we have a valid SQL statement
+        if not sql.upper().startswith("SELECT"):
+            raise SQLGenerationError(
+                "Could not extract valid SQL from LLM completion",
+                details={"completion": completion},
+            )
+
+        log.debug("sql_extracted", original=completion, extracted=sql)
+
+        return sql
 
     def _validate_generated_sql(
-        self, sql: str, schema: SchemaContext
+        self, sql: str, schema: LLMSchemaContext
     ) -> Tuple[bool, Optional[str]]:
         """
         Perform basic validation of the generated SQL.
@@ -318,16 +337,32 @@ class SQLGenerator:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # This is a placeholder for the actual SQLValidator integration
-        # Basic checks that could be done here:
-        # 1. Verify it's a SELECT statement
-        # 2. Check that all referenced tables exist in schema
-        # 3. Check that all referenced columns exist in their tables
-        # 4. Verify basic SQL syntax
+        validator = SQLValidator()
+        validation_result = validator.validate(
+            sql=sql,
+            schema=schema.to_validator_schema(),
+            levels={ValidationLevel.SYNTAX, ValidationLevel.SCHEMA},
+        )
+
+        if not validation_result.is_valid:
+            error_msg = (
+                str(validation_result.errors[0])
+                if validation_result.errors
+                else "Unknown validation error"
+            )
+            log.error(
+                "sql_validation_failed",
+                sql=sql,
+                error=error_msg,
+                validation_errors=[str(e) for e in validation_result.errors],
+                validation_warnings=validation_result.warnings,
+            )
+            return False, error_msg
+
         return True, None
 
     def _extract_query_metadata(
-        self, sql: str, schema: SchemaContext
+        self, sql: str, schema: LLMSchemaContext
     ) -> Tuple[List[str], Dict[str, List[str]]]:
         """
         Extract metadata about tables and columns used in the query.
@@ -343,12 +378,12 @@ class SQLGenerator:
         columns_used = {}
 
         # Extract tables from schema context
-        for table in schema.tables:
+        for table in schema.tables_columns:
             if table.lower() in sql.lower():
                 tables_used.append(table)
                 # Extract columns for this table
                 columns = []
-                for col in schema.tables[table]:
+                for col in schema.tables_columns[table]:
                     if col.lower() in sql.lower():
                         columns.append(col)
                 if columns:
