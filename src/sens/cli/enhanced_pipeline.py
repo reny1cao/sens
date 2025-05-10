@@ -5,11 +5,13 @@ the ChatOrchestrator for better error handling, metrics tracking, and debugging.
 """
 
 import logging
-from typing import Dict, Optional
+import uuid
+from typing import Dict, Optional, Tuple
 
 import structlog
 
 from sens.chat.orchestrator import ChatOrchestrator
+from sens.chat.session import SessionManager
 from sens.chat.state import ConversationState
 from sens.monitoring.metrics import PipelineMetrics
 
@@ -22,37 +24,38 @@ class EnhancedNL2SQLPipeline:
 
     def __init__(
         self,
-        conversation_id: Optional[str] = None,
+        session_id: Optional[str] = None,
         metrics_enabled: bool = False,
         debug_mode: bool = False,
     ):
         """Initialize the enhanced pipeline.
 
         Args:
-            conversation_id: Optional ID for the conversation
+            session_id: Optional ID for the conversation session. If not provided,
+                      a new session will be created for this pipeline instance.
             metrics_enabled: Whether to collect and return metrics
             debug_mode: Whether to include debug information in output
         """
         self.metrics_enabled = metrics_enabled
         self.debug_mode = debug_mode
+        self.session_id = session_id or str(uuid.uuid4())
 
-        # Initialize ChatOrchestrator with optional conversation state
-        state = (
-            ConversationState(conversation_id=conversation_id)
-            if conversation_id
-            else None
-        )
-        self.orchestrator = ChatOrchestrator(
-            conversation_id=conversation_id,
-            state=state,
-        )
+        # Initialize session management
+        self.session_manager = SessionManager()
+        self.state = self.session_manager.get(self.session_id)
+        if not self.state:
+            self.state = ConversationState(conversation_id=self.session_id)
+
+        # Initialize ChatOrchestrator (now stateless)
+        self.orchestrator = ChatOrchestrator(session_manager=self.session_manager)
 
         log.info(
             "enhanced_pipeline_initialized",
-            conversation_id=conversation_id,
+            session_id=self.session_id,
             metrics_enabled=metrics_enabled,
             debug_mode=debug_mode,
             validation_enabled=True,
+            redis_available=self.session_manager.redis_available,
         )
 
     async def process_question(
@@ -74,29 +77,32 @@ class EnhancedNL2SQLPipeline:
             Dict containing the response with optional metrics and debug info
         """
         try:
-            # Process through ChatOrchestrator
-            response = await self.orchestrator.step(question)
+            # Process through ChatOrchestrator with explicit state
+            response, updated_state = await self.orchestrator.step(
+                state=self.state,
+                user_input=question,
+            )
+            self.state = updated_state
 
             # Add metrics if enabled
             if self.metrics_enabled and "metadata" in response:
                 response["metadata"]["metrics_enabled"] = True
                 if "pipeline_metrics" not in response["metadata"]:
                     # Ensure we always have metrics when enabled
-                    metrics = PipelineMetrics(
-                        conversation_id=self.orchestrator.state.conversation_id
-                    )
+                    metrics = PipelineMetrics(conversation_id=self.session_id)
                     response["metadata"]["pipeline_metrics"] = metrics.model_dump()
 
             # Add debug info if enabled
             if self.debug_mode:
                 debug_info = {
-                    "conversation_id": self.orchestrator.state.conversation_id,
-                    "interaction_count": len(self.orchestrator.state.history),
+                    "session_id": self.session_id,
+                    "interaction_count": len(self.state.history),
                     "last_intent": (
-                        self.orchestrator.state.last_valid_intent.model_dump()
-                        if self.orchestrator.state.last_valid_intent
+                        self.state.last_valid_intent.model_dump()
+                        if self.state.last_valid_intent
                         else None
                     ),
+                    "redis_available": self.session_manager.redis_available,
                 }
                 if "metadata" not in response:
                     response["metadata"] = {}
@@ -108,7 +114,7 @@ class EnhancedNL2SQLPipeline:
             log.error(
                 "enhanced_pipeline_error",
                 error=str(e),
-                conversation_id=self.orchestrator.state.conversation_id,
+                session_id=self.session_id,
             )
             error_response = {
                 "status": "error",
@@ -118,9 +124,7 @@ class EnhancedNL2SQLPipeline:
 
             # Add metrics to error response if enabled
             if self.metrics_enabled:
-                metrics = PipelineMetrics(
-                    conversation_id=self.orchestrator.state.conversation_id
-                )
+                metrics = PipelineMetrics(conversation_id=self.session_id)
                 metrics.complete(success=False, error=str(e))
                 error_response["metadata"]["pipeline_metrics"] = metrics.model_dump()
 
@@ -128,7 +132,8 @@ class EnhancedNL2SQLPipeline:
             if self.debug_mode:
                 error_response["metadata"]["debug"] = {
                     "error_type": e.__class__.__name__,
-                    "conversation_id": self.orchestrator.state.conversation_id,
+                    "session_id": self.session_id,
+                    "redis_available": self.session_manager.redis_available,
                 }
 
             return error_response

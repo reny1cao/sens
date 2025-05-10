@@ -2,7 +2,6 @@
 
 import json
 import time
-from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,6 +9,7 @@ from typing import Any, Dict, List, Optional
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from sens.execution.types import QueryResult
 from sens.llm.models import Intent, TokenUsage
@@ -24,21 +24,30 @@ DEFAULT_PROMPT_DIR = Path(__file__).parent.parent / "llm" / "prompts"
 DEFAULT_PROMPT_NAME = "summary.prompt.txt"
 
 
-@dataclass
-class FinalResponse:
+class FinalResponse(BaseModel):
     """Structured response containing the query results and metadata."""
 
-    summary: str
-    table_preview: List[Dict[str, Any]]
-    row_count: int
-    sql: str
-    execution_time_ms: float
-    generated_at: str
-    metadata: Dict[str, Any]
+    summary: str = Field(
+        ..., description="Natural language summary of the query results"
+    )
+    table_preview: List[List[Any]] = Field(
+        ..., description="Preview of the result rows"
+    )
+    row_count: int = Field(..., description="Total number of rows in the result")
+    sql: str = Field(..., description="The executed SQL query")
+    execution_time_ms: float = Field(
+        ..., description="Query execution time in milliseconds"
+    )
+    generated_at: str = Field(
+        ..., description="Timestamp when the response was generated"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata about the response"
+    )
 
     def to_json(self) -> str:
         """Convert the response to a JSON string."""
-        return json.dumps(asdict(self), default=str)
+        return self.model_dump_json()
 
     @classmethod
     def create_empty_response(cls, sql: str) -> "FinalResponse":

@@ -39,7 +39,7 @@ def test_successful_query_execution(mock_connection):
 
         assert isinstance(result, QueryResult)
         assert result.columns == ["id", "name"]
-        assert result.rows == [(1, "test"), (2, "example")]
+        assert result.rows == [[1, "test"], [2, "example"]]
         assert result.row_count == 2
         assert result.error is None
 

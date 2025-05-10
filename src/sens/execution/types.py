@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 def serialize_value(value: Any) -> Any:
@@ -29,16 +31,19 @@ def serialize_value(value: Any) -> Any:
     return value
 
 
-@dataclass
-class QueryResult:
+class QueryResult(BaseModel):
     """Represents the result of a SQL query execution."""
 
-    columns: List[str]
-    rows: List[List[Any]]
-    row_count: int
-    error: Optional[str] = None
+    columns: List[str] = Field(..., description="List of column names in the result")
+    rows: List[List[Any]] = Field(
+        ..., description="List of rows containing the query results"
+    )
+    row_count: int = Field(..., description="Total number of rows in the result")
+    error: Optional[str] = Field(
+        None, description="Error message if query execution failed"
+    )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert the query result to a dictionary format with serialized values."""
         return {
             "columns": self.columns,
@@ -46,3 +51,7 @@ class QueryResult:
             "row_count": self.row_count,
             "error": self.error,
         }
+
+    def model_dump(self) -> Dict[str, Any]:
+        """Convert the instance to a dictionary representation."""
+        return self.to_dict()

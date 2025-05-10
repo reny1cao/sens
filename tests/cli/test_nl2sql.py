@@ -79,7 +79,7 @@ def mock_sql_executor():
     mock.execute = MagicMock(
         return_value=QueryResult(
             columns=["id", "name"],
-            rows=[(1, "Alice"), (2, "Bob")],
+            rows=[[1, "Alice"], [2, "Bob"]],
             row_count=2,
         )
     )
@@ -93,7 +93,7 @@ def mock_response_builder():
     mock.build = MagicMock(
         return_value=FinalResponse(
             summary="Found 2 users.",
-            table_preview=[(1, "Alice"), (2, "Bob")],
+            table_preview=[[1, "Alice"], [2, "Bob"]],
             row_count=2,
             sql="SELECT * FROM users",
             execution_time_ms=50.0,

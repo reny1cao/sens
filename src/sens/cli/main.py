@@ -19,8 +19,13 @@ from typing import Optional, Set
 
 import structlog
 
-from sens.cli.metrics_store import MetricsStore
+from sens.chat.orchestrator import ChatOrchestrator
+from sens.chat.session import SessionManager
+from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
+from sens.cli.formatters import format_nl2sql_response
+from sens.execution import SQLExecutor
 from sens.schema.context import ValidatorSchemaContext
+from sens.schema.graph import SchemaGraph
 from sens.settings import get_settings
 from sens.validation.sql_validator import SQLValidator, ValidationLevel
 
@@ -42,6 +47,24 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def check_redis_availability(session_id: Optional[str] = None) -> None:
+    """Check Redis availability if session persistence is needed.
+
+    Args:
+        session_id: Optional session ID. If provided and Redis is unavailable,
+                   the function will exit with an error.
+    """
+    if session_id:
+        session_manager = SessionManager()
+        if not session_manager.redis_available:
+            log.error(
+                "redis_unavailable",
+                error="Cannot connect to session store. Session persistence requires Redis.",
+                session_id=session_id,
+            )
+            sys.exit(1)
+
+
 async def handle_nl2sql(
     args: argparse.Namespace, parser: argparse.ArgumentParser
 ) -> None:
@@ -52,16 +75,21 @@ async def handle_nl2sql(
         parser: The argument parser instance
     """
     try:
-        # Import here to avoid loading dependencies unless needed
-        from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
-        from sens.cli.formatters import format_nl2sql_response
+        # Check Redis availability if session ID is provided
+        check_redis_availability(args.session_id)
 
         # Initialize enhanced pipeline with options
         pipeline = EnhancedNL2SQLPipeline(
-            conversation_id=args.conversation_id,
+            session_id=args.session_id,
             metrics_enabled=args.metrics,
             debug_mode=args.debug,
         )
+
+        # Print session ID at start
+        if args.session_id:
+            print(f"Using existing session: {args.session_id}")
+        else:
+            print(f"Created new session: {pipeline.session_id}")
 
         if args.interactive:
             print("Enter your questions (Ctrl+D or Ctrl+C to exit):")
@@ -193,18 +221,16 @@ def handle_validate(args: argparse.Namespace) -> None:
         args: Command line arguments
     """
     try:
-        # Import schema-related components only when needed
-        from sens.schema.graph import SchemaGraph
-        from sens.schema.schema_extractor import SchemaExtractor
-
         # Get schema context
         schema_graph = SchemaGraph.get_instance()
-        tables = schema_graph.list_all_tables()
-        columns_per_table = {
-            table: set(schema_graph.get_table_columns(table)) for table in tables
-        }
-        schema = ValidatorSchemaContext(
-            tables=set(tables), columns_per_table=columns_per_table
+
+        # Convert schema graph to validator context
+        schema_context = ValidatorSchemaContext(
+            tables=set(schema_graph.list_all_tables()),
+            columns_per_table={
+                table: set(schema_graph.get_table_columns(table))
+                for table in schema_graph.list_all_tables()
+            },
         )
 
         # Initialize validator with options
@@ -213,8 +239,20 @@ def handle_validate(args: argparse.Namespace) -> None:
             require_where_for_updates=not args.allow_unfiltered,
         )
 
+        # Read SQL from file or argument
+        sql = None
+        if args.file:
+            with open(args.file, "r") as f:
+                sql = f.read().strip()
+        else:
+            sql = args.sql.strip()
+
+        if not sql:
+            log.error("empty_sql_input")
+            sys.exit(1)
+
         # Determine validation levels
-        levels: Set[ValidationLevel] = set()
+        levels = set()
         if args.syntax:
             levels.add(ValidationLevel.SYNTAX)
         if args.schema:
@@ -224,39 +262,34 @@ def handle_validate(args: argparse.Namespace) -> None:
         if not levels:  # If no specific levels, validate all
             levels.add(ValidationLevel.ALL)
 
-        # Read SQL input
-        if args.file:
-            with open(args.file) as f:
-                sql = f.read()
-        else:
-            sql = args.sql
-
         # Validate SQL
-        result = validator.validate(sql, schema, levels)
+        validation_result = validator.validate(
+            sql=sql, schema=schema_context, levels=levels
+        )
 
-        # Output results
+        # Format output
         if args.json:
-            output = {
-                "valid": result.is_valid,
+            result = {
+                "sql": sql,
+                "is_valid": validation_result.is_valid,
                 "errors": [
                     {
                         "level": error.level.name,
                         "message": error.message,
                         "details": error.details,
                     }
-                    for error in result.errors
+                    for error in validation_result.errors
                 ],
-                "warnings": result.warnings,
+                "warnings": validation_result.warnings,
             }
-            print(json.dumps(output, indent=2 if args.pretty else None))
+            print(json.dumps(result, indent=2 if args.pretty else None))
         else:
-            print(str(result))
-
-        if not result.is_valid:
-            sys.exit(1)
+            print(str(validation_result))
+            if not validation_result.is_valid:
+                sys.exit(1)
 
     except Exception as e:
-        log.error("sql_validation_failed", error=str(e))
+        log.error("validation_failed", error=str(e))
         sys.exit(1)
 
 
@@ -267,182 +300,123 @@ def handle_execute(args: argparse.Namespace) -> None:
         args: Command line arguments
     """
     try:
-        from sens.execution import SQLExecutor
-        from sens.execution.types import serialize_value
-
-        # Initialize executor
-        executor = SQLExecutor()
-
-        # Get SQL input
+        # Read SQL from file or stdin
+        sql = args.sql
         if args.file:
-            with open(args.file) as f:
-                sql = f.read().strip()
-        else:
-            sql = args.sql.strip()
+            with open(args.file, "r") as f:
+                sql = f.read()
 
-        if not sql:
-            log.error("empty_sql_input")
-            sys.exit(1)
-
-        # Execute query
+        # Execute SQL
+        executor = SQLExecutor()
         result = executor.execute(sql)
 
+        if result.error:
+            print(f"Error executing SQL: {result.error}")
+            sys.exit(1)
+
         # Format output
-        if args.pretty:
-            # Pretty print table format
-            if not result.error and result.columns:
-                # Calculate column widths
-                widths = [len(col) for col in result.columns]
-                for row in result.rows:
-                    for i, val in enumerate(row):
-                        # Serialize value before calculating width
-                        str_val = str(serialize_value(val))
-                        widths[i] = max(widths[i], len(str_val))
-
-                # Print header
-                header = " | ".join(
-                    f"{col:{widths[i]}}" for i, col in enumerate(result.columns)
-                )
-                print(header)
-                print("-" * len(header))
-
-                # Print rows
-                for row in result.rows:
-                    print(
-                        " | ".join(
-                            f"{str(serialize_value(val)):{widths[i]}}"
-                            for i, val in enumerate(row)
-                        )
-                    )
-
-                print(f"\nTotal rows: {result.row_count}")
-            else:
-                print(json.dumps(result.to_dict(), indent=2))
+        if args.json:
+            output = {
+                "columns": result.columns,
+                "rows": result.rows,
+                "row_count": result.row_count,
+            }
+            print(json.dumps(output, indent=2))
         else:
-            print(json.dumps(result.to_dict()))
+            from tabulate import tabulate
+
+            print(tabulate(result.rows, headers=result.columns, tablefmt="grid"))
+            print(f"\nTotal rows: {result.row_count}")
 
     except Exception as e:
-        log.error("sql_execution_failed", error=str(e))
+        log.error("execution_failed", error=str(e))
         sys.exit(1)
 
 
 def main() -> None:
-    """Main CLI entrypoint."""
+    """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
-        description="Sens - Semantic Natural SQL CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Sens - Natural language to SQL conversion"
     )
-
-    # Global options
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging",
+        "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
-    # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
-    # nl2sql command
+    # NL2SQL command
     nl2sql_parser = subparsers.add_parser(
-        "nl2sql",
-        help="Convert natural language to SQL",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        "nl2sql", help="Convert natural language to SQL"
     )
     nl2sql_parser.add_argument(
-        "-q",
-        "--question",
-        type=str,
-        help="Natural language question to convert",
-    )
-    nl2sql_parser.add_argument(
-        "-k",
-        type=int,
-        default=5,
-        help="Number of top results to retrieve",
+        "-q", "--question", help="Natural language question to convert"
     )
     nl2sql_parser.add_argument(
         "-i",
         "--interactive",
         action="store_true",
-        help="Enter interactive mode for multiple queries",
+        help="Start interactive mode",
     )
     nl2sql_parser.add_argument(
+        "-f",
         "--format",
         choices=["json", "table", "summary"],
         default="json",
-        help="Output format (default: json)",
+        help="Output format",
     )
     nl2sql_parser.add_argument(
         "--no-preview",
         action="store_true",
-        help="Skip table preview in output",
+        help="Don't show result preview",
     )
     nl2sql_parser.add_argument(
         "--max-rows",
         type=int,
         default=5,
-        help="Maximum preview rows (default: 5)",
+        help="Maximum preview rows",
     )
     nl2sql_parser.add_argument(
-        "-p",
-        "--pretty",
-        action="store_true",
-        help="Pretty print JSON output",
-    )
-    # Add new options for enhanced pipeline
-    nl2sql_parser.add_argument(
-        "--conversation-id",
-        type=str,
-        help="Specify a conversation ID for continuity",
+        "-p", "--pretty", action="store_true", help="Pretty print output"
     )
     nl2sql_parser.add_argument(
-        "-m",
-        "--metrics",
-        action="store_true",
-        help="Show pipeline metrics in output",
+        "-m", "--metrics", action="store_true", help="Include metrics in output"
     )
     nl2sql_parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        help="Show debug information in output",
+        "-d", "--debug", action="store_true", help="Include debug info in output"
+    )
+    nl2sql_parser.add_argument(
+        "-s",
+        "--session-id",
+        help="Session ID for conversation continuity. If not provided, a new session will be created.",
     )
 
-    # extract-schema command
+    # Schema extraction command
     extract_parser = subparsers.add_parser(
-        "extract-schema",
-        help="Extract database schema to JSON",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        "extract-schema", help="Extract database schema"
     )
     extract_parser.add_argument(
         "-o",
         "--output",
         type=Path,
-        help="Output path for schema JSON",
+        help="Output path for schema file",
     )
 
-    # build-index command
-    build_parser = subparsers.add_parser(
-        "build-index",
-        help="Build embedding search index",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
+    # Index building command
+    build_parser = subparsers.add_parser("build-index", help="Build embedding index")
     build_parser.add_argument(
         "-s",
         "--schema",
         type=Path,
-        help="Input schema JSON path",
+        help="Path to schema file",
     )
     build_parser.add_argument(
         "-o",
         "--output",
         type=Path,
-        help="Output directory for index files",
+        help="Output directory for index",
     )
 
-    # validate command
+    # SQL validation command
     validate_parser = subparsers.add_parser(
         "validate",
         help="Validate SQL queries",
@@ -450,16 +424,15 @@ def main() -> None:
     )
     sql_group = validate_parser.add_mutually_exclusive_group(required=True)
     sql_group.add_argument(
-        "-s",
-        "--sql",
-        type=str,
+        "sql",
+        nargs="?",
         help="SQL query to validate",
     )
     sql_group.add_argument(
         "-f",
         "--file",
         type=Path,
-        help="File containing SQL query",
+        help="Read SQL from file",
     )
     validate_parser.add_argument(
         "--syntax",
@@ -487,125 +460,43 @@ def main() -> None:
         help="Allow UPDATE/DELETE without WHERE clause",
     )
     validate_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results in JSON format",
-    )
-    validate_parser.add_argument(
-        "-p",
-        "--pretty",
-        action="store_true",
-        help="Pretty print output",
-    )
-
-    # SQL execution
-    execute_parser = subparsers.add_parser("execute", help="Execute SQL query")
-    execute_parser.add_argument("sql", nargs="?", help="SQL query to execute")
-    execute_parser.add_argument("-f", "--file", type=Path, help="Read SQL from file")
-    execute_parser.add_argument(
-        "--pretty", action="store_true", help="Pretty print output in table format"
-    )
-
-    # debug command
-    debug_parser = subparsers.add_parser(
-        "debug",
-        help="Debug system components and conversations",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    debug_parser.add_argument(
-        "-c",
-        "--conversation-id",
-        type=str,
-        help="Show debug information for a specific conversation",
-    )
-    debug_parser.add_argument(
-        "--component",
-        choices=["schema", "indices", "database"],
-        help="Show debug information for a specific component",
-    )
-
-    # metrics command
-    metrics_parser = subparsers.add_parser(
-        "metrics",
-        help="Show system metrics",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    metrics_parser.add_argument(
-        "-c",
-        "--conversation-id",
-        type=str,
-        help="Show metrics for a specific conversation",
-    )
-    metrics_parser.add_argument(
-        "-d",
-        "--detailed",
-        action="store_true",
-        help="Show detailed metrics",
-    )
-
-    # status command
-    status_parser = subparsers.add_parser(
-        "status",
-        help="Show system status",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    status_parser.add_argument(
         "-j",
         "--json",
         action="store_true",
         help="Output in JSON format",
     )
+    validate_parser.add_argument(
+        "-p",
+        "--pretty",
+        action="store_true",
+        help="Pretty print JSON output",
+    )
+
+    # SQL execution command
+    execute_parser = subparsers.add_parser("execute", help="Execute SQL")
+    execute_parser.add_argument("sql", nargs="?", help="SQL to execute")
+    execute_parser.add_argument("-f", "--file", type=Path, help="Read SQL from file")
+    execute_parser.add_argument(
+        "-j", "--json", action="store_true", help="Output in JSON format"
+    )
 
     args = parser.parse_args()
-
-    # Configure logging
     setup_logging(args.verbose)
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
-    # Record command invocation
-    metrics_store = MetricsStore()
-    metrics_store.record_command(args.command)
-
-    try:
-        # Import handlers here to avoid loading all dependencies
-        if args.command == "nl2sql":
-            if not args.question and not args.interactive:
-                nl2sql_parser.error(
-                    "either --question or --interactive must be specified"
-                )
-            asyncio.run(handle_nl2sql(args, parser))
-        elif args.command == "extract-schema":
-            handle_extract_schema(args)
-        elif args.command == "build-index":
-            handle_build_index(args)
-        elif args.command == "validate":
-            if not args.sql and not args.file:
-                validate_parser.error("either SQL query or --file is required")
-            handle_validate(args)
-        elif args.command == "execute":
-            if not args.sql and not args.file:
-                execute_parser.error("either SQL query or --file is required")
-            handle_execute(args)
-        elif args.command == "debug":
-            from sens.cli.commands.system import handle_debug
-
-            handle_debug(args)
-        elif args.command == "metrics":
-            from sens.cli.commands.system import handle_metrics
-
-            handle_metrics(args)
-        elif args.command == "status":
-            from sens.cli.commands.system import handle_status
-
-            handle_status(args)
-
-    except Exception as e:
-        log.error("command_failed", command=args.command, error=str(e))
-        metrics_store.record_error()
-        sys.exit(1)
+    if args.command == "nl2sql":
+        asyncio.run(handle_nl2sql(args, parser))
+    elif args.command == "extract-schema":
+        handle_extract_schema(args)
+    elif args.command == "build-index":
+        handle_build_index(args)
+    elif args.command == "validate":
+        handle_validate(args)
+    elif args.command == "execute":
+        handle_execute(args)
 
 
 if __name__ == "__main__":

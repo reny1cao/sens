@@ -1,5 +1,7 @@
 """Convert between different schema context representations."""
 
+from typing import Dict, Set, Tuple
+
 from sens.retrieval.models import RetrievedContext
 from sens.schema.context import ValidatorSchemaContext
 
@@ -28,9 +30,28 @@ def to_validator_schema(context: RetrievedContext) -> ValidatorSchemaContext:
         if table not in columns_per_table:
             columns_per_table[table] = set()
 
+    # Build foreign key mapping from metadata
+    foreign_keys: Dict[str, Dict[str, Tuple[str, str]]] = {}
+
+    for column in context.columns:
+        # Only process columns marked as foreign keys
+        if column.metadata.get("type") == "FK":
+            referenced_table = column.metadata.get("references_table")
+            if referenced_table and referenced_table in tables:
+                # Initialize the FK dict for this table if needed
+                if column.table_name not in foreign_keys:
+                    foreign_keys[column.table_name] = {}
+
+                # Add the FK relationship
+                # For now, assume the referenced column is 'id' if not specified
+                referenced_column = column.metadata.get("references_column", "id")
+                foreign_keys[column.table_name][column.column_name] = (
+                    referenced_table,
+                    referenced_column,
+                )
+
     return ValidatorSchemaContext(
         tables=tables,
         columns_per_table=columns_per_table,
-        # Foreign keys are not available in RetrievedContext
-        foreign_keys={},
+        foreign_keys=foreign_keys,
     )

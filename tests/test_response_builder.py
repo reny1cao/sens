@@ -63,10 +63,7 @@ def sample_query_result():
     """Create a sample query result for testing."""
     return QueryResult(
         columns=["id", "name", "value"],
-        rows=[
-            {"id": 1, "name": "Test 1", "value": 100},
-            {"id": 2, "name": "Test 2", "value": 200},
-        ],
+        rows=[[1, "Test 1", 100], [2, "Test 2", 200]],
         row_count=2,
     )
 
@@ -97,7 +94,7 @@ def mock_openai_response():
     )
 
 
-def test_response_builder_initialization(mock_settings, mock_llm_settings):
+def test_response_builder_initialization(mock_settings):
     """Test ResponseBuilder initialization."""
     builder = ResponseBuilder()
     assert builder.config.primary_model == "test/gpt-4"
@@ -106,14 +103,20 @@ def test_response_builder_initialization(mock_settings, mock_llm_settings):
     assert builder.config.temperature == 0.3
 
 
-def test_empty_result_handling(mock_settings, mock_llm_settings):
+def test_empty_result_handling(mock_settings):
     """Test handling of empty query results."""
     builder = ResponseBuilder()
     empty_result = QueryResult(columns=["id", "name"], rows=[], row_count=0)
 
     response = builder.build(
         question="What records match?",
-        intent=Intent(type="lookup", confidence=0.9),
+        intent=Intent(
+            query_type="lookup",
+            tables=["test"],
+            operations=[],
+            conditions=[],
+            confidence=0.9,
+        ),
         result=empty_result,
         sql="SELECT * FROM test WHERE 1=0",
     )
@@ -168,11 +171,11 @@ def test_llm_failure_fallback(mock_settings, mock_llm_settings, sample_query_res
         assert "data preview" in response.summary.lower()
 
 
-def test_response_serialization(mock_settings, mock_llm_settings, sample_query_result):
+def test_response_serialization(mock_settings):
     """Test FinalResponse serialization to JSON."""
     response = FinalResponse(
         summary="Test summary",
-        table_preview=sample_query_result.rows,
+        table_preview=[[1, "Test 1"], [2, "Test 2"]],
         row_count=2,
         sql="SELECT * FROM test",
         execution_time_ms=100.5,
