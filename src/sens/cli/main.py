@@ -20,8 +20,9 @@ from typing import Optional, Set
 import structlog
 
 from sens.chat.orchestrator import ChatOrchestrator
-from sens.chat.session import Session, SessionManager
-from sens.cli.enhanced_pipeline import EnhancedPipeline
+from sens.chat.session import SessionManager
+from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
+from sens.cli.formatters import format_nl2sql_response
 from sens.execution import SQLExecutor
 from sens.schema.context import ValidatorSchemaContext
 from sens.schema.graph import SchemaGraph
@@ -74,10 +75,6 @@ async def handle_nl2sql(
         parser: The argument parser instance
     """
     try:
-        # Import here to avoid loading dependencies unless needed
-        from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
-        from sens.cli.formatters import format_nl2sql_response
-
         # Check Redis availability if session ID is provided
         check_redis_availability(args.session_id)
 
