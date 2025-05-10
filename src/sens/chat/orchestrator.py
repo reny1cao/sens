@@ -43,9 +43,24 @@ log = structlog.get_logger()
 class ChatOrchestrator:
     """Orchestrates the full pipeline from natural language to SQL results."""
 
-    def __init__(self):
-        """Initialize the chat orchestrator and session manager."""
+    def __init__(
+        self,
+        conversation_id: Optional[str] = None,
+        state: Optional[ConversationState] = None,
+    ):
+        """Initialize the chat orchestrator and session manager.
+
+        Args:
+            conversation_id: Optional ID for the conversation
+            state: Optional existing conversation state
+        """
         self.session_manager = SessionManager()
+        self.state = state or (
+            ConversationState(conversation_id=conversation_id)
+            if conversation_id
+            else ConversationState(conversation_id=str(uuid.uuid4()))
+        )
+
         # Initialize all pipeline components
         self.schema_graph = SchemaGraph.get_instance()
         token_index = ChatTokenIndexAdapter()
@@ -61,22 +76,25 @@ class ChatOrchestrator:
         self.sql_validator = SQLValidator()
         self.sql_executor = SQLExecutor()
         self.response_builder = ResponseBuilder()
-        log.info("chat_orchestrator_initialized")
+        log.info(
+            "chat_orchestrator_initialized", conversation_id=self.state.conversation_id
+        )
 
-    async def step(
-        self, session_id: str, user_input: str
-    ) -> Union[Dict, ClarificationRequest]:
-        """Process one step of the conversation, loading and saving state via SessionManager."""
-        # Load or initialize conversation state for this session
-        state = self.session_manager.get(session_id)
-        if state is None:
-            state = ConversationState(conversation_id=session_id)
-        metrics = PipelineMetrics(conversation_id=state.conversation_id)
+    async def step(self, user_input: str) -> Union[Dict, ClarificationRequest]:
+        """Process one step of the conversation.
+
+        Args:
+            user_input: The user's question or input
+
+        Returns:
+            Either a response dictionary or a clarification request
+        """
+        metrics = PipelineMetrics(conversation_id=self.state.conversation_id)
         metrics.metadata["user_input"] = user_input
         try:
             log.info(
                 "retrieving_schema_context",
-                conversation_id=state.conversation_id,
+                conversation_id=self.state.conversation_id,
                 user_input=user_input,
             )
             try:
@@ -98,11 +116,11 @@ class ChatOrchestrator:
                             "pipeline_metrics": metrics.model_dump(),
                         },
                     }
-                    state.add_interaction(
+                    self.state.add_interaction(
                         user_input=user_input,
                         response=error_response,
                     )
-                    self.session_manager.save(session_id, state)
+                    self.session_manager.save(self.state.conversation_id, self.state)
                     return error_response
                 error = SchemaRetrievalError(
                     f"Failed to retrieve schema context: {str(e)}",
@@ -118,11 +136,11 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                state.add_interaction(
+                self.state.add_interaction(
                     user_input=user_input,
                     response=error_response,
                 )
-                self.session_manager.save(session_id, state)
+                self.session_manager.save(self.state.conversation_id, self.state)
                 return error_response
             log.info("extracting_intent")
             try:
@@ -162,12 +180,12 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                state.add_interaction(
+                self.state.add_interaction(
                     user_input=user_input,
                     response=clarification_response,
                     clarification=validation_result,
                 )
-                self.session_manager.save(session_id, state)
+                self.session_manager.save(self.state.conversation_id, self.state)
                 return validation_result
             log.info("generating_sql")
             try:
@@ -264,7 +282,7 @@ class ChatOrchestrator:
             # Create final response with all metadata
             final_response = {
                 "status": "success",
-                "conversation_id": state.conversation_id,
+                "conversation_id": self.state.conversation_id,
                 "summary": response.summary,
                 "sql": sql_result.sql,
                 "result": {
@@ -292,13 +310,13 @@ class ChatOrchestrator:
             }
 
             # Update conversation state and save
-            state.add_interaction(
+            self.state.add_interaction(
                 user_input=user_input,
                 response=final_response,
                 intent=intent,
             )
             metrics.complete(success=True)
-            self.session_manager.save(session_id, state)
+            self.session_manager.save(self.state.conversation_id, self.state)
             return final_response
 
         except ChatError as e:
@@ -308,7 +326,7 @@ class ChatOrchestrator:
                 error_type=e.__class__.__name__,
                 error_message=str(e),
                 error_details=e.details,
-                conversation_id=state.conversation_id,
+                conversation_id=self.state.conversation_id,
             )
             metrics.complete(success=False, error=str(e))
             error_response = {
@@ -320,11 +338,11 @@ class ChatOrchestrator:
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            state.add_interaction(
+            self.state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
-            self.session_manager.save(session_id, state)
+            self.session_manager.save(self.state.conversation_id, self.state)
             return error_response
 
         except Exception as e:
@@ -332,7 +350,7 @@ class ChatOrchestrator:
             log.error(
                 "unexpected_error",
                 error=str(e),
-                conversation_id=state.conversation_id,
+                conversation_id=self.state.conversation_id,
             )
             metrics.complete(success=False, error=str(e))
             error_response = {
@@ -342,11 +360,11 @@ class ChatOrchestrator:
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            state.add_interaction(
+            self.state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
-            self.session_manager.save(session_id, state)
+            self.session_manager.save(self.state.conversation_id, self.state)
             return error_response
 
     def get_conversation_state(self) -> ConversationState:

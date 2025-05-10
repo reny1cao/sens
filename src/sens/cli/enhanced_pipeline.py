@@ -91,10 +91,10 @@ class EnhancedNL2SQLPipeline:
             if self.debug_mode:
                 debug_info = {
                     "conversation_id": self.orchestrator.state.conversation_id,
-                    "interaction_count": len(self.orchestrator.state.interactions),
+                    "interaction_count": len(self.orchestrator.state.history),
                     "last_intent": (
-                        self.orchestrator.state.last_intent.model_dump()
-                        if self.orchestrator.state.last_intent
+                        self.orchestrator.state.last_valid_intent.model_dump()
+                        if self.orchestrator.state.last_valid_intent
                         else None
                     ),
                 }
