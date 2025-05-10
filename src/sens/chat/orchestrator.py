@@ -19,6 +19,7 @@ from sens.chat.exceptions import (
     SQLValidationError,
     UnexpectedError,
 )
+from sens.chat.session import SessionManager
 from sens.chat.state import ClarificationRequest, ConversationState
 from sens.execution import SQLExecutor
 from sens.llm.intent_extractor import IntentExtractor
@@ -40,41 +41,13 @@ log = structlog.get_logger()
 
 
 class ChatOrchestrator:
-    """
-    Orchestrates the full pipeline from natural language to SQL results.
+    """Orchestrates the full pipeline from natural language to SQL results."""
 
-    This class coordinates all components of the Sens system:
-    - Schema retrieval
-    - Intent extraction and validation
-    - SQL generation and validation
-    - Query execution
-    - Response building
-    """
-
-    def __init__(
-        self,
-        conversation_id: Optional[str] = None,
-        state: Optional[ConversationState] = None,
-    ):
-        """
-        Initialize the chat orchestrator with optional existing state.
-
-        Args:
-            conversation_id: Optional ID for a new conversation
-            state: Optional existing conversation state
-        """
-        # Initialize conversation state
-        if state:
-            self.state = state
-        else:
-            self.state = ConversationState(
-                conversation_id=conversation_id or str(uuid.uuid4())
-            )
-
+    def __init__(self):
+        """Initialize the chat orchestrator and session manager."""
+        self.session_manager = SessionManager()
         # Initialize all pipeline components
         self.schema_graph = SchemaGraph.get_instance()
-
-        # Initialize retrieval components
         token_index = ChatTokenIndexAdapter()
         embedding_index = ChatEmbeddingAdapter()
         self.retrieval = RetrievalOrchestrator(
@@ -82,51 +55,28 @@ class ChatOrchestrator:
             embedding_index=embedding_index,
             schema_graph=self.schema_graph,
         )
-
-        # Initialize other components
         self.intent_extractor = IntentExtractor()
         self.intent_validator = IntentValidator()
         self.sql_generator = SQLGenerator()
         self.sql_validator = SQLValidator()
         self.sql_executor = SQLExecutor()
         self.response_builder = ResponseBuilder()
+        log.info("chat_orchestrator_initialized")
 
-        log.info(
-            "chat_orchestrator_initialized",
-            conversation_id=self.state.conversation_id,
-        )
-
-    async def step(self, user_input: str) -> Union[Dict, ClarificationRequest]:
-        """
-        Process one step of the conversation.
-
-        This method orchestrates the full pipeline:
-        1. Schema Retrieval
-        2. Intent extraction
-        3. Intent validation
-        4. SQL generation
-        5. SQL validation
-        6. Query execution
-        7. Response building
-
-        Args:
-            user_input: The user's natural language question
-
-        Returns:
-            Either a complete response or a clarification request
-
-        Raises:
-            ChatError: Base class for all chat-related errors
-        """
-        # Initialize pipeline metrics
-        metrics = PipelineMetrics(conversation_id=self.state.conversation_id)
+    async def step(
+        self, session_id: str, user_input: str
+    ) -> Union[Dict, ClarificationRequest]:
+        """Process one step of the conversation, loading and saving state via SessionManager."""
+        # Load or initialize conversation state for this session
+        state = self.session_manager.get(session_id)
+        if state is None:
+            state = ConversationState(conversation_id=session_id)
+        metrics = PipelineMetrics(conversation_id=state.conversation_id)
         metrics.metadata["user_input"] = user_input
-
         try:
-            # Step 1: Schema Retrieval
             log.info(
                 "retrieving_schema_context",
-                conversation_id=self.state.conversation_id,
+                conversation_id=state.conversation_id,
                 user_input=user_input,
             )
             try:
@@ -137,7 +87,6 @@ class ChatOrchestrator:
                     step.metadata["table_count"] = len(context.tables)
                     step.metadata["column_count"] = len(context.columns)
             except Exception as e:
-                # Let unexpected errors propagate
                 if isinstance(e, ChatError):
                     raise
                 if "UnexpectedError" in e.__class__.__name__:
@@ -149,12 +98,12 @@ class ChatOrchestrator:
                             "pipeline_metrics": metrics.model_dump(),
                         },
                     }
-                    self.state.add_interaction(
+                    state.add_interaction(
                         user_input=user_input,
                         response=error_response,
                     )
+                    self.session_manager.save(session_id, state)
                     return error_response
-                # Wrap other exceptions in SchemaRetrievalError
                 error = SchemaRetrievalError(
                     f"Failed to retrieve schema context: {str(e)}",
                     details={"user_input": user_input},
@@ -169,13 +118,12 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                self.state.add_interaction(
+                state.add_interaction(
                     user_input=user_input,
                     response=error_response,
                 )
+                self.session_manager.save(session_id, state)
                 return error_response
-
-            # Step 2: Intent Extraction
             log.info("extracting_intent")
             try:
                 with track_step(metrics, "intent_extraction") as step:
@@ -196,16 +144,12 @@ class ChatOrchestrator:
                         },
                     )
                 raise
-
-            # Step 3: Intent Validation
             log.info("validating_intent")
             with track_step(metrics, "intent_validation") as step:
                 validation_result = self.intent_validator.validate(intent)
                 step.metadata["is_clarification"] = isinstance(
                     validation_result, ClarificationRequest
                 )
-
-            # If validation requests clarification, handle it
             if isinstance(validation_result, ClarificationRequest):
                 metrics.complete(success=True)
                 clarification_response = {
@@ -218,20 +162,19 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                self.state.add_interaction(
+                state.add_interaction(
                     user_input=user_input,
                     response=clarification_response,
                     clarification=validation_result,
                 )
+                self.session_manager.save(session_id, state)
                 return validation_result
-
-            # Step 4: SQL Generation
             log.info("generating_sql")
             try:
                 with track_step(metrics, "sql_generation") as step:
                     sql_result = await self.sql_generator.generate(
                         question=user_input,
-                        intent=validation_result,  # validation_result is ValidIntent here
+                        intent=validation_result,
                     )
                     step.metadata["tables_used"] = sql_result.tables_used
                     step.metadata["columns_used"] = sql_result.columns_used
@@ -248,8 +191,6 @@ class ChatOrchestrator:
                         },
                     )
                 raise
-
-            # Step 5: SQL Validation
             log.info("validating_sql", sql=sql_result.sql)
             with track_step(metrics, "sql_validation") as step:
                 validator_schema = to_validator_schema(context)
@@ -276,8 +217,6 @@ class ChatOrchestrator:
                             ],
                         },
                     )
-
-            # Step 6: Execute SQL
             log.info("executing_sql")
             try:
                 with track_step(metrics, "sql_execution") as step:
@@ -295,9 +234,6 @@ class ChatOrchestrator:
                         f"Query execution failed: {str(e)}",
                         details={"sql": sql_result.sql},
                     )
-                raise
-
-            # Step 7: Build Response
             log.info("building_response")
             try:
                 with track_step(metrics, "response_building") as step:
@@ -309,10 +245,10 @@ class ChatOrchestrator:
                         execution_time_ms=sql_result.generation_ms,
                     )
                     step.metadata["summary_length"] = len(response.summary)
-            except Exception as e:
-                if not isinstance(e, ChatError):
+            except Exception as build_error:
+                if not isinstance(build_error, ChatError):
                     raise ResponseBuildingError(
-                        f"Failed to build response: {str(e)}",
+                        f"Failed to build response: {str(build_error)}",
                         details={
                             "user_input": user_input,
                             "sql": sql_result.sql,
@@ -325,25 +261,10 @@ class ChatOrchestrator:
                     )
                 raise
 
-                if isinstance(e, UnexpectedError):
-                    raise
-                raise ResponseBuildingError(
-                    f"Failed to build response: {str(e)}",
-                    details={
-                        "user_input": user_input,
-                        "sql": sql_result.sql,
-                        "result": (
-                            query_result.model_dump()
-                            if hasattr(query_result, "model_dump")
-                            else str(query_result)
-                        ),
-                    },
-                )
-
             # Create final response with all metadata
             final_response = {
                 "status": "success",
-                "conversation_id": self.state.conversation_id,
+                "conversation_id": state.conversation_id,
                 "summary": response.summary,
                 "sql": sql_result.sql,
                 "result": {
@@ -370,14 +291,14 @@ class ChatOrchestrator:
                 },
             }
 
-            # Update conversation state
-            self.state.add_interaction(
+            # Update conversation state and save
+            state.add_interaction(
                 user_input=user_input,
                 response=final_response,
                 intent=intent,
             )
-
             metrics.complete(success=True)
+            self.session_manager.save(session_id, state)
             return final_response
 
         except ChatError as e:
@@ -387,7 +308,7 @@ class ChatOrchestrator:
                 error_type=e.__class__.__name__,
                 error_message=str(e),
                 error_details=e.details,
-                conversation_id=self.state.conversation_id,
+                conversation_id=state.conversation_id,
             )
             metrics.complete(success=False, error=str(e))
             error_response = {
@@ -399,10 +320,11 @@ class ChatOrchestrator:
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            self.state.add_interaction(
+            state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
+            self.session_manager.save(session_id, state)
             return error_response
 
         except Exception as e:
@@ -410,7 +332,7 @@ class ChatOrchestrator:
             log.error(
                 "unexpected_error",
                 error=str(e),
-                conversation_id=self.state.conversation_id,
+                conversation_id=state.conversation_id,
             )
             metrics.complete(success=False, error=str(e))
             error_response = {
@@ -420,10 +342,11 @@ class ChatOrchestrator:
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            self.state.add_interaction(
+            state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
+            self.session_manager.save(session_id, state)
             return error_response
 
     def get_conversation_state(self) -> ConversationState:
