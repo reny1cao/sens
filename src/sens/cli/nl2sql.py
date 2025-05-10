@@ -190,7 +190,7 @@ class NL2SQLPipeline:
                     "reason": validation_result.reason,
                 }
 
-            # Step 4: SQL Generation
+            # Step 4: SQL Generation - only proceed if we have a ValidIntent
             log.info("generating_sql")
             start_time = time.time()
             sql_result = await self.sql_generator.generate(
@@ -201,56 +201,42 @@ class NL2SQLPipeline:
             # Step 5: Execute SQL
             log.info("executing_sql", sql=sql_result.sql)
             query_result = self.sql_executor.execute(sql_result.sql)
-            execution_time_ms = (time.time() - start_time) * 1000
 
-            if query_result.error:
-                return {
-                    "status": "error",
-                    "message": f"Query execution failed: {query_result.error}",
-                    "sql": sql_result.sql,
-                }
-
-            # Step 6: Build Response
-            log.info("building_response")
-            response = self.response_builder.build(
-                question=question,
-                intent=intent,
-                result=query_result,
-                sql=sql_result.sql,
-                execution_time_ms=execution_time_ms,
-            )
+            # Calculate total processing time
+            processing_time = int((time.time() - start_time) * 1000)
 
             return {
                 "status": "success",
-                "summary": response.summary,
                 "sql": sql_result.sql,
-                "result": {
-                    "preview": response.table_preview,
-                    "row_count": response.row_count,
-                    "columns": query_result.columns,
-                },
+                "result": query_result,
                 "metadata": {
                     "tables_used": sql_result.tables_used,
                     "columns_used": sql_result.columns_used,
-                    "model_used": sql_result.model_used,
-                    "generation_ms": sql_result.generation_ms,
-                    "execution_ms": execution_time_ms,
+                    "processing_time_ms": processing_time,
                     "token_usage": (
                         sql_result.token_usage.model_dump()
                         if sql_result.token_usage
                         else None
                     ),
-                    "intent_type": intent.query_type,
-                    "tables": intent.tables,
-                    "operations": intent.operations,
-                    "confidence": intent.confidence,
-                    "generated_at": response.generated_at,
                 },
             }
 
         except Exception as e:
-            log.error("pipeline_processing_failed", error=str(e))
-            return {"status": "error", "message": str(e)}
+            log.error("pipeline_error", error=str(e), question=question)
+            error_type = type(e).__name__
+            error_details = {"question": question}
+
+            if hasattr(e, "details"):
+                error_details.update(e.details)
+            if hasattr(intent, "model_dump"):
+                error_details["intent"] = intent.model_dump()
+
+            return {
+                "status": "error",
+                "error_type": error_type,
+                "message": str(e),
+                "details": error_details,
+            }
 
 
 async def main():
