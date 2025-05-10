@@ -193,3 +193,42 @@ def test_validation_with_comments(validator, sample_schema):
     result = validator.validate(sql, sample_schema)
     assert result.is_valid
     assert not result.errors
+
+
+def test_computed_columns_and_aliases(validator, schema_context):
+    """Test validation of computed columns and their aliases in GROUP BY and ORDER BY."""
+    sql = """
+    SELECT
+        EXTRACT(MONTH FROM vs.start_date) AS month,
+        SUM(vs.hours_viewed) AS total_hours_viewed
+    FROM
+        view_summary vs
+    GROUP BY
+        month
+    ORDER BY
+        total_hours_viewed DESC
+    LIMIT 1;
+    """
+    result = validator.validate(sql, schema_context)
+    assert result.is_valid, f"Validation failed with errors: {result.errors}"
+    assert not result.errors
+
+    # Test with multiple computed columns and complex expressions
+    sql = """
+    SELECT
+        EXTRACT(MONTH FROM vs.start_date) AS month,
+        EXTRACT(YEAR FROM vs.start_date) AS year,
+        SUM(vs.hours_viewed) AS total_hours,
+        COUNT(*) AS view_count,
+        SUM(vs.hours_viewed) / COUNT(*) AS avg_hours
+    FROM
+        view_summary vs
+    GROUP BY
+        month, year
+    ORDER BY
+        total_hours DESC,
+        avg_hours ASC;
+    """
+    result = validator.validate(sql, schema_context)
+    assert result.is_valid, f"Validation failed with errors: {result.errors}"
+    assert not result.errors

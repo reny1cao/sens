@@ -44,7 +44,7 @@ class ValidationLevel(Enum):
 
 @dataclass
 class ValidationError:
-    """Represents a single validation error."""
+    """Validation error details."""
 
     level: ValidationLevel
     message: str
@@ -122,6 +122,41 @@ class SQLValidator:
             self.DEFAULT_FORBIDDEN_KEYWORDS | additional_forbidden
         ) - self.whitelisted_keywords
         self.require_where_for_updates = require_where_for_updates
+
+    def _extract_computed_columns(
+        self, parsed_sql_statement: exp.Expression
+    ) -> Dict[str, str]:
+        """Extract computed columns and their aliases from SELECT clause.
+
+        Args:
+            parsed_sql_statement: A parsed SQL statement (sqlglot.Expression)
+
+        Returns:
+            Dict mapping computed column aliases to their source expressions
+        """
+        computed_columns = {}
+
+        # Find all SELECT expressions
+        for select in parsed_sql_statement.find_all(exp.Select):
+            for expr in select.expressions:
+                # Skip simple column references
+                if isinstance(expr, exp.Column) and not expr.alias:
+                    continue
+
+                # Check if expression has an alias
+                if hasattr(expr, "alias") and expr.alias:
+                    alias = expr.alias.lower()
+                    # Store the alias and its source expression
+                    computed_columns[alias] = str(expr)
+
+                # Handle GROUP BY and ORDER BY references
+                elif isinstance(expr, (exp.Group, exp.Order)):
+                    for term in expr.expressions:
+                        if hasattr(term, "alias") and term.alias:
+                            alias = term.alias.lower()
+                            computed_columns[alias] = str(term)
+
+        return computed_columns
 
     def _check_syntax(self, sql: str) -> List[ValidationError]:
         """
@@ -227,6 +262,11 @@ class SQLValidator:
             if isinstance(column_node.parent, exp.Func):
                 continue
 
+            # Skip if this is part of a computed column expression
+            if isinstance(column_node.parent, (exp.Select, exp.Group, exp.Order)):
+                if hasattr(column_node.parent, "alias") and column_node.parent.alias:
+                    continue
+
             # Determine the table qualifier (alias or actual table name)
             table_qualifier = None
             if column_node.table:  # e.g., alias.column or table.column
@@ -291,6 +331,9 @@ class SQLValidator:
             if parsed_sql_statement is None:
                 continue
 
+            # Get computed columns first
+            computed_columns = self._extract_computed_columns(parsed_sql_statement)
+
             # Extract references for the current statement
             (
                 referenced_actual_tables,
@@ -319,6 +362,10 @@ class SQLValidator:
                     actual_table, set()
                 )
                 for col_name in column_names:
+                    # Skip validation for computed columns and their aliases
+                    if col_name.lower() in computed_columns:
+                        continue
+
                     if col_name not in valid_columns_for_table:
                         errors.append(
                             ValidationError(
