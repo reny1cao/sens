@@ -3,7 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 import structlog
 from openai import OpenAI
@@ -45,21 +45,15 @@ class ChatOrchestrator:
 
     def __init__(
         self,
-        conversation_id: Optional[str] = None,
-        state: Optional[ConversationState] = None,
+        session_manager: Optional[SessionManager] = None,
     ):
-        """Initialize the chat orchestrator and session manager.
+        """Initialize the chat orchestrator.
 
         Args:
-            conversation_id: Optional ID for the conversation
-            state: Optional existing conversation state
+            session_manager: Optional SessionManager for backward compatibility with existing tests
+                           and scripts that don't need explicit state management
         """
-        self.session_manager = SessionManager()
-        self.state = state or (
-            ConversationState(conversation_id=conversation_id)
-            if conversation_id
-            else ConversationState(conversation_id=str(uuid.uuid4()))
-        )
+        self.session_manager = session_manager
 
         # Initialize all pipeline components
         self.schema_graph = SchemaGraph.get_instance()
@@ -76,25 +70,28 @@ class ChatOrchestrator:
         self.sql_validator = SQLValidator()
         self.sql_executor = SQLExecutor()
         self.response_builder = ResponseBuilder()
-        log.info(
-            "chat_orchestrator_initialized", conversation_id=self.state.conversation_id
-        )
+        log.info("chat_orchestrator_initialized")
 
-    async def step(self, user_input: str) -> Union[Dict, ClarificationRequest]:
+    async def step(
+        self, state: ConversationState, user_input: str
+    ) -> Tuple[Union[Dict, ClarificationRequest], ConversationState]:
         """Process one step of the conversation.
 
         Args:
+            state: The current conversation state
             user_input: The user's question or input
 
         Returns:
-            Either a response dictionary or a clarification request
+            A tuple containing:
+            - Either a response dictionary or a clarification request
+            - The updated conversation state
         """
-        metrics = PipelineMetrics(conversation_id=self.state.conversation_id)
+        metrics = PipelineMetrics(conversation_id=state.conversation_id)
         metrics.metadata["user_input"] = user_input
         try:
             log.info(
                 "retrieving_schema_context",
-                conversation_id=self.state.conversation_id,
+                conversation_id=state.conversation_id,
                 user_input=user_input,
             )
             try:
@@ -116,12 +113,13 @@ class ChatOrchestrator:
                             "pipeline_metrics": metrics.model_dump(),
                         },
                     }
-                    self.state.add_interaction(
+                    state.add_interaction(
                         user_input=user_input,
                         response=error_response,
                     )
-                    self.session_manager.save(self.state.conversation_id, self.state)
-                    return error_response
+                    if self.session_manager:
+                        self.session_manager.save(state.conversation_id, state)
+                    return error_response, state
                 error = SchemaRetrievalError(
                     f"Failed to retrieve schema context: {str(e)}",
                     details={"user_input": user_input},
@@ -136,12 +134,13 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                self.state.add_interaction(
+                state.add_interaction(
                     user_input=user_input,
                     response=error_response,
                 )
-                self.session_manager.save(self.state.conversation_id, self.state)
-                return error_response
+                if self.session_manager:
+                    self.session_manager.save(state.conversation_id, state)
+                return error_response, state
             log.info("extracting_intent")
             try:
                 with track_step(metrics, "intent_extraction") as step:
@@ -180,13 +179,16 @@ class ChatOrchestrator:
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
-                self.state.add_interaction(
+                state.add_interaction(
                     user_input=user_input,
                     response=clarification_response,
                     clarification=validation_result,
                 )
-                self.session_manager.save(self.state.conversation_id, self.state)
-                return validation_result
+                if self.session_manager:
+                    self.session_manager.save(state.conversation_id, state)
+                return clarification_response, state
+
+            # Only proceed with SQL generation if validation passed
             log.info("generating_sql")
             try:
                 with track_step(metrics, "sql_generation") as step:
@@ -209,7 +211,9 @@ class ChatOrchestrator:
                         },
                     )
                 raise
-            log.info("validating_sql", sql=sql_result.sql)
+
+            # Continue with execution and response building
+            log.info("executing_sql", sql=sql_result.sql)
             with track_step(metrics, "sql_validation") as step:
                 validator_schema = to_validator_schema(context)
                 sql_validation = self.sql_validator.validate(
@@ -249,85 +253,32 @@ class ChatOrchestrator:
             except Exception as e:
                 if not isinstance(e, ChatError):
                     raise SQLExecutionError(
-                        f"Query execution failed: {str(e)}",
+                        f"Failed to execute SQL: {str(e)}",
                         details={"sql": sql_result.sql},
                     )
-            log.info("building_response")
-            try:
-                with track_step(metrics, "response_building") as step:
-                    response = self.response_builder.build(
-                        question=user_input,
-                        intent=intent,
-                        result=query_result,
-                        sql=sql_result.sql,
-                        execution_time_ms=sql_result.generation_ms,
-                    )
-                    step.metadata["summary_length"] = len(response.summary)
-            except Exception as build_error:
-                if not isinstance(build_error, ChatError):
-                    raise ResponseBuildingError(
-                        f"Failed to build response: {str(build_error)}",
-                        details={
-                            "user_input": user_input,
-                            "sql": sql_result.sql,
-                            "result": (
-                                query_result.model_dump()
-                                if hasattr(query_result, "model_dump")
-                                else str(query_result)
-                            ),
-                        },
-                    )
                 raise
-
-            # Create final response with all metadata
-            final_response = {
-                "status": "success",
-                "conversation_id": self.state.conversation_id,
-                "summary": response.summary,
-                "sql": sql_result.sql,
-                "result": {
-                    "preview": response.table_preview,
-                    "row_count": response.row_count,
-                    "columns": query_result.columns,
-                },
-                "metadata": {
-                    "tables_used": sql_result.tables_used,
-                    "columns_used": sql_result.columns_used,
-                    "model_used": sql_result.model_used,
-                    "generation_ms": sql_result.generation_ms,
-                    "token_usage": (
-                        sql_result.token_usage.model_dump()
-                        if sql_result.token_usage
-                        else None
-                    ),
-                    "intent_type": intent.query_type,
-                    "tables": intent.tables,
-                    "operations": intent.operations,
-                    "confidence": intent.confidence,
-                    "generated_at": response.generated_at,
-                    "pipeline_metrics": metrics.model_dump(),
-                },
+            log.info("building_response")
+            with track_step(metrics, "response_building") as step:
+                response = self.response_builder.build(
+                    question=user_input,
+                    intent=intent,
+                    sql=sql_result.sql,
+                    result=query_result,
+                ).model_dump()
+                step.metadata["response_type"] = response.get("type", "unknown")
+            metrics.complete(success=True)
+            response["metadata"] = {
+                "pipeline_metrics": metrics.model_dump(),
             }
-
-            # Update conversation state and save
-            self.state.add_interaction(
+            state.add_interaction(
                 user_input=user_input,
-                response=final_response,
+                response=response,
                 intent=intent,
             )
-            metrics.complete(success=True)
-            self.session_manager.save(self.state.conversation_id, self.state)
-            return final_response
-
+            if self.session_manager:
+                self.session_manager.save(state.conversation_id, state)
+            return response, state
         except ChatError as e:
-            # Handle known chat-related errors
-            log.error(
-                "chat_error",
-                error_type=e.__class__.__name__,
-                error_message=str(e),
-                error_details=e.details,
-                conversation_id=self.state.conversation_id,
-            )
             metrics.complete(success=False, error=str(e))
             error_response = {
                 "status": "error",
@@ -338,34 +289,31 @@ class ChatOrchestrator:
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            self.state.add_interaction(
+            state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
-            self.session_manager.save(self.state.conversation_id, self.state)
-            return error_response
-
+            if self.session_manager:
+                self.session_manager.save(state.conversation_id, state)
+            return error_response, state
         except Exception as e:
-            # Handle unexpected errors
-            log.error(
-                "unexpected_error",
-                error=str(e),
-                conversation_id=self.state.conversation_id,
-            )
             metrics.complete(success=False, error=str(e))
+            error = UnexpectedError(str(e))
             error_response = {
                 "status": "error",
-                "message": f"An unexpected error occurred: {str(e)}",
+                "message": str(error),
+                "error_type": error.__class__.__name__,
                 "metadata": {
                     "pipeline_metrics": metrics.model_dump(),
                 },
             }
-            self.state.add_interaction(
+            state.add_interaction(
                 user_input=user_input,
                 response=error_response,
             )
-            self.session_manager.save(self.state.conversation_id, self.state)
-            return error_response
+            if self.session_manager:
+                self.session_manager.save(state.conversation_id, state)
+            return error_response, state
 
     def get_conversation_state(self) -> ConversationState:
         """Get the current conversation state."""

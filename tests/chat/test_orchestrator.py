@@ -115,13 +115,13 @@ async def test_successful_query_flow(orchestrator, mock_components):
         row_count=1,
     )
     response = FinalResponse(
-        summary="Found 1 order.",
-        table_preview=[{"id": 1, "date": "2024-01-01"}],
-        row_count=1,
-        sql=sql_result.sql,
-        execution_time_ms=100.0,
-        generated_at=datetime.now(UTC).isoformat(),
-        metadata={},
+        summary="Found 1 record.",
+        table_preview=query_result.rows,
+        row_count=query_result.row_count,
+        sql="SELECT id, date FROM events",
+        execution_time_ms=50.0,
+        generated_at=datetime.utcnow().isoformat(),
+        metadata={"intent_type": "lookup"},
     )
 
     # Configure mocks with async return values
@@ -630,13 +630,13 @@ async def test_successful_query_metrics(orchestrator, mock_components):
         row_count=1,
     )
     response = FinalResponse(
-        summary="Found 1 order.",
-        table_preview=[{"id": 1, "date": "2024-01-01"}],
-        row_count=1,
-        sql=sql_result.sql,
-        execution_time_ms=100.0,
-        generated_at=datetime.now(UTC).isoformat(),
-        metadata={},
+        summary="Found 1 record.",
+        table_preview=query_result.rows,
+        row_count=query_result.row_count,
+        sql="SELECT id, date FROM events",
+        execution_time_ms=50.0,
+        generated_at=datetime.utcnow().isoformat(),
+        metadata={"intent_type": "lookup"},
     )
 
     # Configure mocks

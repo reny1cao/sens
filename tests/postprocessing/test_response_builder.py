@@ -68,9 +68,9 @@ def sample_query_result():
     return QueryResult(
         columns=["title", "release_year"],
         rows=[
-            {"title": "Oppenheimer", "release_year": 2023},
-            {"title": "Barbie", "release_year": 2023},
-            {"title": "Dune: Part Two", "release_year": 2024},
+            ["Oppenheimer", 2023],
+            ["Barbie", 2023],
+            ["Dune: Part Two", 2024],
         ],
         row_count=3,
     )
@@ -237,7 +237,9 @@ Data: {{ result.rows | json }}
 def test_large_result_truncation(response_builder, sample_intent, mock_openai_client):
     """Test that large results are properly truncated in preview."""
     large_result = QueryResult(
-        columns=["id"], rows=[{"id": i} for i in range(10)], row_count=10
+        columns=["id"],
+        rows=[[i] for i in range(10)],  # Changed from dict to list format
+        row_count=10,
     )
 
     # Mock LLM response

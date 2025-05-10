@@ -31,11 +31,34 @@ class LLMSchemaContext(BaseSchemaContext):
 
     def to_validator_schema(self) -> ValidatorSchemaContext:
         """Convert to validator schema format."""
+        # Ensure all tables have their columns
+        tables = set(self.tables_columns.keys())
+        columns_per_table = {}
+
+        for table, columns in self.tables_columns.items():
+            # Convert to set and ensure primary keys are included
+            column_set = set(columns)
+            if table in self.primary_keys:
+                column_set.update(self.primary_keys[table])
+
+            # Ensure foreign key columns are included
+            for fk in self.foreign_keys:
+                if fk["from_table"] == table:
+                    if isinstance(fk["from_columns"], list):
+                        column_set.update(fk["from_columns"])
+                    else:
+                        column_set.add(fk["from_columns"])
+                elif fk["to_table"] == table:
+                    if isinstance(fk["to_columns"], list):
+                        column_set.update(fk["to_columns"])
+                    else:
+                        column_set.add(fk["to_columns"])
+
+            columns_per_table[table] = column_set
+
         return ValidatorSchemaContext(
-            tables=set(self.tables_columns.keys()),
-            columns_per_table={
-                table: set(columns) for table, columns in self.tables_columns.items()
-            },
+            tables=tables,
+            columns_per_table=columns_per_table,
             foreign_keys=self._convert_foreign_keys(),
         )
 
