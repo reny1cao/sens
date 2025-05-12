@@ -465,7 +465,7 @@ class RetrievalOrchestrator:
                             RetrievedColumn(
                                 table_name=table_name,
                                 column_name=sticky_col,
-                                score=0.0,  # No scoring for sticky columns
+                                score=0.1,  # Small positive score to rank above structural columns
                                 source="sticky",
                                 is_sticky=True,
                                 metadata={"type": "sticky"},
@@ -501,7 +501,7 @@ class RetrievalOrchestrator:
                                 RetrievedColumn(
                                     table_name=neighbor,
                                     column_name=sticky_col,
-                                    score=0.0,  # No scoring for sticky columns
+                                    score=0.1,  # Small positive score to rank above structural columns
                                     source="sticky",
                                     is_sticky=True,
                                     metadata={
