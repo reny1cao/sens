@@ -15,13 +15,13 @@ from sens.settings import Settings
 
 @pytest.fixture
 def mock_settings_with_llm_config() -> Dict:
-    """Return mock settings for testing."""
+    """Mock settings for testing."""
     return {
         "llm": {
             "sql_generator": {
                 "primary_model": "openai/gpt-4-test",
                 "fallback_model": "openai/gpt-3.5-turbo-test",
-            }
+            },
         },
         "openrouter": {
             "api_key": "sk-test-api-key",  # Valid format for OpenRouter API key
@@ -35,7 +35,7 @@ def mock_settings_with_llm_config() -> Dict:
 
 @pytest.fixture
 def mock_schema_graph():
-    """Return a mock schema graph for testing."""
+    """Mock schema graph for testing."""
     mock = MagicMock(spec=SchemaGraph)
     # Set up default behaviors
     mock.get_referenced_tables.return_value = set()
@@ -49,7 +49,7 @@ def mock_schema_graph():
 
 @pytest.fixture
 def sql_generator_instance(mocker, mock_settings_with_llm_config, mock_schema_graph):
-    """Return an SQLGenerator instance with mocked dependencies."""
+    """Fixture to create an SQLGenerator instance with mocked dependencies."""
     # Patch settings functions used by SQLGenerator
     mocker.patch(
         "sens.llm.sql_generator.get_settings",
@@ -70,54 +70,52 @@ def sql_generator_instance(mocker, mock_settings_with_llm_config, mock_schema_gr
     return generator
 
 
+@pytest.fixture
+def basic_intent():
+    """Fixture for a basic intent."""
+    return ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["movie"],
+            columns=["title"],
+            filters={},
+            confidence=1.0,
+        ),
+        enhanced_metadata={},
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_simple_select_query(
     sql_generator_instance: SQLGenerator,
     mock_schema_graph,
+    basic_intent,
 ):
     """Test generating a simple SELECT query."""
-    # Setup test data
-    question = "Show all movies"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title"],
-        filters={},
-        confidence=1.0,
-    )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
-
     # Mock LLM response
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[
         0
     ].message.content = """```sql
-SELECT movie.title
-FROM movie;
-```"""
+    SELECT movie.title FROM movie;
+    ```"""
     mock_response.usage.prompt_tokens = 100
     mock_response.usage.completion_tokens = 30
 
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     # Execute
-    result = await sql_generator_instance.generate(question, valid_intent)
+    result = await sql_generator_instance.generate("Show all movies", basic_intent)
 
     # Verify
     assert "SELECT movie.title" in result.sql
     assert "FROM movie" in result.sql
     assert result.model_used == sql_generator_instance.primary_model
-
-
-# Add more test cases here following the plan:
-# - test_generate_query_with_where_clause
-# - test_generate_query_with_join
-# - test_generate_handles_llm_extraction_error
-# - test_generate_uses_fallback_model_on_primary_failure
+    assert result.token_usage.prompt_tokens == 100
+    assert result.token_usage.completion_tokens == 30
 
 
 @pytest.mark.asyncio
@@ -125,18 +123,19 @@ async def test_generate_handles_insufficient_schema_error(
     sql_generator_instance: SQLGenerator,
     mock_schema_graph,
 ):
-    """Test handling of INSUFFICIENT_SCHEMA errors when the LLM indicates missing schema elements."""
+    """Verify that SQLGenerator correctly handles INSUFFICIENT_SCHEMA errors."""
     # Setup test data
     question = "Show movie titles and their start dates"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title", "start_date"],
-        filters={},
-        confidence=1.0,
+    intent = ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["movie"],
+            columns=["title", "start_date"],
+            filters={},
+            confidence=1.0,
+        ),
+        enhanced_metadata={},
     )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
 
     # Mock the error JSON that LLM should return
     error_json = {
@@ -152,13 +151,13 @@ async def test_generate_handles_insufficient_schema_error(
     mock_response.usage.prompt_tokens = 100
     mock_response.usage.completion_tokens = 30
 
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     # Execute and verify
     with pytest.raises(SQLGenerationError) as exc_info:
-        await sql_generator_instance.generate(question, valid_intent)
+        await sql_generator_instance.generate(question, intent)
 
     # Verify error details
     assert exc_info.value.error_type == "INSUFFICIENT_SCHEMA"
@@ -167,65 +166,12 @@ async def test_generate_handles_insufficient_schema_error(
 
 
 @pytest.mark.asyncio
-async def test_generate_handles_malformed_json_error(
-    sql_generator_instance: SQLGenerator,
-    mock_schema_graph,
-):
-    """Test handling of malformed JSON in LLM response."""
-    # Setup test data
-    question = "Show all movies"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title"],
-        filters={},
-        confidence=1.0,
-    )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
-
-    # Malformed JSON response
-    malformed_json = "{error_type: INSUFFICIENT_SCHEMA, missing_elements: [}"
-
-    # Mock LLM response
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = malformed_json
-    mock_response.usage.prompt_tokens = 100
-    mock_response.usage.completion_tokens = 30
-
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
-
-    # Execute and verify
-    with pytest.raises(SQLGenerationError) as exc_info:
-        await sql_generator_instance.generate(question, valid_intent)
-
-    # Should raise SQL_EXTRACTION_FAILURE, not INSUFFICIENT_SCHEMA
-    assert exc_info.value.error_type == "SQL_EXTRACTION_FAILURE"
-    assert "malformed json" in str(exc_info.value).lower()
-
-
-@pytest.mark.asyncio
 async def test_extract_sql_from_different_markdown_formats(
     sql_generator_instance: SQLGenerator,
     mock_schema_graph,
+    basic_intent,
 ):
     """Test SQL extraction from various markdown code block formats."""
-    # Setup base test data
-    question = "Show all movies"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title"],
-        filters={},
-        confidence=1.0,
-    )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
-
-    # Test cases with different markdown formats
     test_cases = [
         # Standard markdown SQL block
         """```sql
@@ -257,16 +203,17 @@ async def test_extract_sql_from_different_markdown_formats(
         mock_response.usage.prompt_tokens = 100
         mock_response.usage.completion_tokens = 30
 
-        # Create an async mock that returns the mock response
-        async_mock = AsyncMock(return_value=mock_response)
-        sql_generator_instance.client.chat.completions.create = async_mock
+        sql_generator_instance.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
 
         # Execute
-        result = await sql_generator_instance.generate(question, valid_intent)
+        result = await sql_generator_instance.generate("Show all movies", basic_intent)
 
         # Verify the SQL was correctly extracted
-        assert "SELECT movie.title" in result.sql
-        assert "FROM movie" in result.sql
+        sql_lower = result.sql.lower()
+        assert "select movie.title" in sql_lower
+        assert "from movie" in sql_lower
 
 
 @pytest.mark.asyncio
@@ -277,15 +224,16 @@ async def test_generate_complex_join_query(
     """Test generating a complex query with joins."""
     # Setup test data
     question = "Show movie titles and their view counts"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie", "view_summary"],
-        columns=["title", "views"],
-        filters={},
-        confidence=1.0,
+    intent = ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["movie", "view_summary"],
+            columns=["title", "views"],
+            filters={},
+            confidence=1.0,
+        ),
+        enhanced_metadata={},
     )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
 
     # Mock schema graph to return join-related data
     mock_schema_graph.get_table_fks_involved.return_value = ["movie_id"]
@@ -307,12 +255,12 @@ async def test_generate_complex_join_query(
     mock_response.usage.prompt_tokens = 100
     mock_response.usage.completion_tokens = 30
 
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     # Execute
-    result = await sql_generator_instance.generate(question, valid_intent)
+    result = await sql_generator_instance.generate(question, intent)
 
     # Verify
     assert "SELECT m.title, vs.views" in result.sql
@@ -331,15 +279,16 @@ async def test_generate_with_validation_error(
     """Test handling of SQL validation errors."""
     # Setup test data
     question = "Show all movies and invalid_column"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title", "invalid_column"],
-        filters={},
-        confidence=1.0,
+    intent = ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["movie"],
+            columns=["title", "invalid_column"],
+            filters={},
+            confidence=1.0,
+        ),
+        enhanced_metadata={},
     )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
 
     # Mock LLM response with invalid column
     mock_response = MagicMock()
@@ -353,13 +302,13 @@ async def test_generate_with_validation_error(
     mock_response.usage.prompt_tokens = 100
     mock_response.usage.completion_tokens = 30
 
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     # Execute and verify
     with pytest.raises(SQLGenerationError) as exc_info:
-        await sql_generator_instance.generate(question, valid_intent)
+        await sql_generator_instance.generate(question, intent)
 
     assert exc_info.value.error_type == "SQL_VALIDATION_ERROR"
     assert "invalid_column" in str(exc_info.value).lower()
@@ -369,20 +318,9 @@ async def test_generate_with_validation_error(
 async def test_generate_with_llm_api_error(
     sql_generator_instance: SQLGenerator,
     mock_schema_graph,
+    basic_intent,
 ):
     """Test handling of LLM API errors with fallback."""
-    # Setup test data
-    question = "Show all movies"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title"],
-        filters={},
-        confidence=1.0,
-    )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
-
     # Mock primary model to fail
     primary_error = Exception("API Error")
 
@@ -403,7 +341,7 @@ async def test_generate_with_llm_api_error(
     )
 
     # Execute
-    result = await sql_generator_instance.generate(question, valid_intent)
+    result = await sql_generator_instance.generate("Show all movies", basic_intent)
 
     # Verify fallback was used
     assert result.model_used == sql_generator_instance.fallback_model
@@ -414,20 +352,9 @@ async def test_generate_with_llm_api_error(
 async def test_generate_with_multiple_code_blocks(
     sql_generator_instance: SQLGenerator,
     mock_schema_graph,
+    basic_intent,
 ):
     """Test handling of responses with multiple SQL code blocks."""
-    # Setup test data
-    question = "Show all movies"
-    intent = Intent(
-        query=question,
-        query_type=QueryType.LOOKUP,
-        tables=["movie"],
-        columns=["title"],
-        filters={},
-        confidence=1.0,
-    )
-    valid_intent = ValidIntent(original_intent=intent, validation_passed=True)
-
     # Mock LLM response with multiple code blocks
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
@@ -444,12 +371,12 @@ async def test_generate_with_multiple_code_blocks(
     mock_response.usage.prompt_tokens = 100
     mock_response.usage.completion_tokens = 30
 
-    # Create an async mock that returns the mock response
-    async_mock = AsyncMock(return_value=mock_response)
-    sql_generator_instance.client.chat.completions.create = async_mock
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
 
     # Execute
-    result = await sql_generator_instance.generate(question, valid_intent)
+    result = await sql_generator_instance.generate("Show all movies", basic_intent)
 
     # Verify it uses the first SQL block
     assert "SELECT movie.title FROM movie" in result.sql

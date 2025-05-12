@@ -272,11 +272,20 @@ class RetrievedSchemaContext(BaseModel):
 class SQLGenerationError(Exception):
     """Custom exception for errors during SQL generation."""
 
-    def __init__(self, message: str, details: Optional[Dict] = None):
-        """Initialize the SQL generation error with a message and optional details."""
+    def __init__(
+        self, message: str, details: Optional[Dict] = None, error_type: str = "UNKNOWN"
+    ):
+        """Initialize the SQL generation error with a message, details, and error type.
+
+        Args:
+            message: The error message
+            details: Optional dictionary with additional error details
+            error_type: The type of error (e.g., "INSUFFICIENT_SCHEMA", "SQL_EXTRACTION_FAILURE")
+        """
         self.message = message
         self.details = details or {}
-        super().__init__(self.message)
+        self.error_type = error_type
+        super().__init__(f"[{self.error_type}] {self.message}")
 
 
 class IntentExtractionError(Exception):
