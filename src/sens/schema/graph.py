@@ -222,5 +222,18 @@ class SchemaGraph:
         """Returns the full ForeignKeyConstraint object for a given constraint name."""
         return self._constraints.get(constraint_name)
 
+    def get_table_sticky_columns(self, table_name: str) -> List[str]:
+        """Get the sticky (high-value identifier) columns for a given table.
+
+        Args:
+            table_name: The name of the table to get sticky columns for.
+
+        Returns:
+            A list of sticky column names.
+        """
+        if hasattr(self, "_schema_data") and table_name in self._schema_data.tables:
+            return self._schema_data.tables[table_name].sticky_columns
+        return []
+
 
 # ... (Remove the old get_table_info placeholder if it existed) ...

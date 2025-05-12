@@ -9,8 +9,9 @@ class RetrievedColumn:
     table_name: str
     column_name: str
     score: float
-    source: str  # 'token' or 'embedding'
+    source: str  # 'token', 'embedding', or 'sticky'
     metadata: Dict[str, Any] = field(default_factory=dict)
+    is_sticky: bool = False  # Flag for sticky columns
 
 
 @dataclass

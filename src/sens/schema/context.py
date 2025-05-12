@@ -28,6 +28,10 @@ class LLMSchemaContext(BaseSchemaContext):
     primary_keys: Dict[str, List[str]]
     foreign_keys: List[Dict[str, Union[str, List[str]]]] = field(default_factory=list)
     column_descriptions: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    sticky_columns: Dict[str, List[str]] = field(
+        default_factory=dict,
+        metadata={"description": "High-value identifier columns per table"},
+    )
 
     def to_validator_schema(self) -> ValidatorSchemaContext:
         """Convert to validator schema format."""
@@ -83,6 +87,29 @@ class LLMSchemaContext(BaseSchemaContext):
                 result[from_table][from_col] = (to_table, to_col)
 
         return result
+
+    def format_for_llm(self) -> str:
+        """Format schema context for LLM consumption, including sticky columns."""
+        parts = []
+
+        # Format tables and their columns
+        for table, columns in self.tables_columns.items():
+            # Start with table definition
+            table_def = [f"TABLE {table} ({', '.join(columns)})"]
+
+            # Add column descriptions if available
+            if table in self.column_descriptions:
+                for col, desc in self.column_descriptions[table].items():
+                    table_def.append(f"-- {col}: {desc}")
+
+            # Add sticky columns if available
+            if table in self.sticky_columns and self.sticky_columns[table]:
+                sticky_cols = ", ".join(self.sticky_columns[table])
+                table_def.append(f"-- Primary identifiers: {sticky_cols}")
+
+            parts.append("\n".join(table_def))
+
+        return "\n\n".join(parts)
 
 
 @dataclass

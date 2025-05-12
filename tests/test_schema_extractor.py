@@ -118,3 +118,22 @@ def test_table_filtering(schema_extractor, mock_schema_data, tables, expected):
     all_tables = set(mock_schema_data["tables"].keys())
     for table in all_tables - expected:
         assert f"Table {table}" not in formatted
+
+
+def test_sticky_columns(schema_extractor):
+    """Test that sticky columns are correctly identified and formatted."""
+    schema = schema_extractor.extract_and_save()
+
+    # Verify sticky columns are identified
+    for table_info in schema.tables.values():
+        assert hasattr(table_info, "sticky_columns")
+        assert isinstance(table_info.sticky_columns, list)
+
+    # Check formatting includes sticky columns
+    formatted = schema_extractor.format_for_llm(schema)
+    assert "Primary identifiers:" in formatted
+    assert "(sticky)" in formatted
+
+    # Verify at least one table has sticky columns
+    has_sticky = any(len(table.sticky_columns) > 0 for table in schema.tables.values())
+    assert has_sticky, "No sticky columns were identified in any table"
