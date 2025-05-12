@@ -3,13 +3,13 @@
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
 
-from sens.schema.context import LLMSchemaContext
+from sens.schema.context import LLMSchemaContext, ValidatorSchemaContext
 from sens.schema.graph import SchemaGraph
 from sens.settings import get_llm_settings, get_settings
 from sens.validation.sql_validator import SQLValidator, ValidationLevel
@@ -325,7 +325,7 @@ class SQLGenerator:
         return sql
 
     def _validate_generated_sql(
-        self, sql: str, schema: LLMSchemaContext
+        self, sql: str, schema: LLMSchemaContext, query_id: str
     ) -> Tuple[bool, Optional[str]]:
         """
         Perform basic validation of the generated SQL.
@@ -333,14 +333,36 @@ class SQLGenerator:
         Args:
             sql: The SQL query to validate
             schema: The schema context for validation
+            query_id: Query identifier for logging
 
         Returns:
             Tuple of (is_valid, error_message)
         """
         validator = SQLValidator()
+
+        # Get the full schema from SchemaGraph
+        schema_graph = SchemaGraph.get_instance()
+        full_schema = ValidatorSchemaContext(
+            tables=set(schema_graph.list_all_tables()),
+            columns_per_table={
+                table: set(schema_graph.get_table_columns(table))
+                for table in schema_graph.list_all_tables()
+            },
+            metadata=(
+                schema_graph._schema_data.metadata
+                if schema_graph._schema_data
+                else None
+            ),
+        )
+
+        # Convert LLMSchemaContext to ValidatorSchemaContext for the prompted subset
+        prompted_schema = schema.to_validator_schema()
+
         validation_result = validator.validate(
             sql=sql,
-            schema=schema.to_validator_schema(),
+            full_schema=full_schema,
+            prompted_schema=prompted_schema,
+            query_id=query_id,
             levels={ValidationLevel.SYNTAX, ValidationLevel.SCHEMA},
         )
 
@@ -356,8 +378,26 @@ class SQLGenerator:
                 error=error_msg,
                 validation_errors=[str(e) for e in validation_result.errors],
                 validation_warnings=validation_result.warnings,
+                context_bypass=(
+                    validation_result.context_bypass_info.to_log_dict(query_id)
+                    if validation_result.context_bypass_info
+                    else None
+                ),
             )
             return False, error_msg
+
+        # Even if valid, log any context bypasses for monitoring
+        if (
+            validation_result.context_bypass_info
+            and validation_result.context_bypass_info.is_bypass
+        ):
+            log.info(
+                "sql_generation_used_unprompted_columns",
+                sql=sql,
+                context_bypass=validation_result.context_bypass_info.to_log_dict(
+                    query_id
+                ),
+            )
 
         return True, None
 
@@ -421,7 +461,8 @@ class SQLGenerator:
             sql = self._extract_sql_from_completion(completion)
 
             # Validate the generated SQL
-            is_valid, error = self._validate_generated_sql(sql, schema)
+            query_id = f"{question}_{'_'.join(intent.original_intent.tables)}"
+            is_valid, error = self._validate_generated_sql(sql, schema, query_id)
             if not is_valid:
                 raise SQLGenerationError(
                     "Generated SQL failed validation",

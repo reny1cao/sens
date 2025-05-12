@@ -2,6 +2,7 @@
 
 import pytest
 
+from sens.schema.context import ValidatorSchemaContext
 from sens.validation.sql_validator import (
     SchemaContext,
     SQLValidator,
@@ -20,6 +21,31 @@ def sample_schema():
         columns_per_table={
             "users": {"id", "name", "email"},
             "orders": {"id", "user_id", "product_id", "quantity"},
+        },
+    )
+
+
+@pytest.fixture
+def full_schema():
+    """Create a full schema for testing."""
+    return ValidatorSchemaContext(
+        tables={"users", "orders", "products"},
+        columns_per_table={
+            "users": {"id", "name", "email", "created_at"},
+            "orders": {"id", "user_id", "total", "status", "created_at"},
+            "products": {"id", "name", "price", "description"},
+        },
+    )
+
+
+@pytest.fixture
+def prompted_schema():
+    """Create a subset schema that would be given to LLM."""
+    return ValidatorSchemaContext(
+        tables={"users", "orders"},
+        columns_per_table={
+            "users": {"id", "name"},  # email and created_at omitted
+            "orders": {"id", "user_id", "total"},  # status and created_at omitted
         },
     )
 
@@ -232,3 +258,123 @@ def test_computed_columns_and_aliases(validator, schema_context):
     result = validator.validate(sql, schema_context)
     assert result.is_valid, f"Validation failed with errors: {result.errors}"
     assert not result.errors
+
+
+def test_context_bypass_detection(validator, full_schema, prompted_schema):
+    """Test detection of columns used but not in prompted schema."""
+    sql = """
+    SELECT u.email, u.name, o.status, o.total
+    FROM users u
+    JOIN orders o ON u.id = o.user_id
+    WHERE u.created_at > '2024-01-01'
+    """
+
+    result = validator.validate(
+        sql=sql,
+        full_schema=full_schema,
+        prompted_schema=prompted_schema,
+        query_id="test-query-1",
+    )
+
+    assert result.is_valid  # Query is valid against full schema
+    assert result.context_bypass_info is not None
+    assert result.context_bypass_info.is_bypass
+    assert len(result.context_bypass_info.used_but_missing_columns) == 3
+    assert ("users", "email") in result.context_bypass_info.used_but_missing_columns
+    assert (
+        "users",
+        "created_at",
+    ) in result.context_bypass_info.used_but_missing_columns
+    assert ("orders", "status") in result.context_bypass_info.used_but_missing_columns
+    assert result.context_bypass_info.bypass_score == pytest.approx(
+        0.5
+    )  # 3 missing out of 6 total
+
+
+def test_no_context_bypass(validator, full_schema, prompted_schema):
+    """Test when all used columns are in prompted schema."""
+    sql = """
+    SELECT u.name, o.total
+    FROM users u
+    JOIN orders o ON u.id = o.user_id
+    """
+
+    result = validator.validate(
+        sql=sql,
+        full_schema=full_schema,
+        prompted_schema=prompted_schema,
+        query_id="test-query-2",
+    )
+
+    assert result.is_valid
+    assert result.context_bypass_info is not None
+    assert not result.context_bypass_info.is_bypass
+    assert len(result.context_bypass_info.used_but_missing_columns) == 0
+    assert result.context_bypass_info.bypass_score == 0.0
+
+
+def test_invalid_table_reference(validator, full_schema, prompted_schema):
+    """Test when query references a table not in full schema."""
+    sql = """
+    SELECT u.name, p.category
+    FROM users u
+    JOIN products p ON p.user_id = u.id
+    """
+
+    result = validator.validate(
+        sql=sql,
+        full_schema=full_schema,
+        prompted_schema=prompted_schema,
+        query_id="test-query-3",
+    )
+
+    assert not result.is_valid
+    assert any(
+        e.level == ValidationLevel.SCHEMA and "category" in e.message
+        for e in result.errors
+    )
+
+
+def test_computed_columns_not_counted(validator, full_schema, prompted_schema):
+    """Test that computed columns don't count in bypass detection."""
+    sql = """
+    SELECT
+        u.name,
+        COUNT(*) as order_count,
+        SUM(o.total) as total_spent
+    FROM users u
+    JOIN orders o ON u.id = o.user_id
+    GROUP BY u.name
+    """
+
+    result = validator.validate(
+        sql=sql,
+        full_schema=full_schema,
+        prompted_schema=prompted_schema,
+        query_id="test-query-4",
+    )
+
+    assert result.is_valid
+    assert result.context_bypass_info is not None
+    assert not result.context_bypass_info.is_bypass
+    assert len(result.context_bypass_info.used_but_missing_columns) == 0
+
+
+def test_schema_version_logging(validator, full_schema, prompted_schema):
+    """Test that schema version is included in bypass info."""
+    # Add metadata to full schema
+    full_schema.metadata = {"version": "v1.2.3"}
+
+    sql = "SELECT email FROM users"
+
+    result = validator.validate(
+        sql=sql,
+        full_schema=full_schema,
+        prompted_schema=prompted_schema,
+        query_id="test-query-5",
+    )
+
+    assert result.is_valid
+    assert result.context_bypass_info is not None
+    assert result.context_bypass_info.is_bypass
+    assert result.context_bypass_info.full_schema_version == "v1.2.3"
