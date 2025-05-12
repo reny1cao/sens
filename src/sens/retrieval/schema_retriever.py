@@ -4,22 +4,20 @@ This module provides functionality to retrieve relevant schema information
 based on natural language queries, including tables, columns, and their relationships.
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 
+from sens.schema import DatabaseSchema, IdentifierScorer
+from sens.schema.context import LLMSchemaContext
 from sens.schema.graph import SchemaGraph
-from sens.schema.types import LLMSchemaContext
 
 
 class SchemaRetriever:
     """Retrieves relevant schema information based on natural language query."""
 
     def __init__(self, schema_graph: SchemaGraph):
-        """Initialize schema retriever with schema graph.
-
-        Args:
-            schema_graph: Graph representation of database schema
-        """
+        """Initialize retriever with schema graph."""
         self.schema_graph = schema_graph
+        self.identifier_scorer = IdentifierScorer()
         self._init_indices()
 
     def _init_indices(self):
@@ -28,7 +26,15 @@ class SchemaRetriever:
         self.column_index = self._build_column_index()
 
     def retrieve_schema_context(self, query: str, top_k: int = 5) -> LLMSchemaContext:
-        """Retrieve relevant schema context for the query."""
+        """Retrieve relevant schema context for the query.
+
+        Args:
+            query: Natural language query
+            top_k: Number of top tables/columns to retrieve
+
+        Returns:
+            LLMSchemaContext with relevant schema information and sticky columns
+        """
         # Get relevant tables and their scores
         table_scores = self.table_index.search(query, top_k)
         relevant_tables = {table for table, _ in table_scores}
@@ -101,32 +107,38 @@ class SchemaRetriever:
                 for col in columns
             }
 
+        # Build schema for sticky column identification
+        schema = DatabaseSchema(
+            tables={
+                table: self.schema_graph.get_table_info(table)
+                for table in tables_columns.keys()
+            },
+            relationships=foreign_keys,
+            metadata={},
+        )
+
+        # Identify sticky columns
+        sticky_columns = self.identifier_scorer.identify_sticky_columns(schema)
+
         return LLMSchemaContext(
             tables_columns=tables_columns,
             primary_keys=primary_keys,
             foreign_keys=foreign_keys,
             column_descriptions=column_descriptions,
+            sticky_columns=sticky_columns,
         )
 
     def _is_relationship_column(
         self, table: str, column: str, relevant_tables: Set[str]
     ) -> bool:
-        """Check if a column is part of a relationship with other relevant tables."""
-        # Check if column is part of any foreign key relationship
+        """Check if a column is involved in relationships with other relevant tables."""
+        # Check if column is part of a foreign key relationship
         fks = self.schema_graph.get_foreign_keys(table)
         for fk in fks:
-            # Check from_columns
-            if isinstance(fk["from_columns"], list):
-                if column in fk["from_columns"] and fk["to_table"] in relevant_tables:
+            if fk["to_table"] in relevant_tables:
+                if isinstance(fk["from_columns"], list):
+                    if column in fk["from_columns"]:
+                        return True
+                elif column == fk["from_columns"]:
                     return True
-            elif fk["from_columns"] == column and fk["to_table"] in relevant_tables:
-                return True
-
-            # Check to_columns
-            if isinstance(fk["to_columns"], list):
-                if column in fk["to_columns"] and fk["from_table"] in relevant_tables:
-                    return True
-            elif fk["to_columns"] == column and fk["from_table"] in relevant_tables:
-                return True
-
         return False

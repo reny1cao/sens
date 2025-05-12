@@ -66,6 +66,9 @@ class TableInfo(BaseModel):
     foreign_keys: List[ForeignKeyConstraint] = Field(default_factory=list)
     row_count: Optional[int] = None
     description: Optional[str] = None
+    sticky_columns: List[str] = Field(
+        default_factory=list, description="High-value identifier columns for this table"
+    )
 
 
 class DatabaseSchema(BaseModel):
@@ -346,11 +349,18 @@ class SchemaExtractor:
             if table_info.description:
                 output.append(f"  # {table_info.description}")
 
+            # Add sticky columns section if present
+            if table_info.sticky_columns:
+                output.append("  # Primary identifiers:")
+                for col in table_info.sticky_columns:
+                    output.append(f"  #   - {col}")
+
             for col in table_info.columns:
                 parts = [
                     f"  {col.name}: {col.data_type}",
                     "(primary key)" if col.is_primary else "",
                     "(not null)" if not col.is_nullable else "",
+                    "(sticky)" if col.name in table_info.sticky_columns else "",
                 ]
                 output.append(" ".join(part for part in parts if part))
                 if col.description:
@@ -390,7 +400,7 @@ class SchemaExtractor:
             self.logger.info("Analyzing data patterns...")
             self.analyze_data_patterns(tables)
 
-            # Create schema
+            # Create initial schema
             schema = DatabaseSchema(
                 tables=tables,
                 relationships=relationships,
@@ -399,6 +409,18 @@ class SchemaExtractor:
                     "database": self.db_config["dbname"],
                 },
             )
+
+            # Identify sticky columns
+            self.logger.info("Identifying sticky columns...")
+            from .identifier_scorer import IdentifierScorer
+
+            scorer = IdentifierScorer()
+            sticky_columns = scorer.identify_sticky_columns(schema)
+
+            # Add sticky columns to tables
+            for table_name, columns in sticky_columns.items():
+                if table_name in tables:
+                    tables[table_name].sticky_columns = columns
 
             # Save full schema
             self.logger.info(f"Saving full schema to {schema_path}")

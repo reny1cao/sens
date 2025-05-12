@@ -419,113 +419,176 @@ class RetrievalOrchestrator:
     def _expand_schema(
         self, initial_columns: List[RetrievedColumn]
     ) -> tuple[List[RetrievedTable], List[RetrievedColumn]]:
-        """Expands the schema based on initial hits and schema graph (FKs).
+        """Expands the initial set of columns to include related tables and structural columns.
 
-        Includes tables directly hit and those joinable via FKs within the hit set.
-        Adds necessary PK and FK columns for the included tables.
+        Args:
+            initial_columns: The initial set of retrieved columns.
+
+        Returns:
+            A tuple of (tables, columns) where tables contains all involved tables
+            and columns contains all columns (initial + expanded).
         """
-        if not initial_columns:
-            return [], []
+        # Track tables we've seen to avoid duplicates
+        seen_tables = set()
+        # Track columns we've seen to avoid duplicates
+        seen_columns = set()
 
-        # Use a dictionary to easily add/update columns and ensure uniqueness
-        final_columns_dict: Dict[tuple[str, str], RetrievedColumn] = {
-            (col.table_name, col.column_name): col for col in initial_columns
-        }
+        # Initialize result lists
+        all_tables: List[RetrievedTable] = []
+        all_columns: List[RetrievedColumn] = []
 
-        direct_hit_tables = {col.table_name for col in initial_columns}
+        # First pass: Process initial columns and their tables
+        for col in initial_columns:
+            table_name = col.table_name
+            if table_name not in seen_tables:
+                seen_tables.add(table_name)
+                all_tables.append(
+                    RetrievedTable(
+                        table_name=table_name,
+                        reason="direct_hit",
+                        metadata={"initial_score": col.score},
+                    )
+                )
 
-        # Assume schema_graph has a method to find directly connected neighbors
-        # This method should ideally consider only joins *between* potential tables
-        try:
-            # Placeholder: Get all tables involved in direct hits and their immediate neighbors
-            expanded_table_names = self.schema_graph.get_neighbor_tables(
-                direct_hit_tables
-            )
-        except AttributeError:
-            log.warning(
-                "schema_graph_method_missing",
-                details={
-                    "method": "get_neighbor_tables",
-                    "fallback": "using_direct_hits",
-                },
-            )
-            expanded_table_names = direct_hit_tables
-        except Exception as e:
-            log.error(
-                "schema_expansion_failed",
-                details={"error": str(e), "fallback": "using_direct_hits"},
-            )
-            expanded_table_names = direct_hit_tables
+            col_key = (col.table_name, col.column_name)
+            if col_key not in seen_columns:
+                seen_columns.add(col_key)
+                all_columns.append(col)
 
-        final_tables: List[RetrievedTable] = []
-        for table_name in expanded_table_names:
-            reason = (
-                "direct_hit" if table_name in direct_hit_tables else "join_expansion"
-            )
-            final_tables.append(RetrievedTable(table_name=table_name, reason=reason))
+                # Add sticky columns from the same table
+                sticky_columns = self.schema_graph.get_table_sticky_columns(table_name)
+                for sticky_col in sticky_columns:
+                    sticky_key = (table_name, sticky_col)
+                    if sticky_key not in seen_columns:
+                        seen_columns.add(sticky_key)
+                        all_columns.append(
+                            RetrievedColumn(
+                                table_name=table_name,
+                                column_name=sticky_col,
+                                score=0.0,  # No scoring for sticky columns
+                                source="sticky",
+                                is_sticky=True,
+                                metadata={"type": "sticky"},
+                            )
+                        )
 
-        # Add PKs and FKs for all tables in the final set
-        # Use a placeholder score and source for schema-added columns
-        SCHEMA_SCORE = 0.0
-        SCHEMA_SOURCE = "schema_expansion"
+        # Second pass: Add related tables and their columns
+        tables_to_process = list(seen_tables)
+        for table_name in tables_to_process:
+            # Get neighboring tables
+            neighbors = self.schema_graph.get_neighbor_tables({table_name})
 
-        for table_name in expanded_table_names:
-            try:
-                # Add Primary Keys
-                pk_columns = self.schema_graph.get_table_pks(table_name)
-                for pk_col in pk_columns:
-                    key = (table_name, pk_col)
-                    if key not in final_columns_dict:
-                        final_columns_dict[key] = RetrievedColumn(
+            for neighbor in neighbors:
+                if neighbor not in seen_tables:
+                    seen_tables.add(neighbor)
+                    all_tables.append(
+                        RetrievedTable(
+                            table_name=neighbor,
+                            reason="join_expansion",
+                            metadata={"expanded_from": table_name},
+                        )
+                    )
+
+                    # Add sticky columns from expanded tables
+                    sticky_columns = self.schema_graph.get_table_sticky_columns(
+                        neighbor
+                    )
+                    for sticky_col in sticky_columns:
+                        sticky_key = (neighbor, sticky_col)
+                        if sticky_key not in seen_columns:
+                            seen_columns.add(sticky_key)
+                            all_columns.append(
+                                RetrievedColumn(
+                                    table_name=neighbor,
+                                    column_name=sticky_col,
+                                    score=0.0,  # No scoring for sticky columns
+                                    source="sticky",
+                                    is_sticky=True,
+                                    metadata={
+                                        "type": "sticky",
+                                        "expanded_from": table_name,
+                                    },
+                                )
+                            )
+
+        # Add structural columns (PKs/FKs)
+        for table_name in seen_tables:
+            # Add primary keys
+            for pk_col in self.schema_graph.get_table_pks(table_name):
+                pk_key = (table_name, pk_col)
+                if pk_key not in seen_columns:
+                    seen_columns.add(pk_key)
+                    all_columns.append(
+                        RetrievedColumn(
                             table_name=table_name,
                             column_name=pk_col,
-                            score=SCHEMA_SCORE,
-                            source=SCHEMA_SOURCE,
+                            score=0.0,  # No scoring for structural columns
+                            source="structural",
                             metadata={"type": "PK"},
                         )
+                    )
 
-                # Add Foreign Keys that connect *within* the expanded set
-                fk_columns = self.schema_graph.get_table_fks_involved(
-                    table_name, expanded_table_names
-                )
-                for fk_col in fk_columns:
-                    key = (table_name, fk_col)
-                    if key not in final_columns_dict:
-                        final_columns_dict[key] = RetrievedColumn(
+            # Add foreign keys that connect to other tables in our context
+            fk_columns = self.schema_graph.get_table_fks_involved(
+                table_name, seen_tables
+            )
+            for fk_col in fk_columns:
+                fk_key = (table_name, fk_col)
+                if fk_key not in seen_columns:
+                    seen_columns.add(fk_key)
+                    all_columns.append(
+                        RetrievedColumn(
                             table_name=table_name,
                             column_name=fk_col,
-                            score=SCHEMA_SCORE,
-                            source=SCHEMA_SOURCE,
+                            score=0.0,  # No scoring for structural columns
+                            source="structural",
                             metadata={"type": "FK"},
                         )
-            except AttributeError:
-                log.warning(
-                    "schema_graph_methods_missing",
-                    details={
-                        "table": table_name,
-                        "methods": ["get_table_pks", "get_table_fks_involved"],
-                    },
-                )
-                pass
-            except Exception as e:
-                log.error(
-                    "pk_fk_addition_failed",
-                    details={"table": table_name, "error": str(e)},
-                )
-                pass
+                    )
 
-        # Return the list of tables and the unique columns (original + schema)
-        # Keep the original sorting based on score for ranking later
-        final_columns_list = sorted(
-            final_columns_dict.values(), key=lambda x: x.score, reverse=True
-        )
-
-        return final_tables, final_columns_list
+        return all_tables, all_columns
 
     def _rank_and_select(
         self, columns: List[RetrievedColumn], k: int
     ) -> List[RetrievedColumn]:
-        """Ranks the final set of columns and selects the top k."""
-        # TODO: Implement potentially more sophisticated ranking
-        # For now, assume already sorted by score (from merge step) and take top k
-        return columns[:k]
+        """Ranks and selects the top k columns, with special handling for sticky columns.
+
+        Args:
+            columns: List of columns to rank and select from.
+            k: Maximum number of non-sticky columns to return.
+
+        Returns:
+            List of selected columns, including all sticky columns plus top k non-sticky columns.
+        """
+        if not columns:
+            return []
+
+        # Separate sticky and non-sticky columns
+        sticky_columns = [col for col in columns if col.is_sticky]
+        non_sticky_columns = [col for col in columns if not col.is_sticky]
+        
+        # Sort non-sticky columns by score
+        sorted_non_sticky = sorted(non_sticky_columns, key=lambda x: x.score, reverse=True)
+        
+        # Take top k non-sticky columns
+        selected_non_sticky = sorted_non_sticky[:k]
+        
+        # Remove duplicates (prefer sticky over non-sticky if same column)
+        seen_columns = set()
+        final_columns = []
+        
+        # Add sticky columns first
+        for col in sticky_columns:
+            col_key = (col.table_name, col.column_name)
+            if col_key not in seen_columns:
+                seen_columns.add(col_key)
+                final_columns.append(col)
+        
+        # Add non-sticky columns if not already included
+        for col in selected_non_sticky:
+            col_key = (col.table_name, col.column_name)
+            if col_key not in seen_columns:
+                seen_columns.add(col_key)
+                final_columns.append(col)
+        
+        return final_columns

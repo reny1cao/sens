@@ -165,7 +165,7 @@ def handle_extract_schema(args: argparse.Namespace) -> None:
         schema_path.parent.mkdir(parents=True, exist_ok=True)
 
         extractor = SchemaExtractor()
-        schema = extractor.extract_and_save(output_path=schema_path)
+        schema = extractor.extract_and_save(config_dir=str(schema_path.parent))
 
         log.info(
             "schema_extracted",

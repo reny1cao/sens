@@ -1,6 +1,7 @@
 """Schema extraction and management package."""
 
 from .graph import SchemaGraph
+from .identifier_scorer import ColumnScore, IdentifierScorer
 from .schema_extractor import ColumnInfo, DatabaseSchema, SchemaExtractor, TableInfo
 
 __all__ = [
@@ -9,4 +10,6 @@ __all__ = [
     "TableInfo",
     "ColumnInfo",
     "SchemaGraph",
+    "IdentifierScorer",
+    "ColumnScore",
 ]

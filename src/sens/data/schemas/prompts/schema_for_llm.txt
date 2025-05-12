@@ -1,6 +1,9 @@
 Database Schema:
 
 Table tv_show {
+  # Primary identifiers:
+  #   - original_title
+  #   - title
   id: bigint (primary key) (not null)
     # Primary unique identifier
   created_date: timestamp with time zone (not null)
@@ -11,22 +14,25 @@ Table tv_show {
     # A flag that indicates if this title is available outside US
   locale: character varying
     # The original language/region of the TV show
-  original_title: character varying
+  original_title: character varying (sticky)
     # The TV show title in its original language
   release_date: date
     # Date when this title was released
-  title: character varying (not null)
+  title: character varying (not null) (sticky)
     # The TV show title
 }
 
 Table season {
+  # Primary identifiers:
+  #   - original_title
+  #   - title
   id: bigint (primary key) (not null)
     # Primary unique identifier
   created_date: timestamp with time zone (not null)
     # Date when this record was created
   modified_date: timestamp with time zone (not null)
     # Date when this record was last modified
-  original_title: character varying
+  original_title: character varying (sticky)
     # The season title in its original language
   release_date: date
     # Date when this title was released
@@ -34,7 +40,7 @@ Table season {
     # The total runtime in minutes
   season_number: integer
     # The season number
-  title: character varying (not null)
+  title: character varying (not null) (sticky)
     # The season title
   tv_show_id: bigint
     # The TV show that this season belongs to
@@ -42,6 +48,9 @@ Table season {
 }
 
 Table movie {
+  # Primary identifiers:
+  #   - original_title
+  #   - title
   id: bigint (primary key) (not null)
     # Primary unique identifier
   created_date: timestamp with time zone (not null)
@@ -52,17 +61,19 @@ Table movie {
     # A flag that indicates if this title is available outside US
   locale: character varying
     # The original language/region of the movie
-  original_title: character varying
+  original_title: character varying (sticky)
     # The movie title in its original language
   release_date: date
     # Date when this title was released
   runtime: bigint
     # The total runtime in minutes
-  title: character varying (not null)
+  title: character varying (not null) (sticky)
     # The movie title
 }
 
 Table view_summary {
+  # Primary identifiers:
+  #   - duration
   id: bigint (primary key) (not null)
     # Primary unique identifier
   created_date: timestamp with time zone (not null)
@@ -71,7 +82,7 @@ Table view_summary {
     # Date when this record was last modified
   cumulative_weeks_in_top10: integer
     # The number of cumulative weeks in top 10 list
-  duration: character varying (not null)
+  duration: character varying (not null) (sticky)
     # The duration of the period this summary refers to
   end_date: date (not null)
     # The last day of the period this summary refers to
