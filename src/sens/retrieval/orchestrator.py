@@ -566,29 +566,31 @@ class RetrievalOrchestrator:
         # Separate sticky and non-sticky columns
         sticky_columns = [col for col in columns if col.is_sticky]
         non_sticky_columns = [col for col in columns if not col.is_sticky]
-        
+
         # Sort non-sticky columns by score
-        sorted_non_sticky = sorted(non_sticky_columns, key=lambda x: x.score, reverse=True)
-        
+        sorted_non_sticky = sorted(
+            non_sticky_columns, key=lambda x: x.score, reverse=True
+        )
+
         # Take top k non-sticky columns
         selected_non_sticky = sorted_non_sticky[:k]
-        
+
         # Remove duplicates (prefer sticky over non-sticky if same column)
         seen_columns = set()
         final_columns = []
-        
+
         # Add sticky columns first
         for col in sticky_columns:
             col_key = (col.table_name, col.column_name)
             if col_key not in seen_columns:
                 seen_columns.add(col_key)
                 final_columns.append(col)
-        
+
         # Add non-sticky columns if not already included
         for col in selected_non_sticky:
             col_key = (col.table_name, col.column_name)
             if col_key not in seen_columns:
                 seen_columns.add(col_key)
                 final_columns.append(col)
-        
+
         return final_columns
