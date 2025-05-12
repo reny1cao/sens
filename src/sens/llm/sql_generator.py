@@ -236,7 +236,7 @@ class SQLGenerator:
         last_error = None
         for model in models_to_try:
             try:
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=model,
                     messages=[
                         {
@@ -281,11 +281,12 @@ class SQLGenerator:
         raise SQLGenerationError(
             "Failed to generate SQL with all available models",
             details={"last_error": str(last_error)},
+            error_type="LLM_API_ERROR",  # Add specific error type
         )
 
     def _extract_sql_from_completion(self, completion: str) -> str:
         """
-        Extract the SQL query from the LLM completion text.
+        Extract the SQL query or detect a structured error from the LLM completion text.
 
         Args:
             completion: The raw completion text from the LLM
@@ -294,35 +295,81 @@ class SQLGenerator:
             The extracted SQL query string
 
         Raises:
-            SQLGenerationError: If no valid SQL could be extracted
+            SQLGenerationError: If no valid SQL could be extracted or if the LLM
+                              returned a structured INSUFFICIENT_SCHEMA error.
         """
-        # Check for error response
-        if "ERROR:" in completion:
-            error_msg = completion.split("ERROR:")[1].strip()
-            raise SQLGenerationError(f"LLM indicated generation error: {error_msg}")
+        if not isinstance(completion, str):
+            completion = str(completion)
+
+        completion = completion.strip()
+
+        # Check for JSON error response first
+        if completion.startswith("{") and completion.endswith("}"):
+            try:
+                parsed_json = json.loads(completion)
+                if parsed_json.get("error_type") == "INSUFFICIENT_SCHEMA":
+                    log.warning(
+                        "llm_returned_insufficient_schema_error",
+                        error_details=parsed_json,
+                        raw_completion=completion,
+                    )
+                    raise SQLGenerationError(
+                        "LLM indicated insufficient schema",
+                        error_type="INSUFFICIENT_SCHEMA",
+                        details=parsed_json,
+                    )
+            except json.JSONDecodeError:
+                log.debug("completion_not_json_error", completion=completion)
+                raise SQLGenerationError(
+                    "Could not extract valid SQL - malformed JSON response",
+                    error_type="SQL_EXTRACTION_FAILURE",
+                    details={"raw_completion": completion},
+                )
 
         # Clean the completion text
-        sql = completion.strip()
+        sql = completion
 
-        # Remove markdown code block delimiters if present
-        if sql.startswith("```sql"):
-            sql = sql[6:]  # Remove leading ```sql
-        if sql.endswith("```"):
-            sql = sql[:-3]  # Remove trailing ```
+        # Extract SQL from markdown code blocks if present
+        if "```" in sql:
+            try:
+                # Split by code block markers
+                parts = sql.split("```")
+                # Find the SQL block
+                sql_block = None
+                for i, part in enumerate(parts):
+                    if i % 2 == 1:  # Only look at content between ``` markers
+                        # Remove language identifier if present
+                        if part.lower().startswith("sql"):
+                            sql_block = part[3:].strip()
+                        else:
+                            sql_block = part.strip()
+                        if sql_block:  # Use the first non-empty block
+                            break
 
-        # Remove any remaining markdown markers
-        sql = sql.replace("```", "").strip()
+                if sql_block:
+                    sql = sql_block
+                else:
+                    raise SQLGenerationError(
+                        "Could not extract valid SQL - empty code block",
+                        error_type="SQL_EXTRACTION_FAILURE",
+                        details={"raw_completion": completion},
+                    )
+            except Exception:
+                raise SQLGenerationError(
+                    "Could not extract valid SQL - malformed code block",
+                    error_type="SQL_EXTRACTION_FAILURE",
+                    details={"raw_completion": completion},
+                )
 
-        # Verify we have a valid SQL statement
-        if not sql.upper().startswith("SELECT"):
+        # Basic validation
+        if not sql or "select" not in sql.lower():
             raise SQLGenerationError(
-                "Could not extract valid SQL from LLM completion",
-                details={"completion": completion},
+                "Could not extract valid SQL query from completion",
+                error_type="SQL_EXTRACTION_FAILURE",
+                details={"raw_completion": completion},
             )
 
-        log.debug("sql_extracted", original=completion, extracted=sql)
-
-        return sql
+        return sql.strip()
 
     def _validate_generated_sql(
         self, sql: str, schema: LLMSchemaContext
@@ -403,7 +450,8 @@ class SQLGenerator:
             GeneratedSQL object containing the query and metadata
 
         Raises:
-            SQLGenerationError: If query generation fails
+            SQLGenerationError: If query generation fails, with specific error_type
+                              and details for INSUFFICIENT_SCHEMA errors
         """
         try:
             start_time = time.time()
@@ -417,47 +465,79 @@ class SQLGenerator:
             # Generate SQL using LLM
             completion, model_used, token_usage = await self._call_llm(prompt)
 
-            # Extract SQL from completion
-            sql = self._extract_sql_from_completion(completion)
+            try:
+                # Extract SQL from completion (this may raise INSUFFICIENT_SCHEMA)
+                sql = self._extract_sql_from_completion(completion)
 
-            # Validate the generated SQL
-            is_valid, error = self._validate_generated_sql(sql, schema)
-            if not is_valid:
-                raise SQLGenerationError(
-                    "Generated SQL failed validation",
-                    details={"sql": sql, "error": error},
+                # Validate the generated SQL
+                is_valid, error_msg = self._validate_generated_sql(sql, schema)
+                if not is_valid:
+                    raise SQLGenerationError(
+                        f"Generated SQL failed validation: {error_msg}",
+                        error_type="SQL_VALIDATION_ERROR",
+                        details={"sql": sql, "error": error_msg},
+                    )
+
+                # Extract tables and columns used in the query
+                tables_used, columns_used = self._extract_query_metadata(sql, schema)
+
+                # Calculate generation time
+                generation_ms = int((time.time() - start_time) * 1000)
+
+                result = GeneratedSQL(
+                    sql=sql,
+                    tables_used=tables_used,
+                    columns_used=columns_used,
+                    token_usage=token_usage,
+                    model_used=model_used,
+                    generation_ms=generation_ms,
                 )
 
-            # Extract tables and columns used in the query
-            tables_used, columns_used = self._extract_query_metadata(sql, schema)
+                log.info(
+                    "sql_generated",
+                    question=question,
+                    tables=tables_used,
+                    model=model_used,
+                    generation_ms=generation_ms,
+                )
 
-            # Calculate generation time
-            generation_ms = int((time.time() - start_time) * 1000)
+                return result
 
-            result = GeneratedSQL(
-                sql=sql,
-                tables_used=tables_used,
-                columns_used=columns_used,
-                token_usage=token_usage,
-                model_used=model_used,
-                generation_ms=generation_ms,
-            )
+            except SQLGenerationError as gen_error:
+                if gen_error.error_type == "INSUFFICIENT_SCHEMA":
+                    # Log structured error details and metric flag
+                    missing_elements = gen_error.details.get("missing_elements", [])
+                    reason = gen_error.details.get("reason", "No reason provided")
 
-            log.info(
-                "sql_generated",
-                question=question,
-                tables=tables_used,
-                model=model_used,
-                generation_ms=generation_ms,
-            )
-
-            return result
+                    log.warning(
+                        "sql_generation_failed_insufficient_schema",
+                        error_type=gen_error.error_type,
+                        missing_elements=missing_elements,
+                        reason=reason,
+                        question=question,
+                        model_used=model_used,
+                        token_usage=token_usage.model_dump() if token_usage else None,
+                        step_metrics={"schema_insufficient": True},
+                    )
+                else:
+                    log.error(
+                        "sql_generation_failed",
+                        error_type=gen_error.error_type,
+                        message=gen_error.message,
+                        details=gen_error.details,
+                        question=question,
+                    )
+                raise gen_error
 
         except Exception as e:
-            log.error(
-                "sql_generation_failed",
+            if isinstance(e, SQLGenerationError):
+                raise e
+            log.exception(
+                "unexpected_error_during_sql_generation",
                 error=str(e),
                 question=question,
-                intent=intent.model_dump(),
             )
-            raise SQLGenerationError(str(e), details={"question": question})
+            raise SQLGenerationError(
+                f"Unexpected error during SQL generation: {str(e)}",
+                error_type="UNEXPECTED_ERROR",
+            ) from e
