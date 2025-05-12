@@ -13,13 +13,6 @@ class RetrievedColumn:
     metadata: Dict[str, Any] = field(default_factory=dict)
     is_sticky: bool = False  # Flag for sticky columns
 
-    def __post_init__(self):
-        """Post-initialization hook to adjust score for sticky columns."""
-        if self.is_sticky and "sticky_boost" not in self.metadata:
-            # Apply a boost to sticky columns that weren't already boosted
-            self.score += 2.0
-            self.metadata["sticky_boost"] = True
-
 
 @dataclass
 class RetrievedTable:
