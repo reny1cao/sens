@@ -187,6 +187,29 @@ def valid_intent() -> ValidIntent:
     )
 
 
+@pytest.fixture
+def basic_intent() -> ValidIntent:
+    """Create a basic intent fixture with all required fields."""
+    return ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["movie"],
+            columns=["title"],
+            filters={},
+            query="Show all movie titles",  # Added query field
+            confidence=1.0,
+            operations=[],  # Added operations field
+            conditions=[],  # Added conditions field
+        ),
+        enhanced_metadata={
+            "table_relationships": {},
+            "column_metadata": {
+                "movie": {"title": {"description": "Movie title", "type": "string"}}
+            },
+        },
+    )
+
+
 def test_sql_generator_initialization(temp_prompt_file: Path):
     """Test successful initialization of SQLGenerator."""
     generator = SQLGenerator(
@@ -569,3 +592,170 @@ def test_validate_generated_sql(sample_schema):
     is_valid, error = generator._validate_generated_sql(sql, sample_schema)
     assert is_valid
     assert error is None
+
+
+def normalize_sql(sql: str) -> str:
+    """Normalize SQL string for comparison by removing extra whitespace and converting to lowercase."""
+    # Remove comments
+    lines = [line.split("--")[0].strip() for line in sql.split("\n")]
+    # Join and normalize whitespace
+    sql = " ".join(line for line in lines if line)
+    # Remove extra whitespace around punctuation
+    for char in [",", ".", "(", ")", "=", "<", ">", "+", "-", "*", "/"]:
+        sql = sql.replace(f" {char} ", char)
+        sql = sql.replace(f" {char}", char)
+        sql = sql.replace(f"{char} ", char)
+    return sql.strip().lower()
+
+
+def test_sql_comparison():
+    """Test SQL normalization and comparison."""
+    sql1 = """
+    SELECT movie.title,
+           COUNT(*) as count
+    FROM movie
+    GROUP BY movie.title
+    -- This is a comment
+    ORDER BY count DESC;
+    """
+
+    sql2 = "select movie.title,count(*) as count from movie group by movie.title order by count desc;"
+
+    assert normalize_sql(sql1) == normalize_sql(sql2)
+
+    # Test with different spacing around operators
+    sql3 = "SELECT movie.title,COUNT( * )as count FROM movie GROUP BY movie.title ORDER BY count DESC;"
+    assert normalize_sql(sql1) == normalize_sql(sql3)
+
+
+@pytest.mark.asyncio
+async def test_json_error_handling_in_markdown(
+    sql_generator, valid_intent, mock_openai_response, monkeypatch
+):
+    """Test handling of JSON error responses in markdown code blocks."""
+    error_responses = [
+        # JSON error in markdown block
+        """Here's the error details:
+```json
+{
+    "error_type": "INSUFFICIENT_SCHEMA",
+    "missing_elements": ["shows.air_date"],
+    "reason": "Required column 'air_date' not found in schema"
+}
+```""",
+        # JSON error with explanation
+        """I cannot generate SQL for your query due to schema issues:
+```json
+{
+    "error_type": "INVALID_RELATIONSHIP",
+    "details": {
+        "tables": ["shows", "ratings"],
+        "missing_join_path": true
+    },
+    "reason": "No valid join path found between tables"
+}
+```
+Please check the schema and try again.""",
+        # Multiple blocks with JSON error
+        """Let me analyze the query:
+```sql
+-- Initial attempt at query
+SELECT shows.title, ratings.score
+FROM shows
+JOIN ratings ON shows.id = ratings.show_id;
+```
+
+However, there's an error with this approach:
+```json
+{
+    "error_type": "SCHEMA_VALIDATION",
+    "invalid_columns": ["ratings.score"],
+    "reason": "Column 'score' does not exist in table 'ratings'"
+}
+```""",
+    ]
+
+    for error_response in error_responses:
+        # Mock LLM response
+        mock_response = AsyncMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = error_response
+        mock_response.model = "openai/gpt-4"
+        mock_response.usage = MagicMock(
+            prompt_tokens=100, completion_tokens=50, total_tokens=150
+        )
+
+        async def mock_create(*args, **kwargs):
+            return mock_response
+
+        monkeypatch.setattr(
+            sql_generator.client.chat.completions, "create", mock_create
+        )
+
+        # Test error handling
+        with pytest.raises(SQLGenerationError) as exc_info:
+            await sql_generator.generate(
+                "Show average time for shows to enter top 10", valid_intent
+            )
+
+        # Verify error details are correctly extracted
+        assert exc_info.value.error_type in [
+            "INSUFFICIENT_SCHEMA",
+            "INVALID_RELATIONSHIP",
+            "SCHEMA_VALIDATION",
+        ]
+        assert isinstance(exc_info.value.details, dict)
+        assert "reason" in exc_info.value.details
+
+
+@pytest.mark.asyncio
+async def test_error_response_format_validation(
+    sql_generator, valid_intent, mock_openai_response, monkeypatch
+):
+    """Test validation of error response format and required fields."""
+    invalid_error_responses = [
+        # Missing error_type
+        """```json
+{
+    "missing_elements": ["shows.air_date"],
+    "reason": "Required column not found"
+}
+```""",
+        # Invalid JSON format
+        """```json
+{
+    error_type: "SCHEMA_ERROR"
+    reason: "Invalid schema"
+}
+```""",
+        # Empty error object
+        """```json
+{}
+```""",
+        # Non-JSON error response
+        """Error: Could not generate SQL query due to schema issues.""",
+    ]
+
+    for error_response in invalid_error_responses:
+        mock_response = AsyncMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = error_response
+        mock_response.model = "openai/gpt-4"
+        mock_response.usage = MagicMock(
+            prompt_tokens=100, completion_tokens=50, total_tokens=150
+        )
+
+        async def mock_create(*args, **kwargs):
+            return mock_response
+
+        monkeypatch.setattr(
+            sql_generator.client.chat.completions, "create", mock_create
+        )
+
+        # Should raise SQLGenerationError with appropriate error details
+        with pytest.raises(SQLGenerationError) as exc_info:
+            await sql_generator.generate("Show top rated shows", valid_intent)
+
+        assert exc_info.value.error_type == "RESPONSE_PARSING_ERROR"
+        assert "details" in exc_info.value.__dict__
+        assert "reason" in exc_info.value.details

@@ -236,7 +236,7 @@ class SQLGenerator:
         last_error = None
         for model in models_to_try:
             try:
-                response = await self.client.chat.completions.create(
+                response = self.client.chat.completions.create(
                     model=model,
                     messages=[
                         {
@@ -303,65 +303,73 @@ class SQLGenerator:
 
         completion = completion.strip()
 
-        # Check for JSON error response first
-        if completion.startswith("{") and completion.endswith("}"):
+        # Function to try parsing JSON and check for INSUFFICIENT_SCHEMA error
+        def try_parse_json_error(text: str) -> Optional[Dict]:
             try:
-                parsed_json = json.loads(completion)
-                if parsed_json.get("error_type") == "INSUFFICIENT_SCHEMA":
-                    log.warning(
-                        "llm_returned_insufficient_schema_error",
-                        error_details=parsed_json,
-                        raw_completion=completion,
-                    )
-                    raise SQLGenerationError(
-                        "LLM indicated insufficient schema",
-                        error_type="INSUFFICIENT_SCHEMA",
-                        details=parsed_json,
-                    )
+                # Remove any "json" prefix that might come from markdown
+                if text.lower().startswith("json"):
+                    text = text[4:].lstrip()
+
+                parsed = json.loads(text)
+                if parsed.get("error_type") == "INSUFFICIENT_SCHEMA":
+                    return parsed
+                return None
             except json.JSONDecodeError:
-                log.debug("completion_not_json_error", completion=completion)
-                raise SQLGenerationError(
-                    "Could not extract valid SQL - malformed JSON response",
-                    error_type="SQL_EXTRACTION_FAILURE",
-                    details={"raw_completion": completion},
-                )
+                return None
 
-        # Clean the completion text
+        # First check if the entire completion is a JSON error
+        json_error = try_parse_json_error(completion)
+        if json_error:
+            log.warning(
+                "llm_returned_insufficient_schema_error",
+                error_details=json_error,
+                raw_completion=completion,
+            )
+            raise SQLGenerationError(
+                "LLM indicated insufficient schema",
+                error_type="INSUFFICIENT_SCHEMA",
+                details=json_error,
+            )
+
+        # If markdown blocks are present, extract and check each block
+        if "```" in completion:
+            parts = completion.split("```")
+            for i, part in enumerate(parts):
+                if i % 2 == 1:  # Only look at content between ``` markers
+                    part = part.strip()
+
+                    # Check if this block is a JSON error
+                    json_error = try_parse_json_error(part)
+                    if json_error:
+                        log.warning(
+                            "llm_returned_insufficient_schema_error_in_markdown",
+                            error_details=json_error,
+                            raw_completion=completion,
+                        )
+                        raise SQLGenerationError(
+                            "LLM indicated insufficient schema",
+                            error_type="INSUFFICIENT_SCHEMA",
+                            details=json_error,
+                        )
+
+                    # If not JSON error, try to extract SQL
+                    if part.lower().startswith("sql"):
+                        sql = part[3:].strip()
+                    else:
+                        sql = part.strip()
+
+                    if sql and "select" in sql.lower():
+                        return sql.strip()
+
+            # If we get here, no valid SQL block was found
+            raise SQLGenerationError(
+                "Could not extract valid SQL from markdown blocks",
+                error_type="SQL_EXTRACTION_FAILURE",
+                details={"raw_completion": completion},
+            )
+
+        # If no markdown and no JSON error, treat as raw SQL
         sql = completion
-
-        # Extract SQL from markdown code blocks if present
-        if "```" in sql:
-            try:
-                # Split by code block markers
-                parts = sql.split("```")
-                # Find the SQL block
-                sql_block = None
-                for i, part in enumerate(parts):
-                    if i % 2 == 1:  # Only look at content between ``` markers
-                        # Remove language identifier if present
-                        if part.lower().startswith("sql"):
-                            sql_block = part[3:].strip()
-                        else:
-                            sql_block = part.strip()
-                        if sql_block:  # Use the first non-empty block
-                            break
-
-                if sql_block:
-                    sql = sql_block
-                else:
-                    raise SQLGenerationError(
-                        "Could not extract valid SQL - empty code block",
-                        error_type="SQL_EXTRACTION_FAILURE",
-                        details={"raw_completion": completion},
-                    )
-            except Exception:
-                raise SQLGenerationError(
-                    "Could not extract valid SQL - malformed code block",
-                    error_type="SQL_EXTRACTION_FAILURE",
-                    details={"raw_completion": completion},
-                )
-
-        # Basic validation
         if not sql or "select" not in sql.lower():
             raise SQLGenerationError(
                 "Could not extract valid SQL query from completion",

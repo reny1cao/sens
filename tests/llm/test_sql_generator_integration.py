@@ -36,11 +36,11 @@ def mock_settings_with_llm_config() -> Dict:
 @pytest.fixture
 def mock_schema_graph():
     """Mock schema graph for testing."""
-    mock = MagicMock(spec=SchemaGraph)
+    mock = AsyncMock(spec=SchemaGraph)
     # Set up default behaviors
     mock.get_referenced_tables.return_value = set()
     mock.get_referencing_tables.return_value = set()
-    mock.get_table_columns.return_value = ["id", "title"]
+    mock.get_table_columns.return_value = ["id", "title", "release_date", "rating"]
     mock.get_table_pks.return_value = ["id"]
     mock.get_column_comment.return_value = None
     mock.get_table_fks_involved.return_value = []
@@ -77,12 +77,182 @@ def basic_intent():
         original_intent=Intent(
             query_type=QueryType.LOOKUP,
             tables=["movie"],
-            columns=["title"],
-            filters={},
+            columns=["title", "rating"],
+            filters={"rating": "> 8.0"},
+            query="Show highly rated movies",
             confidence=1.0,
+            operations=["ORDER BY"],
+            conditions=["rating > 8.0"],
         ),
-        enhanced_metadata={},
+        enhanced_metadata={
+            "table_relationships": {},
+            "column_metadata": {
+                "movie": {
+                    "title": {"description": "Movie title", "type": "string"},
+                    "rating": {"description": "Movie rating", "type": "float"},
+                }
+            },
+        },
     )
+
+
+@pytest.mark.asyncio
+async def test_generate_with_different_response_formats(
+    sql_generator_instance: SQLGenerator,
+    mock_schema_graph,
+    basic_intent,
+):
+    """Test SQL generation with different LLM response formats."""
+    test_responses = [
+        # Standard SQL response
+        """```sql
+        SELECT movie.title, movie.rating
+        FROM movie
+        WHERE rating > 8.0
+        ORDER BY rating DESC;
+        ```""",
+        # SQL with explanation
+        """Here's a query to find highly rated movies:
+        ```sql
+        SELECT movie.title, movie.rating
+        FROM movie
+        WHERE rating > 8.0
+        ORDER BY rating DESC;
+        ```
+        This will show movies with ratings above 8.0.""",
+        # Multiple code blocks
+        """Let's break this down:
+
+        First, we need to select from the movie table:
+        ```sql
+        SELECT movie.title, movie.rating
+        FROM movie
+        ```
+
+        Then add our conditions:
+        ```sql
+        SELECT movie.title, movie.rating
+        FROM movie
+        WHERE rating > 8.0
+        ORDER BY rating DESC;
+        ```""",
+    ]
+
+    for response_text in test_responses:
+        # Setup mock response
+        mock_response = AsyncMock()
+        mock_response.choices = [AsyncMock()]
+        mock_response.choices[0].message.content = response_text
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 30
+        mock_response.model = sql_generator_instance.primary_model
+
+        sql_generator_instance.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        # Generate SQL
+        result = await sql_generator_instance.generate(
+            "Show highly rated movies", basic_intent
+        )
+
+        # Verify result
+        assert result.sql is not None
+        assert "SELECT" in result.sql.upper()
+        assert "FROM movie" in result.sql.upper()
+        assert "WHERE rating > 8.0" in result.sql
+        assert "ORDER BY" in result.sql.upper()
+        assert result.model_used == sql_generator_instance.primary_model
+        assert isinstance(result.token_usage, TokenUsage)
+        assert result.token_usage.prompt_tokens == 100
+        assert result.token_usage.completion_tokens == 30
+
+
+@pytest.mark.asyncio
+async def test_generate_with_complex_joins(
+    sql_generator_instance: SQLGenerator,
+    mock_schema_graph,
+):
+    """Test generating SQL with complex joins and aggregations."""
+    # Update schema graph mock for join scenario
+    mock_schema_graph.get_table_columns.side_effect = lambda table: {
+        "movie": ["id", "title", "release_date"],
+        "rating": ["id", "movie_id", "user_id", "score", "rated_at"],
+        "user": ["id", "name", "joined_at"],
+    }.get(table, [])
+
+    mock_schema_graph.get_table_fks_involved.return_value = [
+        {
+            "from_table": "rating",
+            "from_columns": ["movie_id"],
+            "to_table": "movie",
+            "to_columns": ["id"],
+        },
+        {
+            "from_table": "rating",
+            "from_columns": ["user_id"],
+            "to_table": "user",
+            "to_columns": ["id"],
+        },
+    ]
+
+    intent = ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.AGGREGATE,
+            tables=["movie", "rating", "user"],
+            columns=["title", "score"],
+            filters={},
+            query="Show average rating for each movie",
+            confidence=1.0,
+            operations=["AVG", "GROUP BY"],
+            conditions=[],
+        ),
+        enhanced_metadata={
+            "table_relationships": {"rating": {"referenced_tables": ["movie", "user"]}},
+            "column_metadata": {
+                "movie": {"title": {"type": "string"}},
+                "rating": {"score": {"type": "float"}},
+            },
+        },
+    )
+
+    # Mock LLM response
+    mock_response = AsyncMock()
+    mock_response.choices = [AsyncMock()]
+    mock_response.choices[
+        0
+    ].message.content = """```sql
+    SELECT
+        movie.title,
+        AVG(rating.score) as average_rating,
+        COUNT(rating.id) as num_ratings
+    FROM movie
+    LEFT JOIN rating ON movie.id = rating.movie_id
+    GROUP BY movie.title
+    HAVING COUNT(rating.id) >= 5
+    ORDER BY average_rating DESC;
+    ```"""
+    mock_response.usage.prompt_tokens = 150
+    mock_response.usage.completion_tokens = 50
+    mock_response.model = sql_generator_instance.primary_model
+
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    # Generate SQL
+    result = await sql_generator_instance.generate(
+        "Show average rating for each movie with at least 5 ratings", intent
+    )
+
+    # Verify complex query
+    assert result.sql is not None
+    assert "SELECT" in result.sql.upper()
+    assert "AVG(rating.score)" in result.sql.lower()
+    assert "LEFT JOIN rating" in result.sql.upper()
+    assert "GROUP BY movie.title" in result.sql.upper()
+    assert "HAVING COUNT(rating.id) >= 5" in result.sql.upper()
+    assert result.model_used == sql_generator_instance.primary_model
 
 
 @pytest.mark.asyncio
@@ -93,7 +263,7 @@ async def test_generate_simple_select_query(
 ):
     """Test generating a simple SELECT query."""
     # Mock LLM response
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[
         0
@@ -145,7 +315,7 @@ async def test_generate_handles_insufficient_schema_error(
     }
 
     # Mock LLM response to return the error JSON
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = json.dumps(error_json)
     mock_response.usage.prompt_tokens = 100
@@ -197,7 +367,7 @@ async def test_extract_sql_from_different_markdown_formats(
 
     for sql_response in test_cases:
         # Mock LLM response
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = sql_response
         mock_response.usage.prompt_tokens = 100
@@ -243,7 +413,7 @@ async def test_generate_complex_join_query(
     }[table]
 
     # Mock LLM response with a join query
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[
         0
@@ -291,7 +461,7 @@ async def test_generate_with_validation_error(
     )
 
     # Mock LLM response with invalid column
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[
         0
@@ -325,7 +495,7 @@ async def test_generate_with_llm_api_error(
     primary_error = Exception("API Error")
 
     # Mock fallback model to succeed
-    fallback_response = MagicMock()
+    fallback_response = AsyncMock()
     fallback_response.choices = [MagicMock()]
     # Create a mock message with proper __str__ behavior
     message = MagicMock()
@@ -356,7 +526,7 @@ async def test_generate_with_multiple_code_blocks(
 ):
     """Test handling of responses with multiple SQL code blocks."""
     # Mock LLM response with multiple code blocks
-    mock_response = MagicMock()
+    mock_response = AsyncMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[
         0
@@ -381,3 +551,58 @@ async def test_generate_with_multiple_code_blocks(
     # Verify it uses the first SQL block
     assert "SELECT movie.title FROM movie" in result.sql
     assert "m.title" not in result.sql
+
+
+@pytest.mark.asyncio
+async def test_generate_handles_json_error_in_markdown(
+    sql_generator_instance: SQLGenerator,
+    mock_schema_graph,
+):
+    """Test handling of JSON error responses wrapped in markdown code blocks."""
+    # Setup test data
+    question = "What's the average time it takes for a new show to enter the top 10 list after release?"
+    intent = ValidIntent(
+        original_intent=Intent(
+            query_type=QueryType.LOOKUP,
+            tables=["tv_show", "view_summary"],
+            columns=["release_date", "title"],
+            filters={},
+            confidence=1.0,
+        ),
+        enhanced_metadata={},
+    )
+
+    # Mock LLM response with JSON error in markdown
+    error_json = {
+        "error_type": "INSUFFICIENT_SCHEMA",
+        "missing_elements": ["view_summary.start_date", "tv_show.release_date"],
+        "reason": "The schema lacks a direct way to calculate the time between a TV show's release and its first entry into the top 10 list, as there is no direct link between tv_show and view_summary for this calculation.",
+    }
+
+    mock_response = AsyncMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[
+        0
+    ].message.content = f"""```json
+{json.dumps(error_json, indent=2)}
+```"""
+    mock_response.usage.prompt_tokens = 100
+    mock_response.usage.completion_tokens = 30
+
+    sql_generator_instance.client.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    # Execute and verify
+    with pytest.raises(SQLGenerationError) as exc_info:
+        await sql_generator_instance.generate(question, intent)
+
+    # Verify error details
+    assert exc_info.value.error_type == "INSUFFICIENT_SCHEMA"
+    assert "missing_elements" in exc_info.value.details
+    assert "view_summary.start_date" in exc_info.value.details["missing_elements"]
+    assert "tv_show.release_date" in exc_info.value.details["missing_elements"]
+    assert (
+        "no direct link between tv_show and view_summary"
+        in exc_info.value.details["reason"]
+    )
