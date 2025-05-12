@@ -217,8 +217,8 @@ async def test_retrieval_orchestrator_basic(
     assert table_reasons.get("movie") == "direct_hit"
     assert table_reasons.get("rating") == "direct_hit"
 
-    # Verify sticky columns have score of 0.0 (no scoring)
-    assert all(col.score == 0.0 for col in sticky_columns)
+    # Verify sticky columns have score of 0.1 (small positive score to rank above structural columns)
+    assert all(col.score == 0.1 for col in sticky_columns)
 
     # Verify non-sticky columns maintain their original scores
     non_sticky_columns = [col for col in result.columns if not col.is_sticky and col.source != "structural"]
