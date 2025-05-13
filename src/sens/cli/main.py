@@ -11,6 +11,7 @@ This module provides a command-line interface for all Sens operations including:
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import sys
@@ -224,14 +225,32 @@ def handle_validate(args: argparse.Namespace) -> None:
         # Get schema context
         schema_graph = SchemaGraph.get_instance()
 
-        # Convert schema graph to validator context
-        schema_context = ValidatorSchemaContext(
+        # Convert schema graph to validator context for full schema
+        full_schema = ValidatorSchemaContext(
             tables=set(schema_graph.list_all_tables()),
             columns_per_table={
                 table: set(schema_graph.get_table_columns(table))
                 for table in schema_graph.list_all_tables()
             },
+            metadata=(
+                schema_graph._schema_data.metadata
+                if schema_graph._schema_data
+                else None
+            ),
         )
+
+        # If a prompted schema file is provided, load it
+        prompted_schema = None
+        if args.prompted_schema:
+            with open(args.prompted_schema, "r") as f:
+                prompted_data = json.load(f)
+                prompted_schema = ValidatorSchemaContext(
+                    tables=set(prompted_data["tables"]),
+                    columns_per_table={
+                        table: set(columns)
+                        for table, columns in prompted_data["columns_per_table"].items()
+                    },
+                )
 
         # Initialize validator with options
         validator = SQLValidator(
@@ -262,31 +281,36 @@ def handle_validate(args: argparse.Namespace) -> None:
         if not levels:  # If no specific levels, validate all
             levels.add(ValidationLevel.ALL)
 
+        # Generate a query ID for logging
+        query_id = hashlib.md5(sql.encode()).hexdigest()[:8]
+
         # Validate SQL
         validation_result = validator.validate(
-            sql=sql, schema=schema_context, levels=levels
+            sql=sql,
+            full_schema=full_schema,
+            prompted_schema=prompted_schema,
+            query_id=query_id,
+            levels=levels,
         )
 
-        # Format output
-        if args.json:
-            result = {
-                "sql": sql,
-                "is_valid": validation_result.is_valid,
-                "errors": [
-                    {
-                        "level": error.level.name,
-                        "message": error.message,
-                        "details": error.details,
-                    }
-                    for error in validation_result.errors
-                ],
-                "warnings": validation_result.warnings,
-            }
-            print(json.dumps(result, indent=2 if args.pretty else None))
-        else:
-            print(str(validation_result))
-            if not validation_result.is_valid:
-                sys.exit(1)
+        # Print validation result
+        print(validation_result)
+
+        # Print context bypass information if available
+        if (
+            validation_result.context_bypass_info
+            and validation_result.context_bypass_info.is_bypass
+        ):
+            print("\nContext Bypass Analysis:")
+            print(f"Score: {validation_result.context_bypass_info.bypass_score:.2%}")
+            print("Columns used but not in prompted schema:")
+            for (
+                table,
+                column,
+            ) in validation_result.context_bypass_info.used_but_missing_columns:
+                print(f"  - {table}.{column}")
+
+        sys.exit(0 if validation_result.is_valid else 1)
 
     except Exception as e:
         log.error("validation_failed", error=str(e))
@@ -470,6 +494,12 @@ def main() -> None:
         "--pretty",
         action="store_true",
         help="Pretty print JSON output",
+    )
+    validate_parser.add_argument(
+        "-ps",
+        "--prompted-schema",
+        type=Path,
+        help="Path to prompted schema file",
     )
 
     # SQL execution command

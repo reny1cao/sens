@@ -7,7 +7,6 @@ This module provides validation for SQL queries to ensure they are:
 3. Safe (no destructive operations unless explicitly allowed)
 """
 
-import logging
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -27,10 +26,12 @@ from sqlparse.sql import (
 )
 from sqlparse.tokens import DDL, DML, Keyword, Name, Punctuation, Whitespace
 
+from sens.api.common.logging import get_logger
 from sens.schema.context import ValidatorSchemaContext
+from sens.validation.types import ContextBypassInfo
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ValidationLevel(Enum):
@@ -59,6 +60,7 @@ class ValidatedSQL:
     is_valid: bool
     errors: List[ValidationError] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    context_bypass_info: Optional[ContextBypassInfo] = None
 
     def __str__(self) -> str:
         """String representation of validation result."""
@@ -74,6 +76,12 @@ class ValidatedSQL:
             result.append("\nWarnings:")
             for warning in self.warnings:
                 result.append(f"- {warning}")
+        if self.context_bypass_info and self.context_bypass_info.is_bypass:
+            result.append("\nContext Bypass Information:")
+            result.append(f"- Score: {self.context_bypass_info.bypass_score:.2f}")
+            result.append("- Missing Columns:")
+            for table, column in self.context_bypass_info.used_but_missing_columns:
+                result.append(f"  * {table}.{column}")
         return "\n".join(result)
 
 
@@ -85,6 +93,30 @@ class SQLValidator:
     1. Syntactically correct using sqlparse
     2. Schema-aligned by checking tables and columns against a provided schema
     3. Safe by checking for forbidden operations
+    4. Monitored for context bypass attempts
+
+    Context Bypass Detection:
+    -----------------------
+    The validator detects when a query uses schema information that wasn't provided
+    in the prompted schema. This is important for LLM-generated queries to ensure
+    they only use the schema information they were explicitly given.
+
+    ALL column usages are counted in bypass detection, including columns used in:
+    - SELECT clause (projections)
+    - WHERE clause (filters)
+    - JOIN conditions (table relationships)
+    - Any other SQL constructs
+
+    This comprehensive approach is taken because any column usage represents schema
+    knowledge that should have been provided to the LLM in the prompt. For example:
+    - Using a column in a JOIN means knowing about table relationships
+    - Using a column in WHERE means knowing it's a filterable field
+    - Using a column in SELECT means knowing about available data
+
+    The bypass score is calculated as:
+        score = (number of unprompted columns used) / (total number of columns used)
+
+    A score > 0 indicates the query is using schema information not provided in the prompt.
     """
 
     # Default set of dangerous keywords that should be blocked
@@ -287,24 +319,37 @@ class SQLValidator:
         return referenced_actual_tables, columns_per_actual_table, table_aliases
 
     def _check_schema(
-        self, sql: str, schema: ValidatorSchemaContext
-    ) -> List[ValidationError]:
+        self,
+        sql: str,
+        full_schema: ValidatorSchemaContext,
+        prompted_schema: ValidatorSchemaContext,
+        query_id: Optional[str] = None,
+    ) -> Tuple[List[ValidationError], ContextBypassInfo]:
         """
         Validate SQL against schema context using sqlglot for robust parsing.
 
         Args:
             sql: SQL query string
-            schema: SchemaContext object containing valid tables and columns
+            full_schema: Complete schema context for validation
+            prompted_schema: Schema context that was provided to the LLM
+            query_id: Optional query identifier for logging
 
         Returns:
-            List of ValidationError objects for any schema mismatches
+            Tuple of (validation_errors, context_bypass_info)
         """
         errors = []
+        bypass_info = ContextBypassInfo(prompted_tables=list(prompted_schema.tables))
 
-        schema_tables_lower = {t.lower() for t in schema.tables}
-        schema_columns_per_table_lower = {
+        # Convert schemas to lowercase for case-insensitive comparison
+        full_schema_tables_lower = {t.lower() for t in full_schema.tables}
+        full_schema_columns_per_table_lower = {
             table.lower(): {col.lower() for col in columns}
-            for table, columns in schema.columns_per_table.items()
+            for table, columns in full_schema.columns_per_table.items()
+        }
+
+        prompted_schema_columns_per_table_lower = {
+            table.lower(): {col.lower() for col in columns}
+            for table, columns in prompted_schema.columns_per_table.items()
         }
 
         try:
@@ -316,7 +361,97 @@ class SQLValidator:
                         message="No valid SQL statements found in input",
                     )
                 )
-                return errors
+                return errors, bypass_info
+
+            total_columns_used = 0
+            missing_columns_count = 0
+
+            for stmt_idx, parsed_sql_statement in enumerate(parsed_statements):
+                if parsed_sql_statement is None:
+                    continue
+
+                # Get computed columns first
+                computed_columns = self._extract_computed_columns(parsed_sql_statement)
+
+                # Extract references for the current statement
+                (
+                    referenced_actual_tables,
+                    columns_per_actual_table,
+                    current_table_aliases,
+                ) = self._extract_schema_references_with_sqlglot(parsed_sql_statement)
+
+                # 1. Validate Tables against full schema
+                for table_name in referenced_actual_tables:
+                    table_name_lower = table_name.lower()
+                    if table_name_lower not in full_schema_tables_lower:
+                        errors.append(
+                            ValidationError(
+                                level=ValidationLevel.SCHEMA,
+                                message=f"Table '{table_name}' referenced in statement {stmt_idx+1} does not exist in the schema",
+                                details=f"Available tables: {', '.join(sorted(full_schema_tables_lower))}",
+                            )
+                        )
+
+                # 2. Validate Columns against full schema and check for context bypass
+                for actual_table, column_names in columns_per_actual_table.items():
+                    actual_table_lower = actual_table.lower()
+                    if actual_table_lower not in full_schema_tables_lower:
+                        # This table should have already been caught as an error above
+                        continue
+
+                    valid_columns_for_table = full_schema_columns_per_table_lower.get(
+                        actual_table_lower, set()
+                    )
+
+                    for col_name in column_names:
+                        col_name_lower = col_name.lower()
+                        # Skip validation for computed columns and their aliases
+                        if col_name_lower in computed_columns:
+                            continue
+
+                        total_columns_used += 1
+
+                        # First validate against full schema
+                        if col_name_lower not in valid_columns_for_table:
+                            errors.append(
+                                ValidationError(
+                                    level=ValidationLevel.SCHEMA,
+                                    message=f"Column '{col_name}' in statement {stmt_idx+1} does not exist in table '{actual_table}'",
+                                    details=f"Available columns for '{actual_table}': {', '.join(sorted(valid_columns_for_table))}",
+                                )
+                            )
+                            continue
+
+                        # Then check if it was in the prompted schema
+                        prompted_columns = prompted_schema_columns_per_table_lower.get(
+                            actual_table_lower, set()
+                        )
+                        if col_name_lower not in prompted_columns:
+                            bypass_info.used_but_missing_columns.append(
+                                (actual_table, col_name)
+                            )
+                            missing_columns_count += 1
+
+            # Calculate bypass score and set bypass flag
+            if total_columns_used > 0:
+                bypass_info.bypass_score = missing_columns_count / total_columns_used
+                bypass_info.is_bypass = missing_columns_count > 0
+
+            # Set schema version if available
+            if hasattr(full_schema, "metadata") and isinstance(
+                full_schema.metadata, dict
+            ):
+                bypass_info.full_schema_version = full_schema.metadata.get("version")
+
+            # Log bypass information if detected
+            if bypass_info.is_bypass and query_id:
+                logger.warning(
+                    "sql_context_bypass_detected",
+                    **bypass_info.to_log_dict(query_id),
+                )
+
+            return errors, bypass_info
+
         except sqlglot.errors.ParseError as e:
             errors.append(
                 ValidationError(
@@ -325,57 +460,7 @@ class SQLValidator:
                     details=sql[:200],  # Show snippet of SQL
                 )
             )
-            return errors
-
-        for stmt_idx, parsed_sql_statement in enumerate(parsed_statements):
-            if parsed_sql_statement is None:
-                continue
-
-            # Get computed columns first
-            computed_columns = self._extract_computed_columns(parsed_sql_statement)
-
-            # Extract references for the current statement
-            (
-                referenced_actual_tables,
-                columns_per_actual_table,
-                current_table_aliases,
-            ) = self._extract_schema_references_with_sqlglot(parsed_sql_statement)
-
-            # 1. Validate Tables
-            for table_name in referenced_actual_tables:
-                if table_name not in schema_tables_lower:
-                    errors.append(
-                        ValidationError(
-                            level=ValidationLevel.SCHEMA,
-                            message=f"Table '{table_name}' referenced in statement {stmt_idx+1} does not exist in the schema",
-                            details=f"Available tables: {', '.join(sorted(schema_tables_lower))}",
-                        )
-                    )
-
-            # 2. Validate Columns
-            for actual_table, column_names in columns_per_actual_table.items():
-                if actual_table not in schema_tables_lower:
-                    # This table should have already been caught as an error above
-                    continue
-
-                valid_columns_for_table = schema_columns_per_table_lower.get(
-                    actual_table, set()
-                )
-                for col_name in column_names:
-                    # Skip validation for computed columns and their aliases
-                    if col_name.lower() in computed_columns:
-                        continue
-
-                    if col_name not in valid_columns_for_table:
-                        errors.append(
-                            ValidationError(
-                                level=ValidationLevel.SCHEMA,
-                                message=f"Column '{col_name}' in statement {stmt_idx+1} does not exist in table '{actual_table}'",
-                                details=f"Available columns for '{actual_table}': {', '.join(sorted(valid_columns_for_table))}",
-                            )
-                        )
-
-        return errors
+            return errors, bypass_info
 
     def _check_safety(self, sql: str) -> List[ValidationError]:
         """
@@ -517,7 +602,9 @@ class SQLValidator:
     def validate(
         self,
         sql: str,
-        schema: ValidatorSchemaContext,
+        full_schema: ValidatorSchemaContext,
+        prompted_schema: Optional[ValidatorSchemaContext] = None,
+        query_id: Optional[str] = None,
         levels: Optional[Set[ValidationLevel]] = None,
     ) -> ValidatedSQL:
         """
@@ -525,7 +612,9 @@ class SQLValidator:
 
         Args:
             sql: SQL query to validate
-            schema: Schema context for validation
+            full_schema: Complete schema context for validation
+            prompted_schema: Schema context that was provided to the LLM (if None, uses full_schema)
+            query_id: Optional query identifier for logging
             levels: Set of validation levels to apply
 
         Returns:
@@ -534,15 +623,28 @@ class SQLValidator:
         Raises:
             TypeError: If schema is not a ValidatorSchemaContext
         """
-        if not isinstance(schema, ValidatorSchemaContext):
+        if not isinstance(full_schema, ValidatorSchemaContext):
             raise TypeError(
-                f"Expected ValidatorSchemaContext, got {type(schema).__name__}"
+                f"Expected ValidatorSchemaContext for full_schema, got {type(full_schema).__name__}"
             )
+
+        if prompted_schema is not None and not isinstance(
+            prompted_schema, ValidatorSchemaContext
+        ):
+            raise TypeError(
+                f"Expected ValidatorSchemaContext for prompted_schema, got {type(prompted_schema).__name__}"
+            )
+
+        # If no prompted schema provided, use full schema (no bypass detection)
+        schema_for_bypass = (
+            prompted_schema if prompted_schema is not None else full_schema
+        )
 
         if levels is None:
             levels = {ValidationLevel.ALL}
 
         errors = []
+        context_bypass_info = None
 
         # Expand ALL to include all levels
         if ValidationLevel.ALL in levels:
@@ -555,12 +657,23 @@ class SQLValidator:
         # Run requested validations
         if ValidationLevel.SYNTAX in levels:
             errors.extend(self._check_syntax(sql))
+
         if ValidationLevel.SCHEMA in levels:
-            errors.extend(self._check_schema(sql, schema))
+            schema_errors, bypass_info = self._check_schema(
+                sql, full_schema, schema_for_bypass, query_id
+            )
+            errors.extend(schema_errors)
+            context_bypass_info = bypass_info
+
         if ValidationLevel.SAFETY in levels:
             errors.extend(self._check_safety(sql))
 
-        return ValidatedSQL(sql=sql, is_valid=len(errors) == 0, errors=errors)
+        return ValidatedSQL(
+            sql=sql,
+            is_valid=len(errors) == 0,
+            errors=errors,
+            context_bypass_info=context_bypass_info,
+        )
 
     def _extract_table_column_references(
         self, stmt: Statement

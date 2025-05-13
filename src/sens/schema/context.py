@@ -2,14 +2,25 @@
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 @dataclass
 class BaseSchemaContext:
     """Base class for all schema context representations."""
 
+    # Fields without defaults must come first, both in the base class and in derived classes
     tables: Set[str]
+    # Fields with defaults must come after all non-default fields, including those in derived classes
+    metadata: Dict[str, Any] = field(
+        default_factory=dict,
+        init=False,  # This prevents the field from being part of __init__
+    )
+
+    def __post_init__(self):
+        """Initialize default values after dataclass initialization."""
+        # Initialize metadata with an empty dict if not set
+        self.metadata = {}
 
 
 @dataclass
@@ -35,8 +46,8 @@ class LLMSchemaContext(BaseSchemaContext):
 
     def to_validator_schema(self) -> ValidatorSchemaContext:
         """Convert to validator schema format."""
-        # Ensure all tables have their columns
-        tables = set(self.tables_columns.keys())
+        # Use inherited tables from BaseSchemaContext
+        current_tables = self.tables
         columns_per_table = {}
 
         for table, columns in self.tables_columns.items():
@@ -60,10 +71,16 @@ class LLMSchemaContext(BaseSchemaContext):
 
             columns_per_table[table] = column_set
 
+        # Ensure all tables from self.tables (inherited) are in columns_per_table
+        for table in current_tables:
+            if table not in columns_per_table:
+                columns_per_table[table] = set()
+
         return ValidatorSchemaContext(
-            tables=tables,
+            tables=current_tables,  # Pass the inherited tables
             columns_per_table=columns_per_table,
             foreign_keys=self._convert_foreign_keys(),
+            # metadata is inherited and handled by BaseSchemaContext's __post_init__
         )
 
     def _convert_foreign_keys(self) -> Dict[str, Dict[str, Tuple[str, str]]]:
