@@ -7,7 +7,6 @@ This module provides validation for SQL queries to ensure they are:
 3. Safe (no destructive operations unless explicitly allowed)
 """
 
-import logging
 import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -27,11 +26,12 @@ from sqlparse.sql import (
 )
 from sqlparse.tokens import DDL, DML, Keyword, Name, Punctuation, Whitespace
 
+from sens.api.common.logging import get_logger
 from sens.schema.context import ValidatorSchemaContext
 from sens.validation.types import ContextBypassInfo
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ValidationLevel(Enum):
@@ -93,6 +93,30 @@ class SQLValidator:
     1. Syntactically correct using sqlparse
     2. Schema-aligned by checking tables and columns against a provided schema
     3. Safe by checking for forbidden operations
+    4. Monitored for context bypass attempts
+
+    Context Bypass Detection:
+    -----------------------
+    The validator detects when a query uses schema information that wasn't provided
+    in the prompted schema. This is important for LLM-generated queries to ensure
+    they only use the schema information they were explicitly given.
+
+    ALL column usages are counted in bypass detection, including columns used in:
+    - SELECT clause (projections)
+    - WHERE clause (filters)
+    - JOIN conditions (table relationships)
+    - Any other SQL constructs
+
+    This comprehensive approach is taken because any column usage represents schema
+    knowledge that should have been provided to the LLM in the prompt. For example:
+    - Using a column in a JOIN means knowing about table relationships
+    - Using a column in WHERE means knowing it's a filterable field
+    - Using a column in SELECT means knowing about available data
+
+    The bypass score is calculated as:
+        score = (number of unprompted columns used) / (total number of columns used)
+
+    A score > 0 indicates the query is using schema information not provided in the prompt.
     """
 
     # Default set of dangerous keywords that should be blocked
@@ -299,6 +323,7 @@ class SQLValidator:
         sql: str,
         full_schema: ValidatorSchemaContext,
         prompted_schema: ValidatorSchemaContext,
+        query_id: Optional[str] = None,
     ) -> Tuple[List[ValidationError], ContextBypassInfo]:
         """
         Validate SQL against schema context using sqlglot for robust parsing.
@@ -307,6 +332,7 @@ class SQLValidator:
             sql: SQL query string
             full_schema: Complete schema context for validation
             prompted_schema: Schema context that was provided to the LLM
+            query_id: Optional query identifier for logging
 
         Returns:
             Tuple of (validation_errors, context_bypass_info)
@@ -418,9 +444,10 @@ class SQLValidator:
                 bypass_info.full_schema_version = full_schema.metadata.get("version")
 
             # Log bypass information if detected
-            if bypass_info.is_bypass:
+            if bypass_info.is_bypass and query_id:
                 logger.warning(
-                    "sql_context_bypass_detected", **bypass_info.to_log_dict()
+                    "sql_context_bypass_detected",
+                    **bypass_info.to_log_dict(query_id),
                 )
 
             return errors, bypass_info
@@ -633,22 +660,9 @@ class SQLValidator:
 
         if ValidationLevel.SCHEMA in levels:
             schema_errors, bypass_info = self._check_schema(
-                sql, full_schema, schema_for_bypass
+                sql, full_schema, schema_for_bypass, query_id
             )
             errors.extend(schema_errors)
-
-            # Set schema version if available
-            if hasattr(full_schema, "metadata") and isinstance(
-                full_schema.metadata, dict
-            ):
-                bypass_info.full_schema_version = full_schema.metadata.get("version")
-
-            # Log bypass information if detected
-            if bypass_info.is_bypass and query_id:
-                logger.warning(
-                    "sql_context_bypass_detected", **bypass_info.to_log_dict(query_id)
-                )
-
             context_bypass_info = bypass_info
 
         if ValidationLevel.SAFETY in levels:

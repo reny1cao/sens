@@ -126,6 +126,8 @@ class SchemaRetriever:
             foreign_keys=foreign_keys,
             column_descriptions=column_descriptions,
             sticky_columns=sticky_columns,
+            tables=set(tables_columns.keys()),
+            metadata=schema.metadata,
         )
 
     def _is_relationship_column(

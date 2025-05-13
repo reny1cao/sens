@@ -4,7 +4,6 @@ import pytest
 
 from sens.schema.context import ValidatorSchemaContext
 from sens.validation.sql_validator import (
-    SchemaContext,
     SQLValidator,
     ValidatedSQL,
     ValidationError,
@@ -16,7 +15,7 @@ from sens.validation.sql_validator import (
 @pytest.fixture
 def sample_schema():
     """Create a sample schema for testing."""
-    return SchemaContext(
+    return ValidatorSchemaContext(
         tables={"users", "orders"},
         columns_per_table={
             "users": {"id", "name", "email"},
@@ -60,7 +59,12 @@ def validator():
 def test_syntax_validation_valid_sql(validator):
     """Test syntax validation with valid SQL."""
     sql = "SELECT id, name FROM users WHERE id = 1;"
-    result = validator.validate(sql, SchemaContext(set(), {}), {ValidationLevel.SYNTAX})
+    result = validator.validate(
+        sql=sql,
+        full_schema=ValidatorSchemaContext(set(), {}),
+        prompted_schema=None,
+        levels={ValidationLevel.SYNTAX},
+    )
     assert result.is_valid
     assert not result.errors
 
@@ -68,7 +72,12 @@ def test_syntax_validation_valid_sql(validator):
 def test_syntax_validation_invalid_sql(validator):
     """Test syntax validation with invalid SQL."""
     sql = "SELEC * FORM users"  # Intentional typos
-    result = validator.validate(sql, SchemaContext(set(), {}), {ValidationLevel.SYNTAX})
+    result = validator.validate(
+        sql=sql,
+        full_schema=ValidatorSchemaContext(set(), {}),
+        prompted_schema=None,
+        levels={ValidationLevel.SYNTAX},
+    )
     assert not result.is_valid
     assert len(result.errors) > 0
     assert all(error.level == ValidationLevel.SYNTAX for error in result.errors)
@@ -77,7 +86,12 @@ def test_syntax_validation_invalid_sql(validator):
 def test_empty_sql(validator):
     """Test validation of empty SQL."""
     sql = ""
-    result = validator.validate(sql, SchemaContext(set(), {}), {ValidationLevel.SYNTAX})
+    result = validator.validate(
+        sql=sql,
+        full_schema=ValidatorSchemaContext(set(), {}),
+        prompted_schema=None,
+        levels={ValidationLevel.SYNTAX},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert result.errors[0].level == ValidationLevel.SYNTAX
@@ -87,7 +101,12 @@ def test_empty_sql(validator):
 def test_schema_validation_valid(validator, sample_schema):
     """Test schema validation with valid table and column references."""
     sql = "SELECT id, name FROM users WHERE email = 'test@example.com';"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SCHEMA})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SCHEMA},
+    )
     assert result.is_valid
     assert not result.errors
 
@@ -95,7 +114,12 @@ def test_schema_validation_valid(validator, sample_schema):
 def test_schema_validation_invalid_table(validator, sample_schema):
     """Test schema validation with non-existent table."""
     sql = "SELECT id FROM non_existent_table;"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SCHEMA})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SCHEMA},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert "non_existent_table" in result.errors[0].message.lower()
@@ -104,7 +128,12 @@ def test_schema_validation_invalid_table(validator, sample_schema):
 def test_schema_validation_invalid_column(validator, sample_schema):
     """Test schema validation with non-existent column."""
     sql = "SELECT id, non_existent_column FROM users;"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SCHEMA})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SCHEMA},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert "non_existent_column" in result.errors[0].message.lower()
@@ -113,7 +142,12 @@ def test_schema_validation_invalid_column(validator, sample_schema):
 def test_schema_validation_qualified_names(validator, sample_schema):
     """Test schema validation with qualified column names."""
     sql = "SELECT users.id, users.name FROM users;"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SCHEMA})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SCHEMA},
+    )
     assert result.is_valid
     assert not result.errors
 
@@ -122,7 +156,12 @@ def test_schema_validation_qualified_names(validator, sample_schema):
 def test_safety_validation_forbidden_keywords(validator, sample_schema):
     """Test safety validation with forbidden keywords."""
     sql = "DROP TABLE users;"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SAFETY})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SAFETY},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert result.errors[0].level == ValidationLevel.SAFETY
@@ -133,7 +172,12 @@ def test_safety_validation_whitelisted_keywords():
     """Test safety validation with whitelisted keywords."""
     validator = SQLValidator(whitelisted_keywords={"DELETE"})
     sql = "DELETE FROM users WHERE id = 1;"
-    result = validator.validate(sql, SchemaContext(set(), {}), {ValidationLevel.SAFETY})
+    result = validator.validate(
+        sql=sql,
+        full_schema=ValidatorSchemaContext(set(), {}),
+        prompted_schema=None,
+        levels={ValidationLevel.SAFETY},
+    )
     assert result.is_valid
     assert not result.errors
 
@@ -141,7 +185,12 @@ def test_safety_validation_whitelisted_keywords():
 def test_safety_validation_update_without_where(validator, sample_schema):
     """Test safety validation for UPDATE without WHERE clause."""
     sql = "UPDATE users SET name = 'test';"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SAFETY})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SAFETY},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert "WHERE" in result.errors[0].message
@@ -150,7 +199,12 @@ def test_safety_validation_update_without_where(validator, sample_schema):
 def test_safety_validation_delete_without_where(validator, sample_schema):
     """Test safety validation for DELETE without WHERE clause."""
     sql = "DELETE FROM users;"
-    result = validator.validate(sql, sample_schema, {ValidationLevel.SAFETY})
+    result = validator.validate(
+        sql=sql,
+        full_schema=sample_schema,
+        prompted_schema=None,
+        levels={ValidationLevel.SAFETY},
+    )
     assert not result.is_valid
     assert len(result.errors) == 1
     assert "WHERE" in result.errors[0].message
@@ -175,13 +229,20 @@ def test_all_validations_fail(validator, sample_schema):
 
 # SchemaContext tests
 def test_schema_context_from_dict():
-    """Test creating SchemaContext from dictionary."""
+    """Test creating ValidatorSchemaContext from dictionary."""
     schema_dict = {
         "tables": ["users", "orders"],
         "columns_per_table": {"users": ["id", "name"], "orders": ["id", "user_id"]},
         "foreign_keys": {"orders": {"user_id": ("users", "id")}},
     }
-    schema = SchemaContext.from_dict(schema_dict)
+    schema = ValidatorSchemaContext(
+        tables=set(schema_dict["tables"]),
+        columns_per_table={
+            table: set(columns)
+            for table, columns in schema_dict["columns_per_table"].items()
+        },
+        foreign_keys=schema_dict["foreign_keys"],
+    )
     assert "users" in schema.tables
     assert "id" in schema.columns_per_table["users"]
     assert "orders" in schema.foreign_keys
@@ -221,47 +282,57 @@ def test_validation_with_comments(validator, sample_schema):
     assert not result.errors
 
 
-def test_computed_columns_and_aliases(validator, schema_context):
+def test_computed_columns_and_aliases(validator, full_schema):
     """Test validation of computed columns and their aliases in GROUP BY and ORDER BY."""
     sql = """
     SELECT
-        EXTRACT(MONTH FROM vs.start_date) AS month,
-        SUM(vs.hours_viewed) AS total_hours_viewed
+        EXTRACT(MONTH FROM u.created_at) AS month,
+        SUM(o.total) AS total_amount
     FROM
-        view_summary vs
+        users u
+    JOIN orders o ON u.id = o.user_id
     GROUP BY
         month
     ORDER BY
-        total_hours_viewed DESC
+        total_amount DESC
     LIMIT 1;
     """
-    result = validator.validate(sql, schema_context)
+    result = validator.validate(sql, full_schema)
     assert result.is_valid, f"Validation failed with errors: {result.errors}"
     assert not result.errors
 
     # Test with multiple computed columns and complex expressions
     sql = """
     SELECT
-        EXTRACT(MONTH FROM vs.start_date) AS month,
-        EXTRACT(YEAR FROM vs.start_date) AS year,
-        SUM(vs.hours_viewed) AS total_hours,
-        COUNT(*) AS view_count,
-        SUM(vs.hours_viewed) / COUNT(*) AS avg_hours
+        EXTRACT(MONTH FROM u.created_at) AS month,
+        EXTRACT(YEAR FROM u.created_at) AS year,
+        SUM(o.total) AS total_amount,
+        COUNT(*) AS order_count,
+        SUM(o.total) / COUNT(*) AS avg_amount
     FROM
-        view_summary vs
+        users u
+    JOIN orders o ON u.id = o.user_id
     GROUP BY
         month, year
     ORDER BY
-        total_hours DESC,
-        avg_hours ASC;
+        total_amount DESC,
+        avg_amount ASC;
     """
-    result = validator.validate(sql, schema_context)
+    result = validator.validate(sql, full_schema)
     assert result.is_valid, f"Validation failed with errors: {result.errors}"
     assert not result.errors
 
 
 def test_context_bypass_detection(validator, full_schema, prompted_schema):
-    """Test detection of columns used but not in prompted schema."""
+    """Test detection of columns used but not in prompted schema.
+
+    This test verifies that the validator correctly detects when a query uses columns
+    that weren't included in the prompted schema. Each unique column usage is counted
+    once, regardless of where it appears in the query (SELECT, WHERE, JOIN, etc).
+
+    The bypass score is calculated as:
+    (number of unique unprompted columns used) / (total number of unique columns used)
+    """
     sql = """
     SELECT u.email, u.name, o.status, o.total
     FROM users u
@@ -279,16 +350,20 @@ def test_context_bypass_detection(validator, full_schema, prompted_schema):
     assert result.is_valid  # Query is valid against full schema
     assert result.context_bypass_info is not None
     assert result.context_bypass_info.is_bypass
-    assert len(result.context_bypass_info.used_but_missing_columns) == 3
-    assert ("users", "email") in result.context_bypass_info.used_but_missing_columns
-    assert (
-        "users",
-        "created_at",
-    ) in result.context_bypass_info.used_but_missing_columns
-    assert ("orders", "status") in result.context_bypass_info.used_but_missing_columns
-    assert result.context_bypass_info.bypass_score == pytest.approx(
-        0.5
-    )  # 3 missing out of 6 total
+
+    # Verify missing columns are detected
+    # Each column should only be counted once, even if used multiple times
+    expected_missing = {
+        ("users", "email"),
+        ("users", "created_at"),
+        ("orders", "status"),
+    }
+    assert set(result.context_bypass_info.used_but_missing_columns) == expected_missing
+
+    # Total unique columns used (7): email, name, status, total, id, user_id, created_at
+    # Missing unique columns (3): email, created_at, status
+    # Score = 3/7 ≈ 0.429
+    assert result.context_bypass_info.bypass_score == pytest.approx(3 / 7)
 
 
 def test_no_context_bypass(validator, full_schema, prompted_schema):

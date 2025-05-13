@@ -21,6 +21,7 @@ def mock_schema_graph():
         "orders": ["id", "user_id", "total", "status", "created_at"],
         "products": ["id", "name", "price", "description"],
     }[table]
+    mock._schema_data = Mock()
     mock._schema_data.metadata = {"version": "v1.2.3"}
     return mock
 
