@@ -27,34 +27,55 @@ from sens.cli.formatters import format_nl2sql_response
 from sens.execution import SQLExecutor
 from sens.schema.context import ValidatorSchemaContext
 from sens.schema.graph import SchemaGraph
-from sens.settings import get_settings
+from sens.settings import get_settings, reload_settings
 from sens.validation.sql_validator import SQLValidator, ValidationLevel
 
-# Configure structured logging
-log = structlog.get_logger()
 
-
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(verbose: bool = False) -> structlog.BoundLogger:
     """Configure logging level and format.
 
     Args:
         verbose: If True, set logging level to DEBUG
+
+    Returns:
+        A configured logger instance
     """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+    from sens.api.common.logging import configure_logging
+    from sens.settings import get_settings
+
+    # Get current settings
+    settings = get_settings()
+
+    # Update logging configuration with verbose flag
+    settings.update_logging(verbose=verbose)
+
+    # Force reconfigure structlog with updated settings
+    configure_logging(force=True)
+
+    # Get logger after configuration
+    log = structlog.get_logger(__name__)
+    log.info(
+        "cli_logging_configured",
+        level=settings.logging.level,
+        format=settings.logging.format,
+        colors_enabled=settings.logging.enable_colors,
+        environment=settings.environment,
+        verbose_mode=verbose,
     )
+    return log
 
 
-def check_redis_availability(session_id: Optional[str] = None) -> None:
+def check_redis_availability(session_id: Optional[str] = None, log=None) -> None:
     """Check Redis availability if session persistence is needed.
 
     Args:
         session_id: Optional session ID. If provided and Redis is unavailable,
                    the function will exit with an error.
+        log: Logger instance to use
     """
+    if not log:
+        log = structlog.get_logger(__name__)
+
     if session_id:
         session_manager = SessionManager()
         if not session_manager.redis_available:
@@ -67,14 +88,19 @@ def check_redis_availability(session_id: Optional[str] = None) -> None:
 
 
 async def handle_nl2sql(
-    args: argparse.Namespace, parser: argparse.ArgumentParser
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    log: Optional[structlog.BoundLogger] = None,
 ) -> None:
     """Handle natural language to SQL conversion command.
 
     Args:
         args: Command line arguments
         parser: The argument parser instance
+        log: Optional logger instance
     """
+    if log is None:
+        log = structlog.get_logger(__name__)
     try:
         # Check Redis availability if session ID is provided
         check_redis_availability(args.session_id)
@@ -149,11 +175,12 @@ async def handle_nl2sql(
         sys.exit(1)
 
 
-def handle_extract_schema(args: argparse.Namespace) -> None:
+def handle_extract_schema(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle schema extraction command.
 
     Args:
         args: Command line arguments
+        log: Logger instance
     """
     try:
         # Import here to avoid loading dependencies unless needed
@@ -180,11 +207,12 @@ def handle_extract_schema(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def handle_build_index(args: argparse.Namespace) -> None:
+def handle_build_index(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle embedding index building command.
 
     Args:
         args: Command line arguments
+        log: Logger instance
     """
     try:
         # Import here to avoid loading dependencies unless needed
@@ -215,11 +243,12 @@ def handle_build_index(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def handle_validate(args: argparse.Namespace) -> None:
+def handle_validate(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle SQL validation command.
 
     Args:
         args: Command line arguments
+        log: Logger instance
     """
     try:
         # Get schema context
@@ -317,11 +346,12 @@ def handle_validate(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def handle_execute(args: argparse.Namespace) -> None:
+def handle_execute(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle SQL execution command.
 
     Args:
         args: Command line arguments
+        log: Logger instance
     """
     try:
         # Read SQL from file or stdin
@@ -511,22 +541,24 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    setup_logging(args.verbose)
+
+    # Configure logging first, before any other operations
+    log = setup_logging(args.verbose)
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
     if args.command == "nl2sql":
-        asyncio.run(handle_nl2sql(args, parser))
+        asyncio.run(handle_nl2sql(args, parser, log))
     elif args.command == "extract-schema":
-        handle_extract_schema(args)
+        handle_extract_schema(args, log)
     elif args.command == "build-index":
-        handle_build_index(args)
+        handle_build_index(args, log)
     elif args.command == "validate":
-        handle_validate(args)
+        handle_validate(args, log)
     elif args.command == "execute":
-        handle_execute(args)
+        handle_execute(args, log)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ class LoggingConfig(BaseModel):
     """Logging configuration."""
 
     format: Literal["json", "pretty"] = Field(
-        default="json",
+        default="pretty",
         description="Log format (json for production, pretty for development)",
         validation_alias="SENS_LOG_FORMAT",
     )
@@ -27,13 +27,17 @@ class LoggingConfig(BaseModel):
         validation_alias="SENS_LOG_LEVEL",
     )
     enable_colors: bool = Field(
-        default=False,
+        default=True,
         description="Enable colored output in pretty format",
         validation_alias="SENS_LOG_COLORS",
     )
     environment: Optional[EnvironmentType] = Field(
         default=None,
         description="Environment context for logging configuration",
+    )
+    verbose: bool = Field(
+        default=False,
+        description="Enable verbose (DEBUG) logging",
     )
 
     @field_validator("format")
@@ -58,15 +62,30 @@ class LoggingConfig(BaseModel):
         # Get environment from instance or environment variable
         environment = self.environment or os.getenv("SENS_ENVIRONMENT", "development")
 
-        # Set format based on environment if not explicitly set via env var
-        if not os.getenv("SENS_LOG_FORMAT"):
-            self.format = "pretty" if environment == "development" else "json"
+        # Only change format and colors away from defaults if:
+        # 1. We're not in development environment AND
+        # 2. The values weren't explicitly set via environment variables
+        if environment != "development":
+            # If format wasn't explicitly set via env var, use json for non-dev
+            if not os.getenv("SENS_LOG_FORMAT"):
+                self.format = "json"
 
-        # Set colors based on environment and format if not explicitly set via env var
-        if not os.getenv("SENS_LOG_COLORS"):
-            self.enable_colors = (
-                environment == "development" and self.format == "pretty"
-            )
+            # If colors weren't explicitly set via env var, disable for non-dev
+            if not os.getenv("SENS_LOG_COLORS"):
+                self.enable_colors = False
+
+        # Override level if verbose mode is enabled
+        if self.verbose:
+            self.level = "DEBUG"
+
+        # Store environment for future reference
+        self.environment = environment
+
+    def with_updates(self, **kwargs) -> "LoggingConfig":
+        """Create a new LoggingConfig instance with updated values."""
+        current_dict = self.model_dump()
+        current_dict.update(kwargs)
+        return LoggingConfig(**current_dict)
 
 
 class OpenRouterConfig(BaseModel):

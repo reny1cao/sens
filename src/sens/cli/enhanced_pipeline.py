@@ -14,9 +14,10 @@ from sens.chat.orchestrator import ChatOrchestrator
 from sens.chat.session import SessionManager
 from sens.chat.state import ConversationState
 from sens.monitoring.metrics import PipelineMetrics
+from sens.settings import get_settings
 
 # Configure structured logging
-log = structlog.get_logger()
+log = structlog.get_logger(__name__)
 
 
 class EnhancedNL2SQLPipeline:
@@ -40,11 +41,26 @@ class EnhancedNL2SQLPipeline:
         self.debug_mode = debug_mode
         self.session_id = session_id or str(uuid.uuid4())
 
+        # Get settings for logging context
+        settings = get_settings()
+
         # Initialize session management
         self.session_manager = SessionManager()
         self.state = self.session_manager.get(self.session_id)
         if not self.state:
             self.state = ConversationState(conversation_id=self.session_id)
+            log.info(
+                "new_conversation_state_created",
+                session_id=self.session_id,
+                environment=settings.environment,
+            )
+        else:
+            log.info(
+                "existing_conversation_state_loaded",
+                session_id=self.session_id,
+                history_length=len(self.state.history),
+                environment=settings.environment,
+            )
 
         # Initialize ChatOrchestrator (now stateless)
         self.orchestrator = ChatOrchestrator(session_manager=self.session_manager)
@@ -56,6 +72,7 @@ class EnhancedNL2SQLPipeline:
             debug_mode=debug_mode,
             validation_enabled=True,
             redis_available=self.session_manager.redis_available,
+            environment=settings.environment,
         )
 
     async def process_question(
@@ -77,6 +94,16 @@ class EnhancedNL2SQLPipeline:
             Dict containing the response with optional metrics and debug info
         """
         try:
+            log.info(
+                "processing_question",
+                session_id=self.session_id,
+                question=question,
+                format_type=format_type,
+                show_preview=show_preview,
+                max_rows=max_rows,
+                history_length=len(self.state.history),
+            )
+
             # Process through ChatOrchestrator with explicit state
             response, updated_state = await self.orchestrator.step(
                 state=self.state,
@@ -108,13 +135,25 @@ class EnhancedNL2SQLPipeline:
                     response["metadata"] = {}
                 response["metadata"]["debug"] = debug_info
 
+            log.info(
+                "question_processed",
+                session_id=self.session_id,
+                success=True,
+                has_metrics=self.metrics_enabled,
+                has_debug=self.debug_mode,
+                response_type=response.get("status", "unknown"),
+            )
+
             return response
 
         except Exception as e:
             log.error(
                 "enhanced_pipeline_error",
                 error=str(e),
+                error_type=e.__class__.__name__,
                 session_id=self.session_id,
+                question=question,
+                history_length=len(self.state.history),
             )
             error_response = {
                 "status": "error",

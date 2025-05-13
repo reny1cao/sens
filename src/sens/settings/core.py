@@ -21,8 +21,6 @@ from .models import (
     SQLGeneratorConfig,
 )
 
-log = structlog.get_logger()
-
 # Get project root for default paths
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -276,14 +274,29 @@ class Settings(BaseSettings):
         """Get database configuration as a dictionary."""
         return self.database.model_dump()
 
+    def update_logging(self, **kwargs) -> None:
+        """Update logging configuration with new values."""
+        current_logging = self.logging
+        new_logging = current_logging.with_updates(**kwargs)
+        object.__setattr__(self, "logging", new_logging)
+
     def with_updates(self, **kwargs) -> "Settings":
-        """Create a new Settings instance with updated values."""
+        """Create a new Settings instance with updated values.
+
+        Special handling for logging updates to ensure proper initialization.
+        """
         current_dict = self.model_dump()
+
+        # Handle logging updates separately
+        logging_updates = kwargs.pop("logging", {})
+        if logging_updates:
+            current_dict["logging"] = self.logging.with_updates(**logging_updates)
+
         current_dict.update(kwargs)
         return Settings(**current_dict)
 
 
-# Global settings instance
+# Global settings instance - moved after Settings class definition
 _settings: Optional[Settings] = None
 
 
@@ -294,6 +307,8 @@ def get_settings() -> Settings:
         try:
             _settings = Settings()
         except Exception as e:
+            # Only get logger when needed
+            log = structlog.get_logger(__name__)
             log.error("Failed to load settings", error=str(e))
             raise
     return _settings

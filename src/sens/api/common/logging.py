@@ -10,8 +10,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from sens.settings import get_settings
 
+# Flag to track if structlog has been configured
+_STRUCTLOG_CONFIGURED = False
 
-def configure_logging() -> None:
+
+def configure_logging(force: bool = False) -> None:
     """Configure structured logging for the application.
 
     Uses settings to determine:
@@ -20,9 +23,21 @@ def configure_logging() -> None:
     - Color output (for pretty format)
 
     Always logs to stdout for compatibility with container environments.
+
+    Args:
+        force: If True, reconfigure even if already configured
     """
+    global _STRUCTLOG_CONFIGURED
+
+    # Skip if already configured and not forced
+    if _STRUCTLOG_CONFIGURED and not force:
+        return
+
     settings = get_settings()
     log_config = settings.logging
+
+    # Reset any existing handlers
+    logging.root.handlers = []
 
     # Set up shared processors
     shared_processors: List[structlog.typing.Processor] = [
@@ -37,17 +52,28 @@ def configure_logging() -> None:
 
     # Configure format-specific processors
     if log_config.format == "pretty":
+        # In development with pretty format, we want nice console output
         final_processors = shared_processors + [
             structlog.dev.ConsoleRenderer(
                 colors=log_config.enable_colors,
                 exception_formatter=structlog.dev.plain_traceback,
+                pad_event=35,  # Increase padding for better readability
             ),
         ]
     else:  # "json" format
+        # In production with JSON format, we want structured output
         final_processors = shared_processors + [
             structlog.processors.dict_tracebacks,
-            structlog.processors.JSONRenderer(),
+            structlog.processors.JSONRenderer(sort_keys=True),
         ]
+
+    # Configure standard logging to use structlog
+    logging.basicConfig(
+        format="%(message)s",
+        stream=sys.stdout,
+        level=getattr(logging, log_config.level.upper()),  # Ensure level is uppercase
+        force=True,  # Force reconfiguration
+    )
 
     # Configure structlog
     structlog.configure(
@@ -58,12 +84,8 @@ def configure_logging() -> None:
         cache_logger_on_first_use=True,
     )
 
-    # Configure standard logging to use structlog
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=getattr(logging, log_config.level),
-    )
+    # Mark as configured
+    _STRUCTLOG_CONFIGURED = True
 
     # Log initial configuration
     log = structlog.get_logger(__name__)
@@ -72,6 +94,7 @@ def configure_logging() -> None:
         format=log_config.format,
         level=log_config.level,
         colors_enabled=log_config.enable_colors,
+        environment=settings.environment,
     )
 
 
