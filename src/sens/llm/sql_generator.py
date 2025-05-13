@@ -348,11 +348,6 @@ class SQLGenerator:
                 table: set(schema_graph.get_table_columns(table))
                 for table in schema_graph.list_all_tables()
             },
-            metadata=(
-                schema_graph._schema_data.metadata
-                if schema_graph._schema_data
-                else None
-            ),
         )
 
         # Convert LLMSchemaContext to ValidatorSchemaContext for the prompted subset
