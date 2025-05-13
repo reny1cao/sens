@@ -15,6 +15,7 @@ from .models import (
     DatabaseConfig,
     EnvironmentType,
     IntentExtractorConfig,
+    LoggingConfig,
     OpenRouterConfig,
     ResponseBuilderConfig,
     SQLGeneratorConfig,
@@ -35,6 +36,11 @@ class Settings(BaseSettings):
         default="development",
         description="Current environment (development/staging/production)",
         validation_alias="SENS_ENVIRONMENT",
+    )
+
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig,
+        description="Logging configuration",
     )
 
     # Data Paths

@@ -3,47 +3,75 @@
 import logging
 import sys
 import time
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, List
 
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from sens.settings import get_settings
+
 
 def configure_logging() -> None:
-    """Configure structured logging for the application."""
-    # Set up basic logging level
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=logging.INFO,
-    )
+    """Configure structured logging for the application.
+
+    Uses settings to determine:
+    - Log format (json/pretty)
+    - Log level
+    - Color output (for pretty format)
+
+    Always logs to stdout for compatibility with container environments.
+    """
+    settings = get_settings()
+    log_config = settings.logging
+
+    # Set up shared processors
+    shared_processors: List[structlog.typing.Processor] = [
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    # Configure format-specific processors
+    if log_config.format == "pretty":
+        final_processors = shared_processors + [
+            structlog.dev.ConsoleRenderer(
+                colors=log_config.enable_colors,
+                exception_formatter=structlog.dev.plain_traceback,
+            ),
+        ]
+    else:  # "json" format
+        final_processors = shared_processors + [
+            structlog.processors.dict_tracebacks,
+            structlog.processors.JSONRenderer(),
+        ]
 
     # Configure structlog
     structlog.configure(
-        processors=[
-            # If log level is too low, abort pipeline and throw away log entry.
-            structlog.stdlib.filter_by_level,
-            # Add log level to event dict.
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            # Add timestamps
-            structlog.processors.TimeStamper(fmt="iso"),
-            # If the "stack_info" key in the event dict is true, remove it and
-            # render the current stack trace in the "stack" key.
-            structlog.processors.StackInfoRenderer(),
-            # If the "exc_info" key in the event dict is either true or a
-            # sys.exc_info() tuple, remove "exc_info" and render the exception
-            # with traceback into the "exception" key.
-            structlog.processors.format_exc_info,
-            # If some value is in bytes, decode it to unicode
-            structlog.processors.UnicodeDecoder(),
-            # Convert to JSON format
-            structlog.processors.JSONRenderer(),
-        ],
+        processors=final_processors,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
+    )
+
+    # Configure standard logging to use structlog
+    logging.basicConfig(
+        format="%(message)s",
+        stream=sys.stdout,
+        level=getattr(logging, log_config.level),
+    )
+
+    # Log initial configuration
+    log = structlog.get_logger(__name__)
+    log.info(
+        "logging_configured",
+        format=log_config.format,
+        level=log_config.level,
+        colors_enabled=log_config.enable_colors,
     )
 
 

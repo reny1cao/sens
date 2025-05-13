@@ -13,6 +13,41 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 EnvironmentType = Literal["development", "staging", "production"]
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    format: Literal["json", "pretty"] = Field(
+        default="json",
+        description="Log format (json for production, pretty for development)",
+        validation_alias="SENS_LOG_FORMAT",
+    )
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Logging level",
+        validation_alias="SENS_LOG_LEVEL",
+    )
+    enable_colors: bool = Field(
+        default=False,
+        description="Enable colored output in pretty format",
+        validation_alias="SENS_LOG_COLORS",
+    )
+
+    @field_validator("format")
+    def validate_format(cls, v: str) -> str:
+        """Validate log format."""
+        if v not in ("json", "pretty"):
+            raise ValueError("Log format must be either 'json' or 'pretty'")
+        return v
+
+    @field_validator("level")
+    def validate_level(cls, v: str) -> str:
+        """Validate log level."""
+        valid_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        if v not in valid_levels:
+            raise ValueError(f"Log level must be one of: {', '.join(valid_levels)}")
+        return v
+
+
 class OpenRouterConfig(BaseModel):
     """OpenRouter API configuration."""
 
