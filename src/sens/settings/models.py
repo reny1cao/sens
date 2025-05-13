@@ -31,6 +31,10 @@ class LoggingConfig(BaseModel):
         description="Enable colored output in pretty format",
         validation_alias="SENS_LOG_COLORS",
     )
+    environment: Optional[EnvironmentType] = Field(
+        default=None,
+        description="Environment context for logging configuration",
+    )
 
     @field_validator("format")
     def validate_format(cls, v: str) -> str:
@@ -46,6 +50,23 @@ class LoggingConfig(BaseModel):
         if v not in valid_levels:
             raise ValueError(f"Log level must be one of: {', '.join(valid_levels)}")
         return v
+
+    def model_post_init(self, __context):
+        """Post-initialization hook to set environment-aware defaults."""
+        import os
+
+        # Get environment from instance or environment variable
+        environment = self.environment or os.getenv("SENS_ENVIRONMENT", "development")
+
+        # Set format based on environment if not explicitly set via env var
+        if not os.getenv("SENS_LOG_FORMAT"):
+            self.format = "pretty" if environment == "development" else "json"
+
+        # Set colors based on environment and format if not explicitly set via env var
+        if not os.getenv("SENS_LOG_COLORS"):
+            self.enable_colors = (
+                environment == "development" and self.format == "pretty"
+            )
 
 
 class OpenRouterConfig(BaseModel):

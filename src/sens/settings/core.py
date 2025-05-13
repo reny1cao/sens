@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     )
 
     logging: LoggingConfig = Field(
-        default_factory=LoggingConfig,
+        default_factory=lambda: LoggingConfig(),
         description="Logging configuration",
     )
 
@@ -184,7 +184,19 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         """Initialize settings with OpenRouter config and database config."""
+        # Extract logging kwargs before super init
+        logging_kwargs = kwargs.pop("logging", {})
+
+        # Initialize base settings
         super().__init__(**kwargs)
+
+        # Initialize logging with environment
+        object.__setattr__(
+            self,
+            "logging",
+            LoggingConfig(environment=self.environment, **logging_kwargs),
+        )
+
         # Initialize OpenRouter config
         if not self.openrouter and self.openrouter_api_key:
             object.__setattr__(
