@@ -27,9 +27,10 @@ from sens.retrieval.orchestrator import RetrievalOrchestrator
 from sens.retrieval.token.builder import TokenIndexBuilder
 from sens.schema.graph import SchemaGraph
 from sens.schema.schema_extractor import DatabaseSchema, SchemaExtractor
+from sens.settings import get_settings
 
 # Configure structured logging
-log = structlog.get_logger()
+log = structlog.get_logger(__name__)
 
 
 class TokenIndexCLIAdapter:
@@ -40,6 +41,7 @@ class TokenIndexCLIAdapter:
         self.builder = TokenIndexBuilder()
         self.index = None
         self.schema_graph = SchemaGraph.get_instance()
+        self.settings = get_settings()
 
     async def initialize(self):
         """Build or load the token index."""
@@ -49,15 +51,31 @@ class TokenIndexCLIAdapter:
             # Run synchronous build_index in a thread pool
             self.builder.build_index(table_names)
             self.index = self.builder.index
-            log.info("token_index_initialized", table_count=len(table_names))
+            log.info(
+                "token_index_initialized",
+                table_count=len(table_names),
+                environment=self.settings.environment,
+            )
         except Exception as e:
-            log.error("token_index_initialization_failed", error=str(e))
+            log.error(
+                "token_index_initialization_failed",
+                error=str(e),
+                error_type=e.__class__.__name__,
+                environment=self.settings.environment,
+            )
             raise RuntimeError(f"Failed to initialize token index: {e}")
 
     async def search(self, query: str, k: int = 5) -> List[RetrievedColumn]:
         """Search the token index for relevant columns."""
         if not self.index:
             raise RuntimeError("Token index not initialized")
+
+        log.debug(
+            "token_index_search",
+            query=query,
+            k=k,
+            environment=self.settings.environment,
+        )
 
         # Convert token matches to RetrievedColumn objects
         results = []
@@ -70,6 +88,12 @@ class TokenIndexCLIAdapter:
                     source="token",
                 )
             )
+
+        log.debug(
+            "token_index_search_complete",
+            result_count=len(results),
+            environment=self.settings.environment,
+        )
         return results
 
 
@@ -79,18 +103,34 @@ class EmbeddingSearchCLIAdapter:
     def __init__(self):
         """Initialize the embedding search adapter."""
         self.search = EmbeddingSearch()
+        self.settings = get_settings()
 
     async def initialize(self):
         """Initialize the embedding search index."""
         try:
             self.search.load_index()
-            log.info("embedding_search_initialized")
+            log.info(
+                "embedding_search_initialized",
+                environment=self.settings.environment,
+            )
         except Exception as e:
-            log.error("embedding_search_initialization_failed", error=str(e))
+            log.error(
+                "embedding_search_initialization_failed",
+                error=str(e),
+                error_type=e.__class__.__name__,
+                environment=self.settings.environment,
+            )
             raise RuntimeError(f"Failed to initialize embedding search: {e}")
 
     async def search_similar(self, query: str, k: int = 5) -> List[RetrievedColumn]:
         """Search for semantically similar columns."""
+        log.debug(
+            "embedding_search",
+            query=query,
+            k=k,
+            environment=self.settings.environment,
+        )
+
         # Convert embedding search results to RetrievedColumn objects
         results = []
         for table_name, column_name, score in self.search.search(query, k=k):
@@ -102,6 +142,12 @@ class EmbeddingSearchCLIAdapter:
                     source="embedding",
                 )
             )
+
+        log.debug(
+            "embedding_search_complete",
+            result_count=len(results),
+            environment=self.settings.environment,
+        )
         return results
 
 
@@ -110,6 +156,7 @@ class NL2SQLPipeline:
 
     def __init__(self):
         """Initialize pipeline components."""
+        self.settings = get_settings()
         self.schema_graph = SchemaGraph.get_instance()
         self.schema_extractor = SchemaExtractor()
         self.token_index = TokenIndexCLIAdapter()
@@ -124,6 +171,11 @@ class NL2SQLPipeline:
         self.orchestrator = None
         # Will be loaded during initialization
         self.schema_data = None
+
+        log.info(
+            "nl2sql_pipeline_created",
+            environment=self.settings.environment,
+        )
 
     async def initialize(self):
         """Initialize all pipeline components."""
@@ -144,10 +196,19 @@ class NL2SQLPipeline:
                 Path(self.schema_graph.schema_path).read_text()
             )
 
-            log.info("pipeline_initialized")
+            log.info(
+                "pipeline_initialized",
+                schema_path=str(self.schema_graph.schema_path),
+                environment=self.settings.environment,
+            )
 
         except Exception as e:
-            log.error("pipeline_initialization_failed", error=str(e))
+            log.error(
+                "pipeline_initialization_failed",
+                error=str(e),
+                error_type=e.__class__.__name__,
+                environment=self.settings.environment,
+            )
             raise RuntimeError(f"Failed to initialize pipeline: {e}")
 
     async def process_question(self, question: str, k: int = 5) -> Dict:
@@ -163,7 +224,12 @@ class NL2SQLPipeline:
         """
         try:
             # Step 1: Schema Retrieval
-            log.info("retrieving_schema_context", question=question)
+            log.info(
+                "retrieving_schema_context",
+                question=question,
+                k=k,
+                environment=self.settings.environment,
+            )
             context = await self.orchestrator.get_relevant_context(
                 question=question, k=k
             )
@@ -175,15 +241,29 @@ class NL2SQLPipeline:
             )
 
             # Step 2: Intent Extraction
-            log.info("extracting_intent")
+            log.info(
+                "extracting_intent",
+                question=question,
+                environment=self.settings.environment,
+            )
             intent = await self.intent_extractor.extract(
                 question=question, schema_snippet=schema_snippet
             )
 
             # Step 3: Intent Validation
-            log.info("validating_intent")
+            log.info(
+                "validating_intent",
+                question=question,
+                environment=self.settings.environment,
+            )
             validation_result = self.intent_validator.validate(intent)
             if isinstance(validation_result, ClarificationRequest):
+                log.info(
+                    "clarification_needed",
+                    reason=validation_result.reason,
+                    message=validation_result.message,
+                    environment=self.settings.environment,
+                )
                 return {
                     "status": "clarification_needed",
                     "message": validation_result.message,
@@ -191,52 +271,36 @@ class NL2SQLPipeline:
                 }
 
             # Step 4: SQL Generation - only proceed if we have a ValidIntent
-            log.info("generating_sql")
+            log.info(
+                "generating_sql",
+                question=question,
+                environment=self.settings.environment,
+            )
             start_time = time.time()
             sql_result = await self.sql_generator.generate(
                 question=question,
                 intent=validation_result,  # validation_result is ValidIntent here
             )
 
-            # Step 5: Execute SQL
-            log.info("executing_sql", sql=sql_result.sql)
-            query_result = self.sql_executor.execute(sql_result.sql)
+            # Log successful completion
+            log.info(
+                "question_processed",
+                question=question,
+                duration=time.time() - start_time,
+                environment=self.settings.environment,
+            )
 
-            # Calculate total processing time
-            processing_time = int((time.time() - start_time) * 1000)
-
-            return {
-                "status": "success",
-                "sql": sql_result.sql,
-                "result": query_result,
-                "metadata": {
-                    "tables_used": sql_result.tables_used,
-                    "columns_used": sql_result.columns_used,
-                    "processing_time_ms": processing_time,
-                    "token_usage": (
-                        sql_result.token_usage.model_dump()
-                        if sql_result.token_usage
-                        else None
-                    ),
-                },
-            }
+            return sql_result
 
         except Exception as e:
-            log.error("pipeline_error", error=str(e), question=question)
-            error_type = type(e).__name__
-            error_details = {"question": question}
-
-            if hasattr(e, "details"):
-                error_details.update(e.details)
-            if hasattr(intent, "model_dump"):
-                error_details["intent"] = intent.model_dump()
-
-            return {
-                "status": "error",
-                "error_type": error_type,
-                "message": str(e),
-                "details": error_details,
-            }
+            log.error(
+                "question_processing_failed",
+                error=str(e),
+                error_type=e.__class__.__name__,
+                question=question,
+                environment=self.settings.environment,
+            )
+            raise
 
 
 async def main():

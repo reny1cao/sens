@@ -13,6 +13,81 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 EnvironmentType = Literal["development", "staging", "production"]
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+
+    format: Literal["json", "pretty"] = Field(
+        default="pretty",
+        description="Log format (json for production, pretty for development)",
+        validation_alias="SENS_LOG_FORMAT",
+    )
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Logging level",
+        validation_alias="SENS_LOG_LEVEL",
+    )
+    enable_colors: bool = Field(
+        default=True,
+        description="Enable colored output in pretty format",
+        validation_alias="SENS_LOG_COLORS",
+    )
+    environment: Optional[EnvironmentType] = Field(
+        default=None,
+        description="Environment context for logging configuration",
+    )
+    verbose: bool = Field(
+        default=False,
+        description="Enable verbose (DEBUG) logging",
+    )
+
+    @field_validator("format")
+    def validate_format(cls, v: str) -> str:
+        """Validate log format."""
+        if v not in ("json", "pretty"):
+            raise ValueError("Log format must be either 'json' or 'pretty'")
+        return v
+
+    @field_validator("level")
+    def validate_level(cls, v: str) -> str:
+        """Validate log level."""
+        valid_levels = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        if v not in valid_levels:
+            raise ValueError(f"Log level must be one of: {', '.join(valid_levels)}")
+        return v
+
+    def model_post_init(self, __context):
+        """Post-initialization hook to set environment-aware defaults."""
+        import os
+
+        # Get environment from instance or environment variable
+        environment = self.environment or os.getenv("SENS_ENVIRONMENT", "development")
+
+        # Only change format and colors away from defaults if:
+        # 1. We're not in development environment AND
+        # 2. The values weren't explicitly set via environment variables
+        if environment != "development":
+            # If format wasn't explicitly set via env var, use json for non-dev
+            if not os.getenv("SENS_LOG_FORMAT"):
+                self.format = "json"
+
+            # If colors weren't explicitly set via env var, disable for non-dev
+            if not os.getenv("SENS_LOG_COLORS"):
+                self.enable_colors = False
+
+        # Override level if verbose mode is enabled
+        if self.verbose:
+            self.level = "DEBUG"
+
+        # Store environment for future reference
+        self.environment = environment
+
+    def with_updates(self, **kwargs) -> "LoggingConfig":
+        """Create a new LoggingConfig instance with updated values."""
+        current_dict = self.model_dump()
+        current_dict.update(kwargs)
+        return LoggingConfig(**current_dict)
+
+
 class OpenRouterConfig(BaseModel):
     """OpenRouter API configuration."""
 
