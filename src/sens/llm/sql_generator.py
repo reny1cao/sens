@@ -9,6 +9,7 @@ import structlog
 from jinja2 import Environment, FileSystemLoader
 from openai import OpenAI
 
+from sens.caching.llm_cache import LLMResponseCache
 from sens.schema.context import LLMSchemaContext, ValidatorSchemaContext
 from sens.schema.graph import SchemaGraph
 from sens.settings import get_llm_settings, get_settings
@@ -97,6 +98,9 @@ class SQLGenerator:
             api_key=openrouter_config["api_key"],
             default_headers=openrouter_config["headers"],
         )
+
+        # Initialize LLM response cache
+        self.llm_cache = LLMResponseCache()
 
         log.info(
             "sql_generator_initialized",
@@ -462,6 +466,32 @@ class SQLGenerator:
                 # Fallback to building from intent (backward compatibility)
                 schema = self._build_schema_context(intent)
 
+            # Check cache first
+            # Convert schema context to dict for caching
+            schema_dict = {
+                "tables": list(schema.tables),
+                "tables_columns": schema.tables_columns,
+                "primary_keys": schema.primary_keys,
+                "foreign_keys": schema.foreign_keys,
+                "column_descriptions": schema.column_descriptions,
+                "sticky_columns": schema.sticky_columns,
+            }
+
+            cached_sql = await self.llm_cache.get_cached_sql(
+                question=question,
+                intent=intent.original_intent.model_dump(),
+                schema_context=schema_dict,
+                model=self.primary_model,
+            )
+
+            if cached_sql:
+                log.info(
+                    "sql_generation_cache_hit",
+                    question=question,
+                    cached_sql=cached_sql.sql,
+                )
+                return cached_sql
+
             # Render prompt with question, intent, and schema
             prompt = self._render_prompt(question, intent, schema)
 
@@ -493,6 +523,15 @@ class SQLGenerator:
                 token_usage=token_usage,
                 model_used=model_used,
                 generation_ms=generation_ms,
+            )
+
+            # Cache the generated SQL
+            await self.llm_cache.cache_sql(
+                question=question,
+                intent=intent.original_intent.model_dump(),
+                schema_context=schema_dict,
+                model=model_used,
+                generated_sql=result,
             )
 
             log.info(

@@ -237,3 +237,61 @@ class ResponseBuilderConfig(ModelConfig):
         default=30,
         description="Timeout in seconds for response generation requests",
     )
+
+
+class CacheConfig(BaseModel):
+    """Cache configuration."""
+
+    backend: Literal["redis", "memory"] = Field(
+        default="memory",
+        description="Cache backend to use",
+        validation_alias="SENS_CACHE_BACKEND",
+    )
+    redis_host: str = Field(
+        default="localhost",
+        description="Redis host",
+        validation_alias="SENS_CACHE_REDIS_HOST",
+    )
+    redis_port: int = Field(
+        default=6379,
+        description="Redis port",
+        gt=0,
+        le=65535,
+        validation_alias="SENS_CACHE_REDIS_PORT",
+    )
+    redis_db: int = Field(
+        default=0,
+        description="Redis database number",
+        ge=0,
+        validation_alias="SENS_CACHE_REDIS_DB",
+    )
+    redis_password: Optional[str] = Field(
+        default=None,
+        description="Redis password",
+        repr=False,
+        validation_alias="SENS_CACHE_REDIS_PASSWORD",
+    )
+    ttl_seconds: int = Field(
+        default=3600,
+        description="Default TTL in seconds (1 hour)",
+        gt=0,
+        validation_alias="SENS_CACHE_TTL_SECONDS",
+    )
+    embedding_ttl_hours: int = Field(
+        default=24,
+        description="TTL for embedding cache in hours",
+        gt=0,
+        validation_alias="SENS_CACHE_EMBEDDING_TTL_HOURS",
+    )
+    llm_ttl_hours: int = Field(
+        default=12,
+        description="TTL for LLM response cache in hours",
+        gt=0,
+        validation_alias="SENS_CACHE_LLM_TTL_HOURS",
+    )
+    schema_ttl_hours: int = Field(
+        default=1,
+        description="TTL for schema cache in hours",
+        gt=0,
+        validation_alias="SENS_CACHE_SCHEMA_TTL_HOURS",
+    )

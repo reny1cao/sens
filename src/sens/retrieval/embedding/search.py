@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 # Defer FAISS and SentenceTransformer imports
 import numpy as np
 
+from sens.caching.factory import get_cache_manager, get_cache_ttl
 from sens.settings import get_settings
 
 # Configure structured logging
@@ -43,6 +44,7 @@ class EmbeddingSearch:
         self.dimension = dimension
         self.index = None
         self.lookup: Dict[int, Tuple[str, str]] = {}  # id -> (table, column)
+        self._cache_manager = None
 
     @property
     def model(self):
@@ -52,6 +54,13 @@ class EmbeddingSearch:
 
             self._model = SentenceTransformer(self.model_name)
         return self._model
+
+    @property
+    def cache_manager(self):
+        """Lazy load the cache manager."""
+        if self._cache_manager is None:
+            self._cache_manager = get_cache_manager()
+        return self._cache_manager
 
     def _build_column_text(self, table: str, column: str, description: str = "") -> str:
         """Build the text representation for a column.
@@ -162,7 +171,7 @@ class EmbeddingSearch:
             },
         )
 
-    def search(self, query: str, k: int = 20) -> List[Tuple[str, str, float]]:
+    async def search(self, query: str, k: int = 20) -> List[Tuple[str, str, float]]:
         """Search for the most relevant columns given a query.
 
         Args:
@@ -172,6 +181,25 @@ class EmbeddingSearch:
         Returns:
             List of (table, column, score) tuples sorted by relevance
         """
+        # Try to get from cache first
+        cache_key = self.cache_manager.generate_key(
+            "embedding_search", query=query, k=k
+        )
+        cached_results = await self.cache_manager.get(cache_key)
+
+        if cached_results is not None:
+            logger.info(
+                "Embedding search cache hit",
+                extra={
+                    "phase": "embed_search",
+                    "action": "cache_hit",
+                    "query": query,
+                    "num_results": len(cached_results),
+                },
+            )
+            return cached_results
+
+        # Load index if needed
         if self.index is None:
             self.load_index()
 
@@ -191,6 +219,10 @@ class EmbeddingSearch:
             if idx >= 0  # Filter out invalid indices
         ]
 
+        # Cache the results
+        ttl = get_cache_ttl("embedding")
+        await self.cache_manager.set(cache_key, results, ttl)
+
         logger.info(
             "Performed embedding search",
             extra={
@@ -204,6 +236,54 @@ class EmbeddingSearch:
                 ],
             },
         )
+
+        return results
+
+    def search_sync(self, query: str, k: int = 20) -> List[Tuple[str, str, float]]:
+        """Synchronous version of search for backward compatibility.
+
+        Args:
+            query: The search query
+            k: Number of results to return
+
+        Returns:
+            List of (table, column, score) tuples sorted by relevance
+        """
+        import asyncio
+
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Run async method in sync context
+        if loop.is_running():
+            # If loop is already running, we can't use run_until_complete
+            # This shouldn't happen in normal usage, but handle it gracefully
+            return self._search_no_cache(query, k)
+        else:
+            return loop.run_until_complete(self.search(query, k))
+
+    def _search_no_cache(self, query: str, k: int = 20) -> List[Tuple[str, str, float]]:
+        """Internal search method without caching for edge cases."""
+        if self.index is None:
+            self.load_index()
+
+        # Encode query
+        query_embedding = self.model.encode(query, convert_to_tensor=True)
+        query_embedding = query_embedding.cpu().numpy().reshape(1, -1)
+
+        # Search
+        scores, indices = self.index.search(query_embedding, k)
+
+        # Format results
+        results = [
+            (self.lookup[idx][0], self.lookup[idx][1], float(score))
+            for score, idx in zip(scores[0], indices[0])
+            if idx >= 0
+        ]
 
         return results
 
@@ -240,4 +320,4 @@ def top_columns(query: str, k: int = 20) -> List[Tuple[str, str, float]]:
         List of (table, column, score) tuples sorted by relevance
     """
     search = get_embedding_search()
-    return search.search(query, k)
+    return search.search_sync(query, k)

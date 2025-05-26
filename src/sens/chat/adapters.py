@@ -58,8 +58,8 @@ class ChatEmbeddingAdapter:
     async def search(self, query: str, k: int = 5) -> List[RetrievedColumn]:
         if not self._initialized:
             await self._initialize()
-        # Run the synchronous search in a thread
-        results = await asyncio.to_thread(self.embedding_search.search, query, k)
+        # Use the async search method directly
+        results = await self.embedding_search.search(query, k)
         # Convert List[Tuple[str, str, float]] to List[RetrievedColumn]
         return [
             RetrievedColumn(table_name=t, column_name=c, score=s, source="embedding")
