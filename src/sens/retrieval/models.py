@@ -34,8 +34,40 @@ class RetrievedContext:
     columns: List[RetrievedColumn] = field(default_factory=list)
     # Optional: Add overall confidence or other top-level metadata if needed
 
-    def format_for_llm(self) -> Dict[str, Any]:
-        """Format the retrieved context in a structure suitable for LLM consumption."""
+    def get_tables_dict(self) -> Dict[str, RetrievedTable]:
+        """Get tables as a dictionary keyed by table name."""
+        return {table.table_name: table for table in self.tables}
+
+    def get_columns_by_table(self) -> Dict[str, List[RetrievedColumn]]:
+        """Get columns grouped by table name."""
+        result = {}
+        for col in self.columns:
+            if col.table_name not in result:
+                result[col.table_name] = []
+            result[col.table_name].append(col)
+        return result
+
+    def format_for_llm(self) -> str:
+        """Format the retrieved context as a string suitable for LLM consumption."""
+        # Group columns by table
+        table_columns = self.get_columns_by_table()
+
+        # Format each table
+        parts = []
+        for table in self.tables:
+            columns = table_columns.get(table.table_name, [])
+            column_names = sorted([col.column_name for col in columns])
+            columns_str = ", ".join(column_names)
+
+            table_def = f"TABLE {table.table_name} ({columns_str})"
+            if table.metadata.get("description"):
+                table_def += f"\n-- {table.metadata['description']}"
+            parts.append(table_def)
+
+        return "\n\n".join(parts)
+
+    def format_for_llm_dict(self) -> Dict[str, Any]:
+        """Format the retrieved context in a dictionary structure suitable for LLM consumption."""
         return {
             "query": self.query,
             "tables": [

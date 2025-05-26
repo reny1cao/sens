@@ -32,6 +32,10 @@ from sens.retrieval.embedding.search import EmbeddingSearch
 from sens.retrieval.orchestrator import RetrievalOrchestrator
 from sens.retrieval.token.builder import TokenIndexBuilder
 from sens.schema.graph import SchemaGraph
+from sens.schema.unified_context import (
+    SchemaContextStrategy,
+    UnifiedSchemaContextBuilder,
+)
 from sens.settings import get_settings
 from sens.validation.context_converter import to_validator_schema
 from sens.validation.sql_validator import SQLValidator
@@ -70,6 +74,7 @@ class ChatOrchestrator:
         self.sql_validator = SQLValidator()
         self.sql_executor = SQLExecutor()
         self.response_builder = ResponseBuilder()
+        self.context_builder = UnifiedSchemaContextBuilder()
         log.info("chat_orchestrator_initialized")
 
     async def step(
@@ -146,7 +151,7 @@ class ChatOrchestrator:
                 with track_step(metrics, "intent_extraction") as step:
                     intent = await self.intent_extractor.extract(
                         question=user_input,
-                        schema_snippet=context.format_for_llm(),
+                        schema_snippet=context,  # Pass the RetrievedContext directly
                     )
                     step.metadata["query_type"] = intent.query_type
                     step.metadata["confidence"] = intent.confidence
@@ -188,6 +193,13 @@ class ChatOrchestrator:
                     self.session_manager.save(state.conversation_id, state)
                 return clarification_response, state
 
+            # Build unified schema context
+            llm_context, validator_context = self.context_builder.build_from_retrieval(
+                retrieved_context=context,
+                intent=validation_result,
+                include_all_columns=True,  # Use aggressive strategy to include all columns
+            )
+
             # Only proceed with SQL generation if validation passed
             log.info("generating_sql")
             try:
@@ -195,6 +207,7 @@ class ChatOrchestrator:
                     sql_result = await self.sql_generator.generate(
                         question=user_input,
                         intent=validation_result,
+                        schema_context=llm_context,
                     )
                     step.metadata["tables_used"] = sql_result.tables_used
                     step.metadata["columns_used"] = sql_result.columns_used
@@ -215,9 +228,9 @@ class ChatOrchestrator:
             # Continue with execution and response building
             log.info("executing_sql", sql=sql_result.sql)
             with track_step(metrics, "sql_validation") as step:
-                validator_schema = to_validator_schema(context)
+                # Use the unified validator context
                 sql_validation = self.sql_validator.validate(
-                    sql_result.sql, validator_schema
+                    sql_result.sql, validator_context
                 )
                 step.metadata["is_valid"] = sql_validation.is_valid
                 if not sql_validation.is_valid:
