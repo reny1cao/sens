@@ -194,6 +194,14 @@ class GeneratedSQL(BaseModel):
         None,
         description="Time taken to generate the SQL in milliseconds",
     )
+    cached: bool = Field(
+        False,
+        description="Whether this result was retrieved from cache",
+    )
+    timestamp: Optional[Any] = Field(
+        None,
+        description="Timestamp when the SQL was generated",
+    )
 
     model_config = {
         "json_schema_extra": {

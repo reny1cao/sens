@@ -12,6 +12,7 @@ from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .models import (
+    CacheConfig,
     DatabaseConfig,
     EnvironmentType,
     IntentExtractorConfig,
@@ -119,6 +120,12 @@ class Settings(BaseSettings):
     response_builder: ResponseBuilderConfig = Field(
         default_factory=ResponseBuilderConfig,
         description="Response builder component configuration",
+    )
+
+    # Cache configuration
+    cache: CacheConfig = Field(
+        default_factory=CacheConfig,
+        description="Cache configuration",
     )
 
     # API Security Settings
