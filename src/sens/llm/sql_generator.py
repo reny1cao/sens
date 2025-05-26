@@ -3,7 +3,7 @@
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
@@ -426,7 +426,12 @@ class SQLGenerator:
 
         return tables_used, columns_used
 
-    async def generate(self, question: str, intent: ValidIntent) -> GeneratedSQL:
+    async def generate(
+        self,
+        question: str,
+        intent: ValidIntent,
+        schema_context: Optional[LLMSchemaContext] = None,
+    ) -> GeneratedSQL:
         """
         Generate a SQL query from a natural language question and validated intent.
 
@@ -443,8 +448,19 @@ class SQLGenerator:
         try:
             start_time = time.time()
 
-            # Build schema context for relevant tables
-            schema = self._build_schema_context(intent)
+            # Use provided schema context or build from intent
+            if schema_context:
+                # If it's already an LLMSchemaContext, use it directly
+                if isinstance(schema_context, LLMSchemaContext):
+                    schema = schema_context
+                else:
+                    # Convert from other formats if needed
+                    raise ValueError(
+                        f"Unexpected schema_context type: {type(schema_context)}"
+                    )
+            else:
+                # Fallback to building from intent (backward compatibility)
+                schema = self._build_schema_context(intent)
 
             # Render prompt with question, intent, and schema
             prompt = self._render_prompt(question, intent, schema)

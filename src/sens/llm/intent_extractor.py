@@ -250,25 +250,8 @@ class IntentExtractor:
                 schema_snippet = RetrievedSchemaContext.model_validate(schema_snippet)
                 schema_snippet = schema_snippet.format_for_llm()
         elif isinstance(schema_snippet, RetrievedContext):
-            # Convert RetrievedContext to string format using model_dump()
-            context_dict = schema_snippet.model_dump()
-            table_columns = {}
-            for col in context_dict["columns"]:
-                table_name = col["table_name"]
-                if table_name not in table_columns:
-                    table_columns[table_name] = []
-                table_columns[table_name].append(col["column_name"])
-
-            parts = []
-            for table in context_dict["tables"]:
-                columns_str = ", ".join(
-                    sorted(table_columns.get(table["table_name"], []))
-                )
-                table_def = f"TABLE {table['table_name']} ({columns_str})"
-                if table.get("metadata", {}).get("description"):
-                    table_def += f"\n-- {table['metadata']['description']}"
-                parts.append(table_def)
-            schema_snippet = "\n\n".join(parts)
+            # Use the format_for_llm method directly
+            schema_snippet = schema_snippet.format_for_llm()
         elif isinstance(schema_snippet, RetrievedSchemaContext):
             schema_snippet = schema_snippet.format_for_llm()
 

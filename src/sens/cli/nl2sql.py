@@ -24,7 +24,8 @@ from sens.postprocessing.response_builder import ResponseBuilder
 from sens.retrieval.embedding.search import EmbeddingSearch
 from sens.retrieval.models import RetrievedColumn
 from sens.retrieval.orchestrator import RetrievalOrchestrator
-from sens.retrieval.token.builder import TokenIndexBuilder
+from sens.retrieval.token.enhanced_builder import EnhancedTokenIndexBuilder
+from sens.retrieval.token.enhanced_models import SchemaItem
 from sens.schema.graph import SchemaGraph
 from sens.schema.schema_extractor import DatabaseSchema, SchemaExtractor
 from sens.settings import get_settings
@@ -38,7 +39,7 @@ class TokenIndexCLIAdapter:
 
     def __init__(self):
         """Initialize the token index adapter."""
-        self.builder = TokenIndexBuilder()
+        self.builder = EnhancedTokenIndexBuilder()  # Use enhanced builder
         self.index = None
         self.schema_graph = SchemaGraph.get_instance()
         self.settings = get_settings()
@@ -46,16 +47,53 @@ class TokenIndexCLIAdapter:
     async def initialize(self):
         """Build or load the token index."""
         try:
-            # Get table names from schema graph
+            # Get schema information from schema graph
             table_names = self.schema_graph.list_all_tables()
-            # Run synchronous build_index in a thread pool
-            self.builder.build_index(table_names)
+
+            # Create schema items list
+            schema_items = []
+
+            # Add tables
+            for table_name in table_names:
+                schema_items.append(
+                    SchemaItem(
+                        name=table_name,
+                        item_type="table",
+                    )
+                )
+
+                # Add columns for each table
+                columns = self.schema_graph.get_table_columns(table_name)
+                for column_name in columns:
+                    schema_items.append(
+                        SchemaItem(
+                            name=column_name,
+                            item_type="column",
+                            parent_table=table_name,
+                            metadata={
+                                "is_pk": column_name
+                                in self.schema_graph.get_table_pks(table_name),
+                                "is_fk": column_name
+                                in self.schema_graph.get_table_fks_involved(
+                                    table_name, table_names
+                                ),
+                            },
+                        )
+                    )
+
+            # Build the enhanced index
+            self.builder.build_index(schema_items)
             self.index = self.builder.index
+
             log.info(
                 "token_index_initialized",
                 table_count=len(table_names),
+                column_count=len(
+                    [item for item in schema_items if item.item_type == "column"]
+                ),
                 environment=self.settings.environment,
             )
+
         except Exception as e:
             log.error(
                 "token_index_initialization_failed",
@@ -66,7 +104,7 @@ class TokenIndexCLIAdapter:
             raise RuntimeError(f"Failed to initialize token index: {e}")
 
     async def search(self, query: str, k: int = 5) -> List[RetrievedColumn]:
-        """Search the token index for relevant columns."""
+        """Search the token index for relevant columns and tables."""
         if not self.index:
             raise RuntimeError("Token index not initialized")
 
@@ -77,21 +115,30 @@ class TokenIndexCLIAdapter:
             environment=self.settings.environment,
         )
 
-        # Convert token matches to RetrievedColumn objects
+        # Use the enhanced search functionality
+        matches = self.builder.search(query, k=k)
+
+        # Convert TokenMatch objects to RetrievedColumn objects
         results = []
-        for table_name, score in self.index.search(query, k=k):
+        for match in matches:
             results.append(
                 RetrievedColumn(
-                    table_name=table_name,
-                    column_name="*",  # Token index matches are at table level
-                    score=score,
+                    table_name=match.table_name,
+                    column_name=match.column_name
+                    or "*",  # Use "*" for table-level matches
+                    score=match.score,
                     source="token",
+                    metadata={
+                        "match_type": match.match_type,
+                        "token_overlap": match.token_overlap,
+                    },
                 )
             )
 
         log.debug(
             "token_index_search_complete",
             result_count=len(results),
+            match_types={r.metadata["match_type"]: r.score for r in results},
             environment=self.settings.environment,
         )
         return results
