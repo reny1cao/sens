@@ -4,14 +4,16 @@ This module provides an optimized version of schema retrieval that leverages
 pre-computed indexes for faster performance.
 """
 
+import time
 from datetime import timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import structlog
 
 from sens.caching.manager import CacheManager
 from sens.exceptions import RetrievalError
 from sens.monitoring.metrics import PipelineMetrics, track_step
+from sens.monitoring.metrics_collector import RetrievalMetricsCollector, track_latency
 from sens.schema.context import LLMSchemaContext
 from sens.schema.graph import SchemaGraph
 from sens.schema.precomputed_index import PrecomputedSchemaIndex
@@ -63,6 +65,9 @@ class OptimizedSchemaRetriever:
             token_index, embedding_index, schema_graph
         )
 
+        # Initialize metrics collector
+        self.metrics_collector = RetrievalMetricsCollector()
+
         log.info(
             "optimized_retriever_initialized",
             caching_enabled=self.enable_caching,
@@ -113,6 +118,10 @@ class OptimizedSchemaRetriever:
 
     async def _retrieve_context(self, question: str, k: int) -> RetrievedContext:
         """Internal method to retrieve context with optimizations."""
+        # Start metrics collection
+        self.metrics_collector.start_retrieval(question)
+        start_time = time.perf_counter()
+
         try:
             # Phase 1: Get initial search results (parallelized)
             token_hits, embedding_hits = await self._parallel_search(question, k)
@@ -129,17 +138,35 @@ class OptimizedSchemaRetriever:
             # Phase 3: Fast schema expansion using pre-computed indexes
             expanded_context = self._fast_expand_schema(merged_columns, k, question)
 
+            # Record retrieved schema for metrics
+            retrieved_tables = {table.table_name for table in expanded_context.tables}
+            retrieved_columns = {
+                (col.table_name, col.column_name) for col in expanded_context.columns
+            }
+            self.metrics_collector.record_retrieved_schema(
+                retrieved_tables, retrieved_columns
+            )
+
+            # Complete metrics collection
+            total_ms = (time.perf_counter() - start_time) * 1000
+            self.metrics_collector.complete_retrieval(total_ms)
+
             log.info(
                 "optimized_retrieval_complete",
                 question=question[:50],
                 initial_hits=len(merged_columns),
                 final_tables=len(expanded_context.tables),
                 final_columns=len(expanded_context.columns),
+                total_ms=total_ms,
             )
 
             return expanded_context
 
         except Exception as e:
+            # Complete metrics even on error
+            total_ms = (time.perf_counter() - start_time) * 1000
+            self.metrics_collector.complete_retrieval(total_ms)
+
             log.error(
                 "optimized_retrieval_failed",
                 error=str(e),
@@ -165,9 +192,27 @@ class OptimizedSchemaRetriever:
 
     async def _safe_search(self, index, question: str, k: int) -> List[RetrievedColumn]:
         """Safe wrapper for search operations."""
+        search_type = (
+            "token" if "token" in index.__class__.__name__.lower() else "embedding"
+        )
+        start_time = time.perf_counter()
+
         try:
-            return await index.search(question, k=k)
+            result = await index.search(question, k=k)
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
+            # Track search latency (cache hit detection would need to be implemented in the index)
+            self.metrics_collector.record_search_latency(
+                search_type, latency_ms, cache_hit=False
+            )
+
+            return result
         except Exception as e:
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            self.metrics_collector.record_search_latency(
+                search_type, latency_ms, cache_hit=False
+            )
+
             log.warning(
                 f"{index.__class__.__name__}_search_failed",
                 error=str(e),

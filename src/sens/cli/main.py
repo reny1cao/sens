@@ -397,6 +397,46 @@ def handle_validate(args: argparse.Namespace, log: structlog.BoundLogger) -> Non
         sys.exit(1)
 
 
+def handle_performance(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
+    """Handle performance metrics command.
+
+    Args:
+        args: Command line arguments
+        log: Logger instance
+    """
+    try:
+        from sens.cli.commands.performance import metrics, performance, reset, slowest
+
+        if args.perf_command == "metrics":
+            # Convert args to click context
+            import click
+
+            ctx = click.Context(metrics)
+            ctx.params = {
+                "format": args.format,
+                "component": args.component,
+            }
+            metrics.invoke(ctx)
+        elif args.perf_command == "slowest":
+            import click
+
+            ctx = click.Context(slowest)
+            ctx.params = {"top": args.top}
+            slowest.invoke(ctx)
+        elif args.perf_command == "reset":
+            import click
+
+            ctx = click.Context(reset)
+            reset.invoke(ctx)
+        else:
+            log.error("unknown_performance_subcommand", command=args.perf_command)
+            sys.exit(1)
+
+    except Exception as e:
+        log.error("performance_command_failed", error=str(e))
+        sys.exit(1)
+
+
 def handle_execute(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle SQL execution command.
 
@@ -609,6 +649,34 @@ def main() -> None:
         "-j", "--json", action="store_true", help="Output in JSON format"
     )
 
+    # Performance metrics command
+    perf_parser = subparsers.add_parser("performance", help="View performance metrics")
+    perf_subparsers = perf_parser.add_subparsers(
+        dest="perf_command", help="Performance subcommands"
+    )
+
+    # Performance metrics subcommand
+    metrics_parser = perf_subparsers.add_parser(
+        "metrics", help="Show performance metrics summary"
+    )
+    metrics_parser.add_argument(
+        "-f",
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format",
+    )
+    metrics_parser.add_argument("-c", "--component", help="Filter by component")
+
+    # Slowest queries subcommand
+    slowest_parser = perf_subparsers.add_parser("slowest", help="Show slowest queries")
+    slowest_parser.add_argument(
+        "-n", "--top", type=int, default=10, help="Number of queries to show"
+    )
+
+    # Reset metrics subcommand
+    perf_subparsers.add_parser("reset", help="Reset performance metrics")
+
     args = parser.parse_args()
 
     # Configure logging first, before any other operations
@@ -630,6 +698,8 @@ def main() -> None:
         handle_validate(args, log)
     elif args.command == "execute":
         handle_execute(args, log)
+    elif args.command == "performance":
+        handle_performance(args, log)
 
 
 if __name__ == "__main__":
