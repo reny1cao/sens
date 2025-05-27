@@ -243,6 +243,57 @@ def handle_build_index(args: argparse.Namespace, log: structlog.BoundLogger) -> 
         sys.exit(1)
 
 
+def handle_build_schema_index(
+    args: argparse.Namespace, log: structlog.BoundLogger
+) -> None:
+    """Handle schema index building command.
+
+    Args:
+        args: Command line arguments
+        log: Logger instance
+    """
+    try:
+        # Import here to avoid loading dependencies unless needed
+        from sens.schema.precomputed_index import PrecomputedSchemaIndex
+
+        settings = get_settings()
+        schema_path = args.schema or Path(settings.schema_path)
+
+        if not schema_path.exists():
+            log.error("schema_file_not_found", path=str(schema_path))
+            sys.exit(1)
+
+        # Clear cache if force flag is set
+        if args.force:
+            cache_dir = Path.home() / ".sens" / "schema_cache"
+            cache_file = cache_dir / "precomputed_index.pkl"
+            if cache_file.exists():
+                cache_file.unlink()
+                log.info("cleared_existing_cache")
+
+        # Build pre-computed indexes
+        index = PrecomputedSchemaIndex()
+
+        # Log statistics
+        log.info(
+            "schema_index_built",
+            schema_path=str(schema_path),
+            table_count=len(index.table_indexes),
+            relationship_count=len(index.relationship_index.foreign_keys),
+            join_graph_entries=len(index.relationship_index.join_graph),
+        )
+
+        # Display summary
+        print("\nSchema indexes built successfully!")
+        print(f"- Tables indexed: {len(index.table_indexes)}")
+        print(f"- Relationships indexed: {len(index.relationship_index.foreign_keys)}")
+        print(f"- Join graph entries: {len(index.relationship_index.join_graph)}")
+
+    except Exception as e:
+        log.error("schema_index_build_failed", error=str(e))
+        sys.exit(1)
+
+
 def handle_validate(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
     """Handle SQL validation command.
 
@@ -470,6 +521,24 @@ def main() -> None:
         help="Output directory for index",
     )
 
+    # Schema index building command
+    build_schema_parser = subparsers.add_parser(
+        "build-schema-index",
+        help="Build pre-computed schema indexes for optimized retrieval",
+    )
+    build_schema_parser.add_argument(
+        "-s",
+        "--schema",
+        type=Path,
+        help="Path to schema file",
+    )
+    build_schema_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Force rebuild even if cache exists",
+    )
+
     # SQL validation command
     validate_parser = subparsers.add_parser(
         "validate",
@@ -555,6 +624,8 @@ def main() -> None:
         handle_extract_schema(args, log)
     elif args.command == "build-index":
         handle_build_index(args, log)
+    elif args.command == "build-schema-index":
+        handle_build_schema_index(args, log)
     elif args.command == "validate":
         handle_validate(args, log)
     elif args.command == "execute":
