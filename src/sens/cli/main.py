@@ -22,6 +22,7 @@ import structlog
 
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.chat.session import SessionManager
+from sens.cli.commands.config import handle_config_command
 from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
 from sens.cli.formatters import format_nl2sql_response
 from sens.execution import SQLExecutor
@@ -677,6 +678,27 @@ def main() -> None:
     # Reset metrics subcommand
     perf_subparsers.add_parser("reset", help="Reset performance metrics")
 
+    # Configuration command
+    config_parser = subparsers.add_parser("config", help="Manage configuration")
+    config_subparsers = config_parser.add_subparsers(
+        dest="config_command", help="Configuration subcommands"
+    )
+
+    # Config set subcommand
+    config_set_parser = config_subparsers.add_parser(
+        "set", help="Set a configuration value"
+    )
+    config_set_parser.add_argument("key", help="Configuration key (e.g., api_key)")
+    config_set_parser.add_argument("value", help="Configuration value")
+
+    # Config get subcommand
+    config_get_parser = config_subparsers.add_parser(
+        "get", help="Get configuration value(s)"
+    )
+    config_get_parser.add_argument(
+        "key", nargs="?", help="Optional specific key to get"
+    )
+
     args = parser.parse_args()
 
     # Configure logging first, before any other operations
@@ -700,6 +722,8 @@ def main() -> None:
         handle_execute(args, log)
     elif args.command == "performance":
         handle_performance(args, log)
+    elif args.command == "config":
+        handle_config_command(args, log)
 
 
 if __name__ == "__main__":
