@@ -606,6 +606,7 @@ class SQLValidator:
         prompted_schema: Optional[ValidatorSchemaContext] = None,
         query_id: Optional[str] = None,
         levels: Optional[Set[ValidationLevel]] = None,
+        retrieval_metrics_collector=None,
     ) -> ValidatedSQL:
         """
         Validate SQL query.
@@ -616,6 +617,7 @@ class SQLValidator:
             prompted_schema: Schema context that was provided to the LLM (if None, uses full_schema)
             query_id: Optional query identifier for logging
             levels: Set of validation levels to apply
+            retrieval_metrics_collector: Optional metrics collector for recall tracking
 
         Returns:
             ValidatedSQL result
@@ -667,6 +669,16 @@ class SQLValidator:
 
         if ValidationLevel.SAFETY in levels:
             errors.extend(self._check_safety(sql))
+
+        # Track recall if SQL is valid and collector is provided
+        if len(errors) == 0 and retrieval_metrics_collector:
+            from sens.monitoring.recall_tracker import RecallTracker
+
+            RecallTracker.track_sql_recall(
+                query=query_id or "unknown",
+                sql=sql,
+                retrieval_metrics_collector=retrieval_metrics_collector,
+            )
 
         return ValidatedSQL(
             sql=sql,

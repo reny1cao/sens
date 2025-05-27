@@ -116,6 +116,7 @@ class ChatOrchestrator:
         """
         metrics = PipelineMetrics(conversation_id=state.conversation_id)
         metrics.metadata["user_input"] = user_input
+        retrieval_metrics_collector = None
         try:
             log.info(
                 "retrieving_schema_context",
@@ -139,6 +140,10 @@ class ChatOrchestrator:
                         )
                     step.metadata["table_count"] = len(context.tables)
                     step.metadata["column_count"] = len(context.columns)
+
+                    # Get metrics collector if using optimized retriever
+                    if hasattr(self.retrieval, "metrics_collector"):
+                        retrieval_metrics_collector = self.retrieval.metrics_collector
             except Exception as e:
                 if isinstance(e, ChatError):
                     raise
@@ -263,7 +268,9 @@ class ChatOrchestrator:
             with track_step(metrics, "sql_validation") as step:
                 # Use the unified validator context
                 sql_validation = self.sql_validator.validate(
-                    sql_result.sql, validator_context
+                    sql_result.sql,
+                    validator_context,
+                    retrieval_metrics_collector=retrieval_metrics_collector,
                 )
                 step.metadata["is_valid"] = sql_validation.is_valid
                 if not sql_validation.is_valid:
