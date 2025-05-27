@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple, Union
 import structlog
 from openai import OpenAI
 
+from sens.caching.factory import get_cache_manager
 from sens.chat.adapters import ChatEmbeddingAdapter, ChatTokenIndexAdapter
 from sens.chat.exceptions import (
     ChatError,
@@ -29,6 +30,7 @@ from sens.llm.sql_generator import SQLGenerator
 from sens.monitoring.metrics import PipelineMetrics, track_step
 from sens.postprocessing.response_builder import ResponseBuilder
 from sens.retrieval.embedding.search import EmbeddingSearch
+from sens.retrieval.optimized_retriever import OptimizedSchemaRetriever
 from sens.retrieval.orchestrator import RetrievalOrchestrator
 from sens.retrieval.token.builder import TokenIndexBuilder
 from sens.schema.graph import SchemaGraph
@@ -50,24 +52,43 @@ class ChatOrchestrator:
     def __init__(
         self,
         session_manager: Optional[SessionManager] = None,
+        use_optimized_retriever: bool = True,
     ):
         """Initialize the chat orchestrator.
 
         Args:
             session_manager: Optional SessionManager for backward compatibility with existing tests
                            and scripts that don't need explicit state management
+            use_optimized_retriever: Whether to use the optimized schema retriever
         """
         self.session_manager = session_manager
+        self.settings = get_settings()
 
         # Initialize all pipeline components
         self.schema_graph = SchemaGraph.get_instance()
         token_index = ChatTokenIndexAdapter()
         embedding_index = ChatEmbeddingAdapter()
-        self.retrieval = RetrievalOrchestrator(
-            token_index=token_index,
-            embedding_index=embedding_index,
-            schema_graph=self.schema_graph,
-        )
+
+        # Initialize retriever based on configuration
+        if use_optimized_retriever:
+            # Create cache manager for optimized retriever
+            cache_manager = get_cache_manager()
+            self.retrieval = OptimizedSchemaRetriever(
+                token_index=token_index,
+                embedding_index=embedding_index,
+                schema_graph=self.schema_graph,
+                cache_manager=cache_manager,
+                enable_caching=True,
+            )
+            log.info("using_optimized_schema_retriever")
+        else:
+            self.retrieval = RetrievalOrchestrator(
+                token_index=token_index,
+                embedding_index=embedding_index,
+                schema_graph=self.schema_graph,
+            )
+            log.info("using_standard_retrieval_orchestrator")
+
         self.intent_extractor = IntentExtractor()
         self.intent_validator = IntentValidator()
         self.sql_generator = SQLGenerator()
@@ -75,7 +96,9 @@ class ChatOrchestrator:
         self.sql_executor = SQLExecutor()
         self.response_builder = ResponseBuilder()
         self.context_builder = UnifiedSchemaContextBuilder()
-        log.info("chat_orchestrator_initialized")
+        log.info(
+            "chat_orchestrator_initialized", optimized_retriever=use_optimized_retriever
+        )
 
     async def step(
         self, state: ConversationState, user_input: str
@@ -101,9 +124,19 @@ class ChatOrchestrator:
             )
             try:
                 with track_step(metrics, "schema_retrieval") as step:
-                    context = await self.retrieval.get_relevant_context(
-                        question=user_input
-                    )
+                    # Pass metrics to optimized retriever if available
+                    if (
+                        hasattr(self.retrieval, "get_relevant_context")
+                        and "metrics"
+                        in self.retrieval.get_relevant_context.__code__.co_varnames
+                    ):
+                        context = await self.retrieval.get_relevant_context(
+                            question=user_input, metrics=metrics
+                        )
+                    else:
+                        context = await self.retrieval.get_relevant_context(
+                            question=user_input
+                        )
                     step.metadata["table_count"] = len(context.tables)
                     step.metadata["column_count"] = len(context.columns)
             except Exception as e:
