@@ -38,6 +38,7 @@ class LLMResponseCache:
 
     def _compute_cache_key(
         self,
+        question_hash: str,
         intent_hash: str,
         schema_hash: str,
         model: str,
@@ -45,6 +46,7 @@ class LLMResponseCache:
         """Compute cache key for LLM response.
 
         Args:
+            question_hash: Hash of the question
             intent_hash: Hash of the intent
             schema_hash: Hash of the schema context
             model: Model name
@@ -53,7 +55,7 @@ class LLMResponseCache:
             Cache key string
         """
         # Combine all components into a single hash
-        combined = f"{intent_hash}:{schema_hash}:{model}"
+        combined = f"{question_hash}:{intent_hash}:{schema_hash}:{model}"
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
     def _hash_intent(self, intent: Dict[str, Any]) -> str:
@@ -103,6 +105,19 @@ class LLMResponseCache:
         schema_json = json.dumps(schema_key, sort_keys=True)
         return hashlib.sha256(schema_json.encode()).hexdigest()[:16]
 
+    def _hash_question(self, question: str) -> str:
+        """Create a stable hash of the question.
+
+        Args:
+            question: User question
+
+        Returns:
+            Hash string
+        """
+        # Normalize the question
+        normalized = question.strip().lower()
+        return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
     async def get_cached_sql(
         self,
         question: str,
@@ -124,12 +139,14 @@ class LLMResponseCache:
             Cached GeneratedSQL if found, None otherwise
         """
         # Compute hashes
+        question_hash = self._hash_question(question)
         intent_hash = self._hash_intent(intent)
         schema_hash = self._hash_schema(schema_context)
 
         # Try exact match first
         cache_key = self.cache_manager.generate_key(
             "llm_sql",
+            question_hash=question_hash,
             intent_hash=intent_hash,
             schema_hash=schema_hash,
             model=model,
@@ -139,6 +156,7 @@ class LLMResponseCache:
         if cached_result:
             log.info(
                 "llm_cache_exact_hit",
+                question_hash=question_hash,
                 intent_hash=intent_hash,
                 schema_hash=schema_hash,
                 model=model,
@@ -184,6 +202,7 @@ class LLMResponseCache:
             generated_sql: Generated SQL result
         """
         # Compute hashes
+        question_hash = self._hash_question(question)
         intent_hash = self._hash_intent(intent)
         schema_hash = self._hash_schema(schema_context)
 
@@ -203,6 +222,7 @@ class LLMResponseCache:
         # Store with appropriate TTL
         cache_key = self.cache_manager.generate_key(
             "llm_sql",
+            question_hash=question_hash,
             intent_hash=intent_hash,
             schema_hash=schema_hash,
             model=model,
@@ -213,6 +233,7 @@ class LLMResponseCache:
 
         log.info(
             "llm_response_cached",
+            question_hash=question_hash,
             intent_hash=intent_hash,
             schema_hash=schema_hash,
             model=model,

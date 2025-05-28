@@ -95,7 +95,16 @@ class OptimizedSchemaRetriever:
             cached_result = await self.cache_manager.get(cache_key)
             if cached_result:
                 log.info("schema_retrieval_cache_hit", question=question[:50])
-                return RetrievedContext(**cached_result)
+                # Reconstruct objects from cached dictionaries
+                tables = [RetrievedTable(**t) for t in cached_result.get("tables", [])]
+                columns = [
+                    RetrievedColumn(**c) for c in cached_result.get("columns", [])
+                ]
+                return RetrievedContext(
+                    query=cached_result["query"],
+                    tables=tables,
+                    columns=columns,
+                )
 
         # Track metrics if provided
         if metrics:

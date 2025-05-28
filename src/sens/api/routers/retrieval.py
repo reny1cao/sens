@@ -43,7 +43,7 @@ class TokenIndexAdapter:
             )
         self._index_builder = table_search_service._index
 
-    def search(self, query: str, k: int) -> List[RetrievedColumn]:
+    async def search(self, query: str, k: int) -> List[RetrievedColumn]:
         """Performs table name search and maps results to RetrievedColumn."""
         # Current token search (`guess_tables`) only returns table names.
         # Map these table names to placeholder columns with a default score.
@@ -84,7 +84,7 @@ class EmbeddingIndexAdapter:
         """
         self._embedding_search = embedding_search
 
-    def search(self, query: str, k: int) -> List[RetrievedColumn]:
+    async def search(self, query: str, k: int) -> List[RetrievedColumn]:
         """Performs embedding search and maps results to RetrievedColumn."""
         try:
             # Pass k directly to the embedding search
@@ -241,7 +241,7 @@ async def get_relevant_schema_context(
 
     try:
         # The injected orchestrator now uses real dependencies via adapters
-        context = orchestrator.get_relevant_context(question=question, k=k)
+        context = await orchestrator.get_relevant_context(question=question, k=k)
         logger.info(f"Successfully retrieved context for question '{question}'.")
         return context
     except Exception as e:

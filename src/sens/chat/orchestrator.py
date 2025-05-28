@@ -21,10 +21,11 @@ from sens.chat.exceptions import (
     UnexpectedError,
 )
 from sens.chat.session import SessionManager
-from sens.chat.state import ClarificationRequest, ConversationState
+from sens.chat.state import ClarificationRequest as ChatClarificationRequest
+from sens.chat.state import ConversationState
 from sens.execution import SQLExecutor
 from sens.llm.intent_extractor import IntentExtractor
-from sens.llm.intent_validator import IntentValidator
+from sens.llm.intent_validator import ClarificationRequest, IntentValidator
 from sens.llm.models import Intent
 from sens.llm.sql_generator import SQLGenerator
 from sens.monitoring.metrics import PipelineMetrics, track_step
@@ -216,16 +217,23 @@ class ChatOrchestrator:
                     "status": "clarification_needed",
                     "message": validation_result.message,
                     "reason": validation_result.reason,
-                    "suggestions": validation_result.suggestions,
-                    "context": validation_result.context,
+                    "suggestions": getattr(validation_result, "suggestions", []),
+                    "context": getattr(validation_result, "context", {}),
                     "metadata": {
                         "pipeline_metrics": metrics.model_dump(),
                     },
                 }
+                # Convert to chat.state.ClarificationRequest for state management
+                chat_clarification = ChatClarificationRequest(
+                    message=validation_result.message,
+                    reason=validation_result.reason,
+                    suggestions=getattr(validation_result, "suggestions", []),
+                    context=getattr(validation_result, "context", {}),
+                )
                 state.add_interaction(
                     user_input=user_input,
                     response=clarification_response,
-                    clarification=validation_result,
+                    clarification=chat_clarification,
                 )
                 if self.session_manager:
                     self.session_manager.save(state.conversation_id, state)
@@ -326,7 +334,7 @@ class ChatOrchestrator:
             state.add_interaction(
                 user_input=user_input,
                 response=response,
-                intent=intent,
+                intent=validation_result.original_intent,
             )
             if self.session_manager:
                 self.session_manager.save(state.conversation_id, state)
