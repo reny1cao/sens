@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import api from '@/lib/api/client';
+import { useDataSource } from '@/contexts/DataSourceContext';
 import type { QueryRequest, QueryResponse, ProcessingStep } from '@/types';
 
 const INITIAL_STEPS: ProcessingStep[] = [
@@ -44,6 +44,7 @@ function mapPipelineStepsToUI(pipelineMetrics: any): ProcessingStep[] {
 export function useQuery() {
   const [steps, setSteps] = useState<ProcessingStep[]>(INITIAL_STEPS);
   const [isPolling, setIsPolling] = useState(false);
+  const { sessionId } = useDataSource();
 
   const resetSteps = useCallback(() => {
     setSteps(INITIAL_STEPS.map(step => ({ ...step, status: 'pending' })));
@@ -60,11 +61,26 @@ export function useQuery() {
           idx === 0 ? { ...step, status: 'running', startTime: Date.now() } : step
         ));
 
-        const response = await api.executeQuery(request);
+        // Make the API call with session ID
+        const response = await fetch('/api/nl2sql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionId && { 'X-Session-Id': sessionId }),
+          },
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to process query');
+        }
+
+        const data: QueryResponse = await response.json();
 
         // Update steps based on pipeline metrics
-        if (response.metadata?.pipeline_metrics) {
-          const realSteps = mapPipelineStepsToUI(response.metadata.pipeline_metrics);
+        if (data.metadata?.pipeline_metrics) {
+          const realSteps = mapPipelineStepsToUI(data.metadata.pipeline_metrics);
           setSteps(realSteps);
         } else {
           // Fallback: mark all as completed if no metrics
@@ -76,7 +92,7 @@ export function useQuery() {
         }
 
         setIsPolling(false);
-        return response;
+        return data;
       } catch (error) {
         setIsPolling(false);
 

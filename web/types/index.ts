@@ -150,3 +150,44 @@ export interface SavedQuery {
   created_at: string;
   updated_at: string;
 }
+
+// Data Source Types
+export type DataSourceType = 'default_postgres' | 'uploaded_file' | 'connected_db';
+
+export interface DataSource {
+  id: string;
+  name: string;
+  type: DataSourceType;
+  tables: TableInfo[];
+  totalRows: number;
+  createdAt: Date;
+}
+
+export interface TableInfo {
+  name: string;
+  columns: ColumnInfo[];
+  row_count: number;
+  sample_data?: Record<string, any>[];
+}
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+}
+
+export interface DataSourceResponse {
+  session_id: string;
+  source_id: string;
+  type: DataSourceType;
+  name: string;
+  tables: TableInfo[];
+  total_rows: number;
+  message?: string;
+}
+
+export interface TablePreview {
+  table_name: string;
+  columns: string[];
+  row_count: number;
+  data: Record<string, any>[];
+}

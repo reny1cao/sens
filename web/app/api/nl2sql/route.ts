@@ -5,12 +5,19 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const sessionId = request.headers.get('X-Session-Id');
+
+    // Determine which endpoint to use based on session
+    const endpoint = sessionId 
+      ? `${API_URL}/api/nl2sql/session/query`
+      : `${API_URL}/api/nl2sql`;
 
     // Forward request to FastAPI backend
-    const response = await fetch(`${API_URL}/api/nl2sql`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(sessionId && { 'X-Session-Id': sessionId }),
       },
       body: JSON.stringify(body),
     });
