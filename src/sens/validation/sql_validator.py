@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import sqlglot
 import sqlparse
+import structlog
 from sqlglot import expressions as exp
 from sqlparse.sql import (
     Comment,
@@ -26,12 +27,11 @@ from sqlparse.sql import (
 )
 from sqlparse.tokens import DDL, DML, Keyword, Name, Punctuation, Whitespace
 
-from sens.api.common.logging import get_logger
 from sens.schema.context import ValidatorSchemaContext
 from sens.validation.types import ContextBypassInfo
 
-# Configure logging
-logger = get_logger(__name__)
+# Get logger
+log = structlog.get_logger(__name__)
 
 
 class ValidationLevel(Enum):
@@ -445,7 +445,7 @@ class SQLValidator:
 
             # Log bypass information if detected
             if bypass_info.is_bypass and query_id:
-                logger.warning(
+                log.warning(
                     "sql_context_bypass_detected",
                     **bypass_info.to_log_dict(query_id),
                 )

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENS - Natural Language SQL</title>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/prismjs@1.x/themes/prism-tomorrow.css" rel="stylesheet" />
+    <script src="https://unpkg.com/prismjs@1.x/components/prism-core.min.js"></script>
+    <script src="https://unpkg.com/prismjs@1.x/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app" x-data="queryInterface()" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <h1 class="text-2xl font-semibold text-gray-900">SENS</h1>
+                    <span class="text-sm text-gray-500">Natural Language SQL Interface</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Query Input Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                <form @submit.prevent="executeQuery()">
+                    <div class="flex gap-4">
+                        <input
+                            type="text"
+                            x-model="query"
+                            placeholder="Ask a question about your data..."
+                            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            :disabled="loading"
+                        >
+                        <button
+                            type="submit"
+                            :disabled="loading || !query.trim()"
+                            class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <span x-show="!loading">Run Query</span>
+                            <span x-show="loading">Processing...</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Example Queries -->
+                <div class="mt-4" x-show="!hasQueried">
+                    <p class="text-sm text-gray-600 mb-2">Try these examples:</p>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="example in examples">
+                            <button
+                                @click="query = example; executeQuery()"
+                                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                                x-text="example"
+                            ></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div x-show="result" class="space-y-6">
+                <!-- SQL Query Display -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Generated SQL</h3>
+                        <button
+                            @click="copySQL()"
+                            class="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                    <pre class="language-sql bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code x-text="result.sql"></code></pre>
+                </div>
+
+                <!-- Data Results -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Results</h3>
+                        <div class="flex gap-2">
+                            <span class="text-sm text-gray-500" x-text="`${result.row_count} rows`"></span>
+                            <button
+                                @click="exportCSV()"
+                                class="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table Display -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <template x-for="column in result.columns">
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" x-text="column"></th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="row in result.data">
+                                    <tr>
+                                        <template x-for="column in result.columns">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="row[column]"></td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div x-show="error" class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p class="text-red-800" x-text="error"></p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function queryInterface() {
+            return {
+                query: '',
+                loading: false,
+                result: null,
+                error: null,
+                hasQueried: false,
+                examples: [
+                    'How many users do we have?',
+                    'Show me the top 10 customers by revenue',
+                    'What were our sales last month?'
+                ],
+
+                async executeQuery() {
+                    if (!this.query.trim()) return;
+
+                    this.loading = true;
+                    this.error = null;
+                    this.hasQueried = true;
+
+                    try {
+                        const response = await fetch('/api/nl2sql', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ question: this.query }),
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Error: ${response.statusText}`);
+                        }
+
+                        this.result = await response.json();
+
+                        // Syntax highlight SQL
+                        setTimeout(() => {
+                            Prism.highlightAll();
+                        }, 10);
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                copySQL() {
+                    navigator.clipboard.writeText(this.result.sql);
+                    // Could add a toast notification here
+                },
+
+                exportCSV() {
+                    const csv = this.convertToCSV(this.result.data, this.result.columns);
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'query_results.csv';
+                    a.click();
+                },
+
+                convertToCSV(data, columns) {
+                    const header = columns.join(',');
+                    const rows = data.map(row =>
+                        columns.map(col => `"${row[col]}"`).join(',')
+                    );
+                    return [header, ...rows].join('\n');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -328,9 +328,10 @@ class ChatOrchestrator:
                 ).model_dump()
                 step.metadata["response_type"] = response.get("type", "unknown")
             metrics.complete(success=True)
-            response["metadata"] = {
-                "pipeline_metrics": metrics.model_dump(),
-            }
+            # Preserve original metadata and add pipeline metrics
+            if "metadata" not in response:
+                response["metadata"] = {}
+            response["metadata"]["pipeline_metrics"] = metrics.model_dump()
             state.add_interaction(
                 user_input=user_input,
                 response=response,
