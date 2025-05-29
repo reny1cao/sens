@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,8 +13,13 @@ from sens.settings import get_settings  # Updated to use new settings module
 from .common.logging import RequestLoggingMiddleware, configure_logging
 from .routers.column_search.router import router as column_search_router
 from .routers.intent.router import router as intent_router
+from .routers.nl2sql_dev import router as nl2sql_dev_router
+from .routers.nl2sql_simple import router as nl2sql_router
 from .routers.retrieval import router as retrieval_router
 from .routers.table_search.router import router as table_search_router
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 configure_logging()
@@ -65,6 +71,8 @@ async def lifespan(app: FastAPI):
 app.router.lifespan_context = lifespan
 
 # Add routers
+app.include_router(nl2sql_router, prefix="/api", tags=["nl2sql"])
+app.include_router(nl2sql_dev_router, prefix="/api", tags=["nl2sql-dev"])
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(
