@@ -31,6 +31,15 @@ def serialize_value(value: Any) -> Any:
     return value
 
 
+class ExecutionMetrics(BaseModel):
+    """Metrics for query execution."""
+    
+    execution_time: float = Field(..., description="Time taken to execute query in seconds")
+    rows_returned: int = Field(..., description="Number of rows returned")
+    data_source: Optional[str] = Field(None, description="Name of the data source")
+    source_type: Optional[str] = Field(None, description="Type of data source")
+
+
 class QueryResult(BaseModel):
     """Represents the result of a SQL query execution."""
 
@@ -42,6 +51,9 @@ class QueryResult(BaseModel):
     error: Optional[str] = Field(
         None, description="Error message if query execution failed"
     )
+    execution_time: Optional[float] = Field(None, description="Execution time in seconds")
+    success: bool = Field(True, description="Whether the query succeeded")
+    metrics: Optional[ExecutionMetrics] = Field(None, description="Execution metrics")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the query result to a dictionary format with serialized values."""

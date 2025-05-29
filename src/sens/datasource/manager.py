@@ -15,6 +15,7 @@ import structlog
 from sens.settings import get_settings
 from sens.schema.schema_extractor import SchemaExtractor
 from .models import DataSourceType, DataSourceInfo, SessionInfo, TableInfo
+from .storage import storage_manager
 
 logger = structlog.get_logger(__name__)
 
