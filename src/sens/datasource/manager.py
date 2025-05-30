@@ -19,7 +19,7 @@ from sens.schema.extractors.duckdb_extractor import DuckDBExtractor
 from sens.schema.extractors.postgresql_extractor import PostgreSQLExtractor
 from sens.schema.format_adapter import SchemaFormatAdapter
 from sens.caching.manager import CacheManager
-from sens.caching.factory import get_cache_backend
+from sens.caching.factory import create_cache_backend
 from .models import DataSourceType, DataSourceInfo, SessionInfo, TableInfo
 from .storage import storage_manager
 from .query_suggestions import generate_query_suggestions
@@ -72,7 +72,7 @@ class DataSourceManager:
         self.session_ttl = timedelta(hours=24)
         
         # Initialize cache manager
-        cache_backend = get_cache_backend(self.settings)
+        cache_backend = create_cache_backend()
         self.cache_manager = CacheManager(backend=cache_backend)
         
         # Initialize default PostgreSQL source
@@ -128,6 +128,18 @@ class DataSourceManager:
             # Load files into DuckDB
             for path in file_paths:
                 table_name = Path(path).stem.lower().replace(' ', '_')
+                
+                # Check if table already exists
+                existing_tables = conn.execute("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'main' AND table_name = ?
+                """, [table_name]).fetchall()
+                
+                if existing_tables:
+                    # Drop existing table first
+                    conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                    logger.info("dropped_existing_table", table=table_name)
                 
                 if path.endswith('.csv'):
                     conn.execute(f"""
@@ -227,7 +239,8 @@ class DataSourceManager:
     def get_session_source(self, session_id: str) -> Optional[DataSource]:
         """Get the data source for a session."""
         if not session_id or session_id not in self.sessions:
-            return self.sources.get("default")
+            # Don't return default source if session not found
+            return None
         
         session_info = self.sessions[session_id]
         session_info.last_accessed = datetime.utcnow()

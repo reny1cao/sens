@@ -183,7 +183,7 @@ export function DataSourceSelector() {
           </DialogHeader>
 
           {selectedMode === 'upload' && (
-            <FileUpload />
+            <FileUpload onSuccess={() => setDialogOpen(false)} />
           )}
 
           {selectedMode === 'connect' && (

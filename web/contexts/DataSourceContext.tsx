@@ -63,8 +63,16 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
           totalRows: data.total_rows,
           createdAt: new Date(),
         });
+      } else if (response.status === 404) {
+        // Session not found - this is OK, user hasn't uploaded anything yet
+        console.log('No active session found');
+        setActiveSource(null);
       } else {
-        console.log('Session not found:', response.status);
+        console.log('Session load error:', response.status);
+        // For other errors, clear the session and start fresh
+        const newSessionId = generateSessionId();
+        setSessionId(newSessionId);
+        setActiveSource(null);
       }
     } catch (err) {
       // No existing session, that's ok
@@ -84,6 +92,9 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
     setError(null);
 
     try {
+      console.log('Uploading files:', files.map(f => ({ name: f.name, size: f.size })));
+      console.log('Session ID:', sessionId);
+      
       const formData = new FormData();
       files.forEach(file => {
         formData.append('files', file);
@@ -97,12 +108,16 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
         body: formData,
       });
 
+      console.log('Upload response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to upload files');
+        console.error('Upload error:', errorData);
+        throw new Error(errorData.error || errorData.detail || 'Failed to upload files');
       }
 
       const data = await response.json();
+      console.log('Upload success:', data);
       
       setActiveSource({
         id: data.source_id,
@@ -113,6 +128,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
         createdAt: new Date(),
       });
     } catch (err) {
+      console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload files');
       throw err;
     } finally {

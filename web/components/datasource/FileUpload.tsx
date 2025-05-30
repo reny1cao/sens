@@ -16,7 +16,11 @@ const ACCEPTED_FILE_TYPES = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
 };
 
-export function FileUpload() {
+interface FileUploadProps {
+  onSuccess?: () => void;
+}
+
+export function FileUpload({ onSuccess }: FileUploadProps = {}) {
   const { uploadFiles, isLoading, error } = useDataSource();
   const [files, setFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -54,6 +58,7 @@ export function FileUpload() {
     try {
       await uploadFiles(files);
       setFiles([]);
+      onSuccess?.();
     } catch (err) {
       // Error is handled by context
     }
