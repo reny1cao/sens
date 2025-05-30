@@ -8,8 +8,10 @@ from sens.llm.intent_extractor import IntentExtractor
 from sens.llm.sql_generator import SQLGenerator
 from sens.postprocessing.response_builder import ResponseBuilder
 from sens.retrieval.optimized_retriever import OptimizedSchemaRetriever
-from sens.schema.context import SchemaContext
+from sens.schema.context import SchemaContext, LLMSchemaContext
 from sens.schema.graph import SchemaGraph
+from sens.schema.unified_schema import UnifiedSchema
+from sens.schema.format_adapter import SchemaFormatAdapter
 from sens.validation.sql_validator import SQLValidator
 from sens.datasource.executor import MultiSourceExecutor
 from sens.caching.factory import get_cache_manager
@@ -23,18 +25,18 @@ class SessionAwarePipeline:
     
     def __init__(
         self,
-        schema_context: SchemaContext,
+        unified_schema: UnifiedSchema,
         sql_executor: MultiSourceExecutor,
         use_optimized_retriever: bool = True
     ):
         """Initialize the session-aware pipeline.
         
         Args:
-            schema_context: The schema context for this session's data source
+            unified_schema: The unified schema for this session's data source
             sql_executor: The multi-source executor for running queries
             use_optimized_retriever: Whether to use optimized retrieval
         """
-        self.schema_context = schema_context
+        self.unified_schema = unified_schema
         self.sql_executor = sql_executor
         
         # Initialize components
@@ -47,18 +49,9 @@ class SessionAwarePipeline:
         if use_optimized_retriever:
             cache_manager = get_cache_manager()
             
-            # Create temporary schema graph for this session
-            self.schema_graph = SchemaGraph()
-            if hasattr(schema_context, '_schema_dict'):
-                self.schema_graph._build_from_dict(schema_context._schema_dict)
-            
-            self.retriever = OptimizedSchemaRetriever(
-                token_index=ChatTokenIndexAdapter(),
-                embedding_index=ChatEmbeddingAdapter(),
-                schema_graph=self.schema_graph,
-                cache_manager=cache_manager,
-                enable_caching=False  # Don't cache session-specific schemas
-            )
+            # For now, skip retrieval optimization for session-specific schemas
+            self.schema_graph = None
+            self.retriever = None
         else:
             raise NotImplementedError("Standard retriever not supported yet")
     
@@ -82,14 +75,20 @@ class SessionAwarePipeline:
         try:
             # Step 1: Extract intent
             logger.info("extracting_intent", question=question)
-            intent = await self.intent_extractor.extract(question)
+            
+            # Use format adapter to get schema in intent extractor format
+            schema_snippet = SchemaFormatAdapter.for_intent_extractor(self.unified_schema)
+            
+            intent = await self.intent_extractor.extract(question, schema_snippet)
             pipeline_steps.append({
                 "step": "intent_extraction",
                 "duration": time.time() - start_time,
                 "result": {
                     "query_type": intent.query_type,
-                    "entities": intent.entities,
-                    "filters": intent.filters
+                    "tables": intent.tables,
+                    "operations": intent.operations,
+                    "conditions": intent.conditions,
+                    "confidence": intent.confidence
                 }
             })
             
@@ -97,14 +96,16 @@ class SessionAwarePipeline:
             step_start = time.time()
             logger.info("retrieving_schema", intent=intent.query_type)
             
-            # For session-specific data, we use the full schema context
+            # For session-specific data, we use the full schema
             # since the data source is limited in scope
-            relevant_tables = list(self.schema_context._schema_dict.get("tables", {}).keys())
+            relevant_tables = [table.name for table in self.unified_schema.tables]
             
             schema_context_dict = {
                 "intent": {
                     "query_type": intent.query_type,
-                    "entities": intent.entities
+                    "tables": intent.tables,
+                    "operations": intent.operations,
+                    "conditions": intent.conditions
                 },
                 "tables": relevant_tables[:10],  # Limit to prevent context overflow
                 "columns": [],
@@ -124,10 +125,26 @@ class SessionAwarePipeline:
             step_start = time.time()
             logger.info("generating_sql")
             
-            sql = await self.sql_generator.generate(
-                intent=intent,
-                schema_context=self.schema_context
+            # Convert schema to LLM format for SQL generation
+            llm_schema_context = SchemaFormatAdapter.for_sql_generator(
+                self.unified_schema, intent
             )
+            
+            # Need to create ValidIntent wrapper for SQL generator
+            from sens.llm.intent_validator import ValidIntent
+            valid_intent = ValidIntent(
+                original_intent=intent,
+                enhanced_metadata={}
+            )
+            
+            generated_sql = await self.sql_generator.generate(
+                question=question,
+                intent=valid_intent,
+                schema_context=llm_schema_context
+            )
+            
+            # Extract the SQL string
+            sql = generated_sql.sql
             
             pipeline_steps.append({
                 "step": "sql_generation",
@@ -139,9 +156,13 @@ class SessionAwarePipeline:
             step_start = time.time()
             logger.info("validating_sql", sql=sql)
             
+            # Convert schema to validator format
+            validator_schema = SchemaFormatAdapter.for_validator(self.unified_schema)
+            
             validation_result = self.sql_validator.validate(
                 sql=sql,
-                schema=self.schema_context._schema_dict
+                full_schema=validator_schema,
+                prompted_schema=validator_schema
             )
             
             if not validation_result.is_valid:
@@ -175,11 +196,17 @@ class SessionAwarePipeline:
             step_start = time.time()
             logger.info("building_response")
             
-            summary = await self.response_builder.build_summary(
+            # Build complete response
+            final_response = self.response_builder.build(
                 question=question,
-                sql_query=sql,
-                query_result=query_result
+                intent=intent,
+                result=query_result,
+                sql=sql,
+                execution_time_ms=query_result.execution_time * 1000 if query_result else None
             )
+            
+            # Extract summary from response
+            summary = final_response.summary
             
             pipeline_steps.append({
                 "step": "response_building",

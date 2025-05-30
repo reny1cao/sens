@@ -13,9 +13,14 @@ from fastapi import UploadFile
 import structlog
 
 from sens.settings import get_settings
-from sens.schema.schema_extractor import SchemaExtractor
+from sens.schema.unified_schema import UnifiedSchema, DataSourceType as UnifiedDataSourceType
+from sens.schema.extractors import SchemaExtractor
+from sens.schema.extractors.duckdb_extractor import DuckDBExtractor
+from sens.schema.extractors.postgresql_extractor import PostgreSQLExtractor
+from sens.schema.format_adapter import SchemaFormatAdapter
 from .models import DataSourceType, DataSourceInfo, SessionInfo, TableInfo
 from .storage import storage_manager
+from .query_suggestions import generate_query_suggestions
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +35,7 @@ class DataSource:
         self.name = name or f"{type.value}_{id[:8]}"
         self.schema_extracted = False
         self.created_at = datetime.utcnow()
-        self.schema_context = None
+        self.unified_schema: Optional[UnifiedSchema] = None
         self._connection = None
     
     def get_connection(self):
@@ -166,46 +171,43 @@ class DataSourceManager:
         return source
     
     async def _extract_schema(self, source: DataSource):
-        """Extract schema for a data source."""
+        """Extract schema for a data source using unified extractors."""
         try:
+            extractor: Optional[SchemaExtractor] = None
+            
             if source.type == DataSourceType.UPLOADED_FILE:
-                # Use DuckDB's information schema
+                # Use DuckDB extractor
                 conn = source.get_connection()
-                
-                # Get basic schema info
-                tables = conn.execute("""
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'main'
-                """).fetchall()
-                
-                schema_dict = {"tables": {}}
-                
-                for (table_name,) in tables:
-                    columns = conn.execute(f"""
-                        SELECT column_name, data_type 
-                        FROM information_schema.columns 
-                        WHERE table_name = '{table_name}'
-                    """).fetchall()
-                    
-                    schema_dict["tables"][table_name] = {
-                        "columns": [
-                            {"name": col[0], "data_type": col[1]} 
-                            for col in columns
-                        ]
-                    }
-                
-                source.schema_context = schema_dict
-                source.schema_extracted = True
+                extractor = DuckDBExtractor(
+                    connection=conn,
+                    source_id=source.id,
+                    database_name=source.name,
+                    include_sample_data=True,
+                    sample_rows=5
+                )
                 
             elif source.type == DataSourceType.DEFAULT_POSTGRES:
-                # Use existing schema extractor
-                extractor = SchemaExtractor(
-                    db_url=source.config['connection_string']
+                # Use PostgreSQL extractor
+                extractor = PostgreSQLExtractor(
+                    db_url=source.config['connection_string'],
+                    source_id=source.id,
+                    schema_name="public",
+                    include_sample_data=True,
+                    sample_rows=5
                 )
-                schema_dict = await asyncio.to_thread(extractor.extract_schema)
-                source.schema_context = schema_dict
+            
+            if extractor:
+                # Extract schema using unified extractor
+                source.unified_schema = await extractor.extract_with_timing()
                 source.schema_extracted = True
+                
+                logger.info("schema_extracted",
+                           source_id=source.id,
+                           source_type=source.type.value,
+                           table_count=len(source.unified_schema.tables),
+                           duration_ms=source.unified_schema.extraction_duration_ms)
+            else:
+                raise ValueError(f"No extractor available for source type: {source.type}")
                 
         except Exception as e:
             logger.error("schema_extraction_failed", source_id=source.id, error=str(e))
@@ -227,41 +229,34 @@ class DataSourceManager:
     
     async def get_table_info(self, source: DataSource) -> List[TableInfo]:
         """Get information about tables in a data source."""
-        tables = []
+        if not source.unified_schema:
+            await self._extract_schema(source)
         
-        if source.type == DataSourceType.UPLOADED_FILE:
-            conn = source.get_connection()
-            
-            # Get all tables
-            table_names = conn.execute("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'main'
-            """).fetchall()
-            
-            for (table_name,) in table_names:
-                # Get columns
-                columns = conn.execute(f"""
-                    SELECT column_name, data_type 
-                    FROM information_schema.columns 
-                    WHERE table_name = '{table_name}'
-                    ORDER BY ordinal_position
-                """).fetchall()
-                
-                # Get row count
-                row_count = conn.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
-                
-                # Get sample data (first 5 rows)
-                sample_data = conn.execute(f'SELECT * FROM "{table_name}" LIMIT 5').fetchdf().to_dict('records')
-                
-                tables.append(TableInfo(
-                    name=table_name,
-                    columns=[{"name": col[0], "type": col[1]} for col in columns],
-                    row_count=row_count,
-                    sample_data=sample_data
-                ))
+        # Convert from UnifiedSchema to legacy TableInfo format
+        tables = []
+        for table in source.unified_schema.tables:
+            tables.append(TableInfo(
+                name=table.name,
+                columns=[{"name": col.name, "type": col.data_type.value} for col in table.columns],
+                row_count=table.row_count,
+                sample_data=table.sample_data
+            ))
         
         return tables
+    
+    async def get_query_suggestions(self, source: DataSource) -> List[str]:
+        """Get query suggestions for a data source."""
+        if not source.unified_schema:
+            await self._extract_schema(source)
+        
+        # Get sample data from first table if available
+        sample_data = None
+        if source.unified_schema.tables:
+            first_table = source.unified_schema.tables[0]
+            sample_data = first_table.sample_data
+        
+        # Generate query suggestions using unified schema
+        return generate_query_suggestions(source.unified_schema, sample_data)
     
     async def cleanup_expired_sessions(self):
         """Clean up expired sessions and their data."""

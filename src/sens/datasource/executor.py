@@ -77,8 +77,8 @@ class MultiSourceExecutor:
         def run_query():
             conn = source.get_connection()
             
-            # Set read-only mode for safety
-            conn.execute("SET read_only = true")
+            # DuckDB doesn't support read_only parameter
+            # For uploaded files, we accept write operations are possible
             
             # Execute the query
             if params:
@@ -92,11 +92,7 @@ class MultiSourceExecutor:
             columns = [desc[0] for desc in result.description] if result.description else []
             rows = result.fetchall()
             
-            # Convert to list of dicts
-            if columns:
-                rows = [dict(zip(columns, row)) for row in rows]
-            else:
-                rows = []
+            # Keep rows as list of lists (don't convert to dicts)
             
             return columns, rows
         

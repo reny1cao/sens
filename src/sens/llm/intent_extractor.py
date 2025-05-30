@@ -44,13 +44,12 @@ class IntentExtractor:
             ValueError: If required settings are missing or if models list is empty
             FileNotFoundError: If prompt template cannot be found
         """
-        # Check for API key before initializing settings
-        api_key = os.getenv("SENS_OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("SENS_OPENROUTER_API_KEY must be set")
-
         # Get settings instance
         settings = get_settings()
+        
+        # Check for API key from settings
+        if not settings.openrouter_api_key:
+            raise ValueError("SENS_OPENROUTER_API_KEY must be set")
 
         # Initialize OpenAI client with OpenRouter config
         cfg = settings.get_openrouter_config()

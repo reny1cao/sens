@@ -9,11 +9,12 @@ from pydantic import BaseModel
 
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.chat.session import SessionManager
-from sens.datasource import DataSourceManager
+from sens.datasource import DataSourceManager, DataSourceType
 from sens.datasource.executor import MultiSourceExecutor
-from sens.schema.context import SchemaContext
+from sens.schema.context import SchemaContext, TableContext
 from sens.datasource.session_pipeline import SessionAwarePipeline
 from sens.execution.types import QueryResult
+from sens.api.routers.datasource import get_datasource_manager
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -39,16 +40,7 @@ class NL2SQLResponse(BaseModel):
 
 
 # Global instances
-_datasource_manager: Optional[DataSourceManager] = None
 _multi_executor: Optional[MultiSourceExecutor] = None
-
-
-def get_datasource_manager() -> DataSourceManager:
-    """Get or create the global data source manager."""
-    global _datasource_manager
-    if _datasource_manager is None:
-        _datasource_manager = DataSourceManager()
-    return _datasource_manager
 
 
 def get_multi_executor(
@@ -98,12 +90,16 @@ async def process_nl2sql_with_session(
                 detail="Schema not yet extracted for this data source. Please wait."
             )
         
-        # Create schema context from source schema
-        schema_context = SchemaContext(schema_dict=source.schema_context)
+        # Check if unified schema exists
+        if not source.unified_schema:
+            raise HTTPException(
+                status_code=500,
+                detail="Schema not loaded. This is an internal error."
+            )
         
-        # Create pipeline with session-aware executor
+        # Create pipeline with unified schema
         pipeline = SessionAwarePipeline(
-            schema_context=schema_context,
+            unified_schema=source.unified_schema,
             sql_executor=executor,
             use_optimized_retriever=True
         )
@@ -158,7 +154,7 @@ async def process_nl2sql_with_session(
                 "id": source.id,
                 "name": source.name,
                 "type": source.type.value,
-                "tables": list(source.schema_context.get("tables", {}).keys()) if source.schema_context else []
+                "tables": source.unified_schema.get_all_tables() if source.unified_schema else []
             }
         )
         

@@ -207,3 +207,28 @@ async def list_sources(
         })
     
     return {"sources": sources}
+
+
+@router.get("/suggestions")
+async def get_query_suggestions(
+    session_id: str = Header(..., alias="X-Session-Id"),
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+):
+    """Get contextual query suggestions based on the uploaded data."""
+    
+    source = datasource_manager.get_session_source(session_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        suggestions = await datasource_manager.get_query_suggestions(source)
+        return {
+            "session_id": session_id,
+            "source_name": source.name,
+            "suggestions": suggestions
+        }
+    except Exception as e:
+        logger.error("query_suggestions_failed", 
+                    session_id=session_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
