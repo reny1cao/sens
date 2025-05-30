@@ -43,6 +43,10 @@ class LLMSchemaContext(BaseSchemaContext):
         default_factory=dict,
         metadata={"description": "High-value identifier columns per table"},
     )
+    column_types: Dict[str, Dict[str, str]] = field(
+        default_factory=dict,
+        metadata={"description": "Column data types per table"},
+    )
 
     def to_validator_schema(self) -> ValidatorSchemaContext:
         """Convert to validator schema format."""

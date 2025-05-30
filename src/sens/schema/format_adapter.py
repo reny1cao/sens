@@ -67,6 +67,7 @@ class SchemaFormatAdapter:
         primary_keys = {}
         column_descriptions = {}
         sticky_columns = {}
+        column_types = {}  # Add column types
         
         for table in relevant_tables:
             # Table columns
@@ -78,11 +79,15 @@ class SchemaFormatAdapter:
             
             # Column descriptions
             table_descriptions = {}
+            table_types = {}
             for col in table.columns:
                 if col.description:
                     table_descriptions[col.name] = col.description
+                # Include data type information
+                table_types[col.name] = col.data_type.value
             if table_descriptions:
                 column_descriptions[table.name] = table_descriptions
+            column_types[table.name] = table_types
             
             # Sticky columns
             sticky_cols = table.get_sticky_columns()
@@ -107,7 +112,8 @@ class SchemaFormatAdapter:
             primary_keys=primary_keys,
             foreign_keys=foreign_keys,
             column_descriptions=column_descriptions,
-            sticky_columns=sticky_columns
+            sticky_columns=sticky_columns,
+            column_types=column_types
         )
     
     @staticmethod
