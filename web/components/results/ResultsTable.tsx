@@ -15,11 +15,21 @@ interface ResultsTableProps {
 }
 
 export function ResultsTable({ results }: ResultsTableProps) {
+  // Safety checks
+  if (!results || !results.columns || !results.data) {
+    console.error('ResultsTable: Invalid results object', results);
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        Error: Invalid results format
+      </div>
+    );
+  }
+
   // Debug logging
   console.log('ResultsTable received:', {
     columns: results.columns,
-    dataLength: results.data.length,
-    firstRow: results.data[0],
+    dataLength: results.data?.length || 0,
+    firstRow: results.data?.[0],
     rowCount: results.row_count,
   });
 
@@ -48,10 +58,18 @@ export function ResultsTable({ results }: ResultsTableProps) {
     return str;
   };
 
-  if (results.data.length === 0) {
+  if (!Array.isArray(results.data) || results.data.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         No data found
+      </div>
+    );
+  }
+
+  if (!Array.isArray(results.columns) || results.columns.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No columns defined
       </div>
     );
   }
@@ -76,9 +94,9 @@ export function ResultsTable({ results }: ResultsTableProps) {
                   <TableCell
                     key={column}
                     className="max-w-[300px] truncate"
-                    title={String(row[column] || '')}
+                    title={String(row?.[column] || '')}
                   >
-                    {formatCellValue(row[column])}
+                    {formatCellValue(row?.[column])}
                   </TableCell>
                 ))}
               </TableRow>

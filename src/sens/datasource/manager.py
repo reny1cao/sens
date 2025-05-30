@@ -21,6 +21,7 @@ from sens.schema.format_adapter import SchemaFormatAdapter
 from .models import DataSourceType, DataSourceInfo, SessionInfo, TableInfo
 from .storage import storage_manager
 from .query_suggestions import generate_query_suggestions
+from .llm_query_suggestions import generate_llm_query_suggestions
 
 logger = structlog.get_logger(__name__)
 
@@ -255,8 +256,19 @@ class DataSourceManager:
             first_table = source.unified_schema.tables[0]
             sample_data = first_table.sample_data
         
-        # Generate query suggestions using unified schema
-        return generate_query_suggestions(source.unified_schema, sample_data)
+        try:
+            # Try to use LLM-powered suggestions for better insights
+            suggestions = await generate_llm_query_suggestions(
+                source.unified_schema, 
+                sample_data,
+                num_suggestions=10
+            )
+            logger.info("llm_suggestions_used", count=len(suggestions))
+            return suggestions
+        except Exception as e:
+            logger.warning("llm_suggestions_failed", error=str(e))
+            # Fall back to pattern-based suggestions
+            return generate_query_suggestions(source.unified_schema, sample_data)
     
     async def cleanup_expired_sessions(self):
         """Clean up expired sessions and their data."""

@@ -17,14 +17,33 @@ interface QueryResultsProps {
 export function QueryResults({ response }: QueryResultsProps) {
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
 
+  // Safety check for response
+  if (!response || !response.results) {
+    console.error('QueryResults: Invalid response', response);
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="p-4">
+          <h3 className="text-red-800 font-medium mb-1">Error</h3>
+          <p className="text-red-700">Invalid query response format</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const { sql, results, metadata } = response;
-  const isSingleValue = results.row_count === 1 && results.columns.length === 1;
+  const isSingleValue = results?.row_count === 1 && results?.columns?.length === 1;
+  const summary = (results as any)?.summary; // Backend sends summary in results
 
   const exportCSV = () => {
+    if (!results?.columns || !results?.data) {
+      console.error('Cannot export CSV: Invalid results format');
+      return;
+    }
+
     const headers = results.columns.join(',');
     const rows = results.data.map(row =>
       results.columns.map(col => {
-        const value = row[col];
+        const value = row?.[col];
         // Escape quotes and wrap in quotes if contains comma
         const stringValue = String(value ?? '');
         return stringValue.includes(',') || stringValue.includes('"')
@@ -48,6 +67,15 @@ export function QueryResults({ response }: QueryResultsProps) {
       {/* SQL Display */}
       <SQLDisplay sql={sql} />
 
+      {/* Summary (if available) */}
+      {summary && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="pt-6">
+            <p className="text-blue-900">{summary}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Results */}
       <Card>
         <CardHeader>
@@ -55,11 +83,11 @@ export function QueryResults({ response }: QueryResultsProps) {
             <div>
               <CardTitle>Results</CardTitle>
               <CardDescription>
-                {results.row_count} {results.row_count === 1 ? 'row' : 'rows'} •
-                {metadata.execution_time_ms}ms
+                {results?.row_count || 0} {results?.row_count === 1 ? 'row' : 'rows'} •
+                {metadata?.execution_time_ms?.toFixed(0) || 0}ms
               </CardDescription>
             </div>
-            {results.row_count > 0 && (
+            {results?.row_count > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -72,9 +100,9 @@ export function QueryResults({ response }: QueryResultsProps) {
           </div>
         </CardHeader>
         <CardContent>
-          {results.row_count === 0 ? (
+          {!results || results.row_count === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No results found</p>
-          ) : isSingleValue ? (
+          ) : isSingleValue && results.data?.[0] && results.columns?.[0] ? (
             <SingleValueCard
               value={results.data[0][results.columns[0]]}
               label={results.columns[0]}

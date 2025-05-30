@@ -15,7 +15,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function QueryInterface() {
   const [question, setQuestion] = useState('');
-  const [hasQueried, setHasQueried] = useState(false);
   const { executeQuery, isLoading, data, error, steps } = useQuery();
   const { activeSource } = useDataSource();
 
@@ -23,13 +22,11 @@ export function QueryInterface() {
     e.preventDefault();
     if (!question.trim() || isLoading) return;
 
-    setHasQueried(true);
     executeQuery({ question });
   };
 
   const handleExampleClick = (example: string) => {
     setQuestion(example);
-    setHasQueried(true);
     executeQuery({ question: example });
   };
 
@@ -78,8 +75,8 @@ export function QueryInterface() {
             </div>
           </form>
 
-          {/* Example Queries */}
-          {!hasQueried && (
+          {/* Example Queries - Always show when we have an active data source */}
+          {activeSource && (
             <ExampleQueries onExampleClick={handleExampleClick} />
           )}
         </CardContent>
@@ -108,7 +105,7 @@ export function QueryInterface() {
       )}
 
       {/* Data Source Schema (optional - shown when there's an active source) */}
-      {activeSource && !hasQueried && (
+      {activeSource && !data && (
         <DataSourceInfo />
       )}
     </div>

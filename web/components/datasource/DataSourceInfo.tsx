@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Table, Database } from 'lucide-react';
+import { ChevronDown, ChevronRight, Table, Database, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { useDataSource } from '@/contexts/DataSourceContext';
 import { cn } from '@/lib/utils';
 
 export function DataSourceInfo() {
-  const { activeSource } = useDataSource();
+  const { activeSource, clearDataSource } = useDataSource();
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
 
   if (!activeSource) {
@@ -32,10 +32,21 @@ export function DataSourceInfo() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Database className="h-5 w-5" />
-          Data Schema
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Data Schema
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearDataSource}
+            title="Clear data source"
+          >
+            <X className="h-4 w-4" />
+            Clear
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">

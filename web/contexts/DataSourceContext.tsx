@@ -116,6 +116,13 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
   const clearDataSource = async () => {
     if (!activeSource) return;
 
+    // Confirm before clearing
+    const confirmed = window.confirm(
+      `Are you sure you want to clear "${activeSource.name}"? This will remove all uploaded data.`
+    );
+    
+    if (!confirmed) return;
+
     try {
       await fetch(`/api/datasource/session/${sessionId}`, {
         method: 'DELETE',

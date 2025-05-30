@@ -32,12 +32,41 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    // Log the response for debugging
-    console.log('Backend response:', {
+    // Transform the response to match frontend expectations
+    if (data.results && data.results.rows && data.results.columns) {
+      // Convert rows (array of arrays) to data (array of objects)
+      data.results.data = data.results.rows.map((row: any[]) => {
+        const obj: Record<string, any> = {};
+        data.results.columns.forEach((col: string, idx: number) => {
+          obj[col] = row[idx];
+        });
+        return obj;
+      });
+      
+      // Remove the rows field to avoid confusion
+      delete data.results.rows;
+    }
+
+    // Transform metadata to match frontend expectations
+    if (data.metadata) {
+      // Ensure execution_time_ms exists
+      if (data.metadata.execution_time !== undefined && data.metadata.execution_time_ms === undefined) {
+        data.metadata.execution_time_ms = data.metadata.execution_time * 1000;
+      }
+      
+      // Default values for required fields
+      data.metadata.tables_used = data.metadata.tables_used || [];
+      data.metadata.query_type = data.metadata.query_type || 'select';
+    }
+
+    // Log the transformed response for debugging
+    console.log('Transformed response:', {
       sql: data.sql?.substring(0, 100) + '...',
       resultsKeys: Object.keys(data.results || {}),
       columns: data.results?.columns,
       dataLength: data.results?.data?.length,
+      dataType: Array.isArray(data.results?.data) ? 'array' : typeof data.results?.data,
+      columnsType: Array.isArray(data.results?.columns) ? 'array' : typeof data.results?.columns,
       firstRow: data.results?.data?.[0],
     });
 
