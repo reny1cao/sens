@@ -25,7 +25,7 @@ import { useDataSource } from '@/contexts/DataSourceContext';
 import { DataSourceType } from '@/types';
 
 export function DataSourceSelector() {
-  const { activeSource, clearDataSource } = useDataSource();
+  const { activeSource, clearDataSource, deleteTable } = useDataSource();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'upload' | 'connect' | null>(null);
 
@@ -83,14 +83,14 @@ export function DataSourceSelector() {
                 <div className="px-2 py-1.5 text-sm text-muted-foreground">
                   Current source:
                 </div>
-                <div className="px-2 pb-2">
+                <div className="px-2 pb-2 space-y-2">
                   <div className="flex items-center justify-between p-2 bg-muted rounded-md">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
                       {getSourceIcon(activeSource.type)}
-                      <div>
-                        <p className="text-sm font-medium">{activeSource.name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{activeSource.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {activeSource.totalRows.toLocaleString()} rows
+                          {activeSource.tables.length} {activeSource.tables.length === 1 ? 'table' : 'tables'} • {activeSource.totalRows.toLocaleString()} rows
                         </p>
                       </div>
                     </div>
@@ -98,11 +98,41 @@ export function DataSourceSelector() {
                       variant="ghost"
                       size="sm"
                       onClick={clearDataSource}
-                      className="h-6 w-6 p-0"
+                      className="h-6 w-6 p-0 flex-shrink-0 ml-2"
+                      title="Clear all data"
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
+                  
+                  {/* Show individual tables */}
+                  {activeSource.tables.map((table) => (
+                    <div key={table.name} className="pl-6 pr-2">
+                      <div className="flex items-center justify-between text-sm group hover:bg-muted/50 rounded p-1">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Table className="h-3 w-3 text-muted-foreground" />
+                          <span className="font-mono text-xs truncate">{table.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {table.row_count.toLocaleString()} rows
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteTable(table.name);
+                            }}
+                            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title={`Delete table ${table.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <DropdownMenuSeparator />
               </>

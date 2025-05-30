@@ -11,6 +11,7 @@ interface DataSourceContextType {
   uploadFiles: (files: File[]) => Promise<void>;
   setActiveSource: (source: DataSource) => void;
   clearDataSource: () => Promise<void>;
+  deleteTable: (tableName: string) => Promise<void>;
   previewTable: (tableName: string) => Promise<any>;
   refreshSession: () => Promise<void>;
 }
@@ -42,12 +43,8 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
     }
   }, [sessionId]);
 
-  // Check for existing session on mount
-  useEffect(() => {
-    refreshSession();
-  }, []);
-
-  const refreshSession = async () => {
+  const refreshSession = useCallback(async () => {
+    console.log('Refreshing session:', sessionId);
     try {
       const response = await fetch(`/api/datasource/session/${sessionId}`, {
         headers: {
@@ -57,6 +54,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Session data loaded:', data);
         setActiveSource({
           id: data.source_id,
           name: data.name,
@@ -65,12 +63,21 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
           totalRows: data.total_rows,
           createdAt: new Date(),
         });
+      } else {
+        console.log('Session not found:', response.status);
       }
     } catch (err) {
       // No existing session, that's ok
-      console.log('No existing session found');
+      console.log('Error loading session:', err);
     }
-  };
+  }, [sessionId]);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    if (sessionId) {
+      refreshSession();
+    }
+  }, [sessionId, refreshSession]);
 
   const uploadFiles = async (files: File[]) => {
     setIsLoading(true);
@@ -141,6 +148,44 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
+  const deleteTable = async (tableName: string) => {
+    if (!activeSource) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the table "${tableName}"? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/datasource/session/${sessionId}/table/${tableName}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Session-Id': sessionId,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete table');
+      }
+
+      const result = await response.json();
+      
+      // Refresh session to get updated table list
+      await refreshSession();
+      
+      // Show success message
+      if (result.remaining_tables && result.remaining_tables.length === 0) {
+        // All tables deleted, session was cleaned up
+        setActiveSource(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete table:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete table');
+    }
+  };
+
   const previewTable = async (tableName: string) => {
     try {
       const response = await fetch(`/api/datasource/preview/${tableName}`, {
@@ -170,6 +215,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
         uploadFiles,
         setActiveSource,
         clearDataSource,
+        deleteTable,
         previewTable,
         refreshSession,
       }}

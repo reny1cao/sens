@@ -18,6 +18,8 @@ from sens.schema.extractors import SchemaExtractor
 from sens.schema.extractors.duckdb_extractor import DuckDBExtractor
 from sens.schema.extractors.postgresql_extractor import PostgreSQLExtractor
 from sens.schema.format_adapter import SchemaFormatAdapter
+from sens.caching.manager import CacheManager
+from sens.caching.factory import get_cache_backend
 from .models import DataSourceType, DataSourceInfo, SessionInfo, TableInfo
 from .storage import storage_manager
 from .query_suggestions import generate_query_suggestions
@@ -68,6 +70,10 @@ class DataSourceManager:
         self.temp_dir = Path("/tmp/sens")
         self.temp_dir.mkdir(exist_ok=True)
         self.session_ttl = timedelta(hours=24)
+        
+        # Initialize cache manager
+        cache_backend = get_cache_backend(self.settings)
+        self.cache_manager = CacheManager(backend=cache_backend)
         
         # Initialize default PostgreSQL source
         self._init_default_source()
@@ -246,9 +252,37 @@ class DataSourceManager:
         return tables
     
     async def get_query_suggestions(self, source: DataSource) -> List[str]:
-        """Get query suggestions for a data source."""
+        """Get query suggestions for a data source with caching."""
         if not source.unified_schema:
             await self._extract_schema(source)
+        
+        # Generate cache key based on source ID and schema structure
+        # We'll use table names and column counts as a simple schema fingerprint
+        schema_fingerprint = {
+            "source_id": source.id,
+            "tables": [
+                {
+                    "name": table.name,
+                    "column_count": len(table.columns),
+                    "row_count": table.row_count
+                }
+                for table in source.unified_schema.tables
+            ]
+        }
+        
+        cache_key = self.cache_manager.generate_key(
+            "query_suggestions",
+            source.id,
+            schema_fingerprint=schema_fingerprint
+        )
+        
+        # Try to get from cache first
+        cached_suggestions = await self.cache_manager.get(cache_key)
+        if cached_suggestions is not None:
+            logger.info("query_suggestions_cache_hit", source_id=source.id)
+            return cached_suggestions
+        
+        logger.info("query_suggestions_cache_miss", source_id=source.id)
         
         # Get sample data from first table if available
         sample_data = None
@@ -263,12 +297,21 @@ class DataSourceManager:
                 sample_data,
                 num_suggestions=10
             )
-            logger.info("llm_suggestions_used", count=len(suggestions))
+            logger.info("llm_suggestions_generated", count=len(suggestions))
+            
+            # Cache the suggestions for 1 hour
+            await self.cache_manager.set(cache_key, suggestions, ttl=timedelta(hours=1))
+            
             return suggestions
         except Exception as e:
             logger.warning("llm_suggestions_failed", error=str(e))
             # Fall back to pattern-based suggestions
-            return generate_query_suggestions(source.unified_schema, sample_data)
+            suggestions = generate_query_suggestions(source.unified_schema, sample_data)
+            
+            # Cache even the fallback suggestions
+            await self.cache_manager.set(cache_key, suggestions, ttl=timedelta(minutes=30))
+            
+            return suggestions
     
     async def cleanup_expired_sessions(self):
         """Clean up expired sessions and their data."""

@@ -33,18 +33,40 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     // Transform the response to match frontend expectations
-    if (data.results && data.results.rows && data.results.columns) {
-      // Convert rows (array of arrays) to data (array of objects)
-      data.results.data = data.results.rows.map((row: any[]) => {
-        const obj: Record<string, any> = {};
-        data.results.columns.forEach((col: string, idx: number) => {
-          obj[col] = row[idx];
-        });
-        return obj;
-      });
+    if (data.results) {
+      // Ensure results has the correct structure
+      if (!data.results.columns) {
+        data.results.columns = [];
+      }
       
-      // Remove the rows field to avoid confusion
-      delete data.results.rows;
+      // Convert rows to data if needed
+      if (data.results.rows && !data.results.data) {
+        data.results.data = data.results.rows.map((row: any[]) => {
+          const obj: Record<string, any> = {};
+          data.results.columns.forEach((col: string, idx: number) => {
+            obj[col] = row[idx];
+          });
+          return obj;
+        });
+        delete data.results.rows;
+      }
+      
+      // Ensure data exists
+      if (!data.results.data) {
+        data.results.data = [];
+      }
+      
+      // Ensure row_count exists
+      if (data.results.row_count === undefined) {
+        data.results.row_count = data.results.data.length;
+      }
+    } else {
+      // Create empty results structure if missing
+      data.results = {
+        columns: [],
+        data: [],
+        row_count: 0
+      };
     }
 
     // Transform metadata to match frontend expectations

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, RefreshCw } from 'lucide-react';
 import { useDataSource } from '@/contexts/DataSourceContext';
+import { Button } from '@/components/ui/button';
 
 interface ExampleQueriesProps {
   onExampleClick: (example: string) => void;
@@ -20,15 +21,13 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
   const { sessionId, activeSource } = useDataSource();
   const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_EXAMPLES);
   const [isLoading, setIsLoading] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-
   useEffect(() => {
     if (activeSource && sessionId) {
       fetchSuggestions();
     } else {
       setSuggestions(DEFAULT_EXAMPLES);
     }
-  }, [activeSource, sessionId, refreshKey]);
+  }, [activeSource, sessionId]);
 
   const fetchSuggestions = async () => {
     setIsLoading(true);
@@ -55,24 +54,30 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
   };
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-        <Sparkles className="h-4 w-4" />
-        <span>{activeSource ? 'Suggested queries for your data:' : 'Try these examples:'}</span>
-        {isLoading && <span className="text-xs text-gray-500">(Loading...)</span>}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <Sparkles className="h-4 w-4" />
+          <span>{activeSource ? 'Suggested queries for your data:' : 'Try these examples:'}</span>
+          {isLoading && <span className="text-xs text-gray-500">(Loading...)</span>}
+        </div>
+        {activeSource && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchSuggestions}
+            disabled={isLoading}
+            className="h-7 px-2 text-xs"
+            title="Get new suggestions"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         {suggestions.map((example) => (
           <button
             key={example}
-            onClick={() => {
-              onExampleClick(example);
-              // Don't refresh immediately - let user see what was clicked
-              setTimeout(() => {
-                if (activeSource) {
-                  setRefreshKey(prev => prev + 1);
-                }
-              }, 2000);
-            }}
+            onClick={() => onExampleClick(example)}
             className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
           >
             {example}

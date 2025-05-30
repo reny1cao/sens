@@ -10,7 +10,7 @@ import { useDataSource } from '@/contexts/DataSourceContext';
 import { cn } from '@/lib/utils';
 
 export function DataSourceInfo() {
-  const { activeSource, clearDataSource } = useDataSource();
+  const { activeSource, clearDataSource, deleteTable } = useDataSource();
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
 
   if (!activeSource) {
@@ -68,7 +68,18 @@ export function DataSourceInfo() {
                     {table.row_count.toLocaleString()} rows
                   </Badge>
                 </div>
-                <DataPreview table={table} />
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <DataPreview table={table} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteTable(table.name)}
+                    className="h-8 w-8 p-0"
+                    title={`Delete table ${table.name}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               
               {expandedTables.has(table.name) && (

@@ -190,6 +190,69 @@ async def delete_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/session/{session_id}/table/{table_name}")
+async def delete_table(
+    session_id: str,
+    table_name: str,
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+):
+    """Delete a specific table from a session."""
+    
+    source = datasource_manager.get_session_source(session_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if source.type != DataSourceType.UPLOADED_FILE:
+        raise HTTPException(status_code=400, detail="Table deletion only available for uploaded files")
+    
+    try:
+        conn = source.get_connection()
+        
+        # Check if table exists
+        tables = conn.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'main' AND table_name = ?
+        """, [table_name]).fetchall()
+        
+        if not tables:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        
+        # Drop the table
+        conn.execute(f'DROP TABLE "{table_name}"')
+        
+        # Update schema if already extracted
+        if source.unified_schema:
+            source.unified_schema.tables = [
+                t for t in source.unified_schema.tables 
+                if t.name != table_name
+            ]
+        
+        logger.info("table_deleted", 
+                   session_id=session_id,
+                   table=table_name)
+        
+        # Get updated table info
+        tables = await datasource_manager.get_table_info(source)
+        
+        # If no tables left, clean up the session
+        if not tables:
+            await datasource_manager._cleanup_session(session_id)
+            return {"message": f"Table '{table_name}' deleted. Session cleaned up as no tables remain."}
+        
+        return {
+            "message": f"Table '{table_name}' deleted successfully",
+            "remaining_tables": [t.name for t in tables]
+        }
+        
+    except Exception as e:
+        logger.error("table_deletion_failed", 
+                    session_id=session_id,
+                    table=table_name,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/sources")
 async def list_sources(
     datasource_manager: DataSourceManager = Depends(get_datasource_manager)
