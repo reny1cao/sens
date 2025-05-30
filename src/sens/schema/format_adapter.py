@@ -68,6 +68,7 @@ class SchemaFormatAdapter:
         column_descriptions = {}
         sticky_columns = {}
         column_types = {}  # Add column types
+        sample_data = {}  # Add sample data
         
         for table in relevant_tables:
             # Table columns
@@ -93,6 +94,10 @@ class SchemaFormatAdapter:
             sticky_cols = table.get_sticky_columns()
             if sticky_cols:
                 sticky_columns[table.name] = sticky_cols
+                
+            # Sample data
+            if table.sample_data:
+                sample_data[table.name] = table.sample_data
         
         # Convert foreign keys
         foreign_keys = []
@@ -113,7 +118,8 @@ class SchemaFormatAdapter:
             foreign_keys=foreign_keys,
             column_descriptions=column_descriptions,
             sticky_columns=sticky_columns,
-            column_types=column_types
+            column_types=column_types,
+            sample_data=sample_data
         )
     
     @staticmethod
