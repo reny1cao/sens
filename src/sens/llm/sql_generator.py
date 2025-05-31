@@ -344,18 +344,13 @@ class SQLGenerator:
         """
         validator = SQLValidator()
 
-        # Get the full schema from SchemaGraph
-        schema_graph = SchemaGraph.get_instance()
-        full_schema = ValidatorSchemaContext(
-            tables=set(schema_graph.list_all_tables()),
-            columns_per_table={
-                table: set(schema_graph.get_table_columns(table))
-                for table in schema_graph.list_all_tables()
-            },
-        )
-
-        # Convert LLMSchemaContext to ValidatorSchemaContext for the prompted subset
-        prompted_schema = schema.to_validator_schema()
+        # Convert LLMSchemaContext to ValidatorSchemaContext
+        validator_schema = schema.to_validator_schema()
+        
+        # For session-based schemas (uploaded files), use the same schema as both full and prompted
+        # since there's no larger database context
+        full_schema = validator_schema
+        prompted_schema = validator_schema
 
         validation_result = validator.validate(
             sql=sql,

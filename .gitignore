@@ -48,3 +48,8 @@ logs/
 
 # Coverage
 .coverage
+
+# Temporary files
+.backend.pid
+cloudflared*
+*.pid

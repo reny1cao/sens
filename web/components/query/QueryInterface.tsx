@@ -1,36 +1,47 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Info } from 'lucide-react';
 import { useQuery } from '@/hooks/useQuery';
+import { useDataSource } from '@/contexts/DataSourceContext';
 import { ProcessingSteps } from './ProcessingSteps';
 import { QueryResults } from '../results/QueryResults';
 import { ExampleQueries } from './ExampleQueries';
+import { DataSourceInfo } from '../datasource/DataSourceInfo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function QueryInterface() {
   const [question, setQuestion] = useState('');
-  const [hasQueried, setHasQueried] = useState(false);
   const { executeQuery, isLoading, data, error, steps } = useQuery();
+  const { activeSource } = useDataSource();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!question.trim() || isLoading) return;
 
-    setHasQueried(true);
     executeQuery({ question });
   };
 
   const handleExampleClick = (example: string) => {
     setQuestion(example);
-    setHasQueried(true);
     executeQuery({ question: example });
   };
 
   return (
     <div className="space-y-6">
+      {/* Active Data Source Info */}
+      {activeSource && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Querying <strong>{activeSource.name}</strong> with {activeSource.tables.length} tables and {activeSource.totalRows.toLocaleString()} total rows
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Query Input */}
       <Card>
         <CardContent className="p-6">
@@ -64,8 +75,8 @@ export function QueryInterface() {
             </div>
           </form>
 
-          {/* Example Queries */}
-          {!hasQueried && (
+          {/* Example Queries - Always show when we have an active data source */}
+          {activeSource && (
             <ExampleQueries onExampleClick={handleExampleClick} />
           )}
         </CardContent>
@@ -91,6 +102,11 @@ export function QueryInterface() {
       {/* Results */}
       {data && !error && (
         <QueryResults response={data} />
+      )}
+
+      {/* Data Source Schema (optional - shown when there's an active source) */}
+      {activeSource && !data && (
+        <DataSourceInfo />
       )}
     </div>
   );

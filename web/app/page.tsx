@@ -1,30 +1,31 @@
 'use client';
 
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { DataSourceProvider } from '@/contexts/DataSourceContext';
 import { QueryInterface } from '@/components/query/QueryInterface';
+import { DataSourceSelector } from '@/components/datasource/DataSourceSelector';
 import { Database } from 'lucide-react';
 
 export default function Home() {
   return (
-    <QueryProvider>
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
-                <Database className="h-6 w-6 text-blue-600" />
-                <h1 className="text-xl font-semibold text-gray-900">SENS</h1>
-                <span className="text-sm text-gray-500">Natural Language SQL</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-500">
-                  Connected to: <span className="font-medium text-gray-700">production_db</span>
-                </span>
+    <DataSourceProvider>
+      <QueryProvider>
+        <div className="min-h-screen bg-gray-50">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between h-16">
+                <div className="flex items-center gap-3">
+                  <Database className="h-6 w-6 text-blue-600" />
+                  <h1 className="text-xl font-semibold text-gray-900">SENS</h1>
+                  <span className="text-sm text-gray-500">Natural Language SQL</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <DataSourceSelector />
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
         {/* Main Content */}
         <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -49,6 +50,7 @@ export default function Home() {
           </div>
         </footer>
       </div>
-    </QueryProvider>
+      </QueryProvider>
+    </DataSourceProvider>
   );
 }

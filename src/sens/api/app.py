@@ -15,8 +15,10 @@ from .routers.column_search.router import router as column_search_router
 from .routers.intent.router import router as intent_router
 from .routers.nl2sql_dev import router as nl2sql_dev_router
 from .routers.nl2sql_simple import router as nl2sql_router
+from .routers.nl2sql_session import router as nl2sql_session_router
 from .routers.retrieval import router as retrieval_router
 from .routers.table_search.router import router as table_search_router
+from .routers.datasource import router as datasource_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -73,12 +75,14 @@ app.router.lifespan_context = lifespan
 # Add routers
 app.include_router(nl2sql_router, prefix="/api", tags=["nl2sql"])
 app.include_router(nl2sql_dev_router, prefix="/api", tags=["nl2sql-dev"])
+app.include_router(nl2sql_session_router, prefix="/api", tags=["nl2sql-session"])
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(
     column_search_router, prefix="/column-search", tags=["column-search"]
 )
 app.include_router(retrieval_router, prefix="/retrieval", tags=["retrieval"])
+app.include_router(datasource_router, prefix="/api", tags=["datasource"])
 
 
 @app.get("/health")

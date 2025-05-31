@@ -1,12 +1,15 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Sparkles, RefreshCw } from 'lucide-react';
+import { useDataSource } from '@/contexts/DataSourceContext';
+import { Button } from '@/components/ui/button';
 
 interface ExampleQueriesProps {
   onExampleClick: (example: string) => void;
 }
 
-const EXAMPLES = [
+const DEFAULT_EXAMPLES = [
   'How many users do we have?',
   'Show me the top 10 customers by revenue',
   'What were our sales last month?',
@@ -15,14 +18,63 @@ const EXAMPLES = [
 ];
 
 export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
+  const { sessionId, activeSource } = useDataSource();
+  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_EXAMPLES);
+  const [isLoading, setIsLoading] = useState(false);
+  useEffect(() => {
+    if (activeSource && sessionId) {
+      fetchSuggestions();
+    } else {
+      setSuggestions(DEFAULT_EXAMPLES);
+    }
+  }, [activeSource, sessionId]);
+
+  const fetchSuggestions = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/datasource/suggestions', {
+        headers: {
+          'X-Session-Id': sessionId,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestions && data.suggestions.length > 0) {
+          // Take first 5 suggestions
+          setSuggestions(data.suggestions.slice(0, 5));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch suggestions:', error);
+      // Keep default suggestions on error
+    } finally {
+      setIsLoading(false);
+    }
+  };
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-        <Sparkles className="h-4 w-4" />
-        <span>Try these examples:</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <Sparkles className="h-4 w-4" />
+          <span>{activeSource ? 'Suggested queries for your data:' : 'Try these examples:'}</span>
+          {isLoading && <span className="text-xs text-gray-500">(Loading...)</span>}
+        </div>
+        {activeSource && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchSuggestions}
+            disabled={isLoading}
+            className="h-7 px-2 text-xs"
+            title="Get new suggestions"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
-        {EXAMPLES.map((example) => (
+        {suggestions.map((example) => (
           <button
             key={example}
             onClick={() => onExampleClick(example)}
