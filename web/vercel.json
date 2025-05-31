@@ -3,9 +3,6 @@
   "outputDirectory": ".next",
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "https://revision-yen-angela-horn.trycloudflare.com"
-  },
   "headers": [
     {
       "source": "/api/(.*)",

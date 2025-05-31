@@ -4,15 +4,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { sessionId: string; tableName: string } }
+  { params }: { params: Promise<{ sessionId: string; tableName: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const response = await fetch(
-      `${API_BASE_URL}/api/datasource/session/${params.sessionId}/table/${params.tableName}`,
+      `${API_BASE_URL}/api/datasource/session/${resolvedParams.sessionId}/table/${resolvedParams.tableName}`,
       {
         method: 'DELETE',
         headers: {
-          'X-Session-Id': params.sessionId,
+          'X-Session-Id': resolvedParams.sessionId,
         },
       }
     );
