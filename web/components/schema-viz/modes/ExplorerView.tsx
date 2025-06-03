@@ -192,7 +192,7 @@ export function ExplorerView({
                       <Badge variant="outline" className="text-xs h-4 px-1 hidden sm:inline-flex">UQ</Badge>
                     )}
                     {attr.constraints.partitionKey && (
-                      <Badge variant="secondary" className="text-xs h-4 px-1">PART</Badge>
+                      <Badge variant="outline" className="text-xs h-4 px-1 text-purple-600 border-purple-600">PT</Badge>
                     )}
                   </div>
                 </div>

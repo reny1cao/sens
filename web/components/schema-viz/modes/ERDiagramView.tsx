@@ -70,7 +70,7 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
                   <span className="font-bold text-primary text-xs">PK</span>
                   {attr.constraints.partitionKey && (
-                    <span className="font-bold text-green-600 text-xs">+PART</span>
+                    <span className="font-bold text-purple-600 text-xs">+PT</span>
                   )}
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
@@ -97,7 +97,7 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
             <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
               {partitionKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
-                  <span className="font-bold text-green-600 text-xs">PT</span>
+                  <span className="font-bold text-purple-600 text-xs">PT</span>
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>

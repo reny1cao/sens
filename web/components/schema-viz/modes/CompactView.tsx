@@ -164,7 +164,7 @@ export function CompactView({
                         <Badge variant="secondary" className="h-4 px-1">FK</Badge>
                       )}
                       {attr.constraints.partitionKey && (
-                        <Badge variant="secondary" className="h-4 px-1">PART</Badge>
+                        <Badge variant="outline" className="text-xs h-4 px-1 text-purple-600 border-purple-600">PT</Badge>
                       )}
                       <span className="font-mono">{attr.name}</span>
                     </div>
@@ -218,7 +218,7 @@ export function CompactView({
                         <Badge variant="outline" className="text-xs h-4 px-1">FK</Badge>
                       )}
                       {attr.constraints.partitionKey && (
-                        <Badge variant="secondary" className="text-xs h-4 px-1">PART</Badge>
+                        <Badge variant="outline" className="text-xs h-4 px-1 text-purple-600 border-purple-600">PT</Badge>
                       )}
                     </div>
                   </div>
