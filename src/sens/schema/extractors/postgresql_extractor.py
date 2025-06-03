@@ -203,6 +203,9 @@ class PostgreSQLExtractor(SchemaExtractor):
             cursor.execute(f'SELECT COUNT(*) FROM "{self.schema_name}"."{table_name}"')
             row_count = cursor.fetchone()[0]
         
+        # Check if table is partitioned or is a partition
+        partition_info = await self._extract_partition_info(conn, table_name)
+        
         # Get sample data if requested
         sample_data = None
         if self.include_sample_data and row_count > 0:
@@ -216,7 +219,11 @@ class PostgreSQLExtractor(SchemaExtractor):
             indexes=indexes,
             row_count=row_count,
             description=table_comment,
-            sample_data=sample_data
+            sample_data=sample_data,
+            is_partitioned=partition_info['is_partitioned'],
+            partition_key=partition_info['partition_key'],
+            is_partition=partition_info['is_partition'],
+            parent_table=partition_info['parent_table']
         )
     
     async def _extract_columns(self, conn, table_name: str) -> List[ColumnInfo]:
@@ -405,6 +412,40 @@ class PostgreSQLExtractor(SchemaExtractor):
                 ))
         
         return indexes
+    
+    async def _extract_partition_info(self, conn, table_name: str) -> Dict[str, Any]:
+        """Extract partition information for a table."""
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            # Check if table is partitioned (is a parent)
+            cursor.execute("""
+                SELECT 
+                    pg_get_partkeydef(c.oid) as partition_key
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s AND c.relname = %s AND c.relkind = 'p'
+            """, (self.schema_name, table_name))
+            
+            partitioned_result = cursor.fetchone()
+            
+            # Check if table is a partition (has a parent)
+            cursor.execute("""
+                SELECT 
+                    p.relname as parent_table
+                FROM pg_class c
+                JOIN pg_inherits i ON c.oid = i.inhrelid
+                JOIN pg_class p ON i.inhparent = p.oid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s AND c.relname = %s
+            """, (self.schema_name, table_name))
+            
+            partition_result = cursor.fetchone()
+            
+            return {
+                'is_partitioned': partitioned_result is not None,
+                'partition_key': partitioned_result['partition_key'] if partitioned_result else None,
+                'is_partition': partition_result is not None,
+                'parent_table': partition_result['parent_table'] if partition_result else None
+            }
     
     async def _extract_sample_data(self, conn, table_name: str) -> List[Dict[str, Any]]:
         """Extract sample data from a table."""

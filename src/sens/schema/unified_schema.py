@@ -88,6 +88,11 @@ class TableInfo(BaseModel):
     row_count: Optional[int] = None
     description: Optional[str] = None
     sample_data: Optional[List[Dict[str, Any]]] = None
+    # Partition information
+    is_partitioned: bool = False
+    partition_key: Optional[str] = None
+    is_partition: bool = False
+    parent_table: Optional[str] = None
     
     def get_column(self, column_name: str) -> Optional[ColumnInfo]:
         """Get column info by name."""

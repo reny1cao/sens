@@ -172,6 +172,10 @@ async def get_schema_for_visualization(
         
         # Process tables
         for table in schema.tables:
+            # Skip partition tables - they have a parent_table set
+            if hasattr(table, 'is_partition') and table.is_partition:
+                continue  # Skip child partitions, only show parent tables
+            
             # Map columns to attributes
             attributes = []
             
@@ -213,8 +217,19 @@ async def get_schema_for_visualization(
             # Determine category
             category = categorize_table(table.name, schema)
             
-            # Check if partitioned
-            is_partitioned = any(word in table.name.lower() for word in ['_y', '_m', '_q', '_partition'])
+            # Check if partitioned from database metadata
+            is_partitioned = hasattr(table, 'is_partitioned') and table.is_partitioned
+            
+            # Enhance description for partitioned tables
+            description = table.description
+            if is_partitioned and hasattr(table, 'partition_key') and table.partition_key:
+                # Extract the partition key from PostgreSQL format like "RANGE (trade_date)"
+                partition_key = table.partition_key
+                if 'RANGE' in partition_key:
+                    key_match = partition_key.split('(')[1].rstrip(')')
+                    description = (description or "") + f" (Partitioned by {key_match})"
+                else:
+                    description = (description or "") + f" (Partitioned)"
             
             # Create entity
             entity = SchemaEntity(
@@ -223,7 +238,7 @@ async def get_schema_for_visualization(
                 type="table",
                 category=category,
                 displayName=table.name.replace('_', ' ').title(),
-                description=table.description,
+                description=description,
                 attributes=attributes,
                 stats={
                     "rowCount": table.row_count,
