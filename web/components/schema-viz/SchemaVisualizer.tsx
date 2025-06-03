@@ -11,7 +11,8 @@ import {
   Search,
   Filter,
   Download,
-  Maximize2
+  Maximize2,
+  ChevronDown
 } from 'lucide-react';
 import { 
   UniversalSchema, 
@@ -133,11 +134,12 @@ export function SchemaVisualizer({
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             {/* Mobile dropdown */}
-            <div className="md:hidden flex-1">
+            <div className="md:hidden flex-1 relative z-10">
               <select
                 value={config.mode}
                 onChange={(e) => setConfig(prev => ({ ...prev, mode: e.target.value as any }))}
-                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="appearance-none w-full h-10 rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                style={{ WebkitAppearance: 'none', touchAction: 'manipulation' }}
               >
                 {viewModes.map((mode) => (
                   <option key={mode.id} value={mode.id}>
@@ -145,6 +147,7 @@ export function SchemaVisualizer({
                   </option>
                 ))}
               </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground" />
             </div>
             
             {/* Desktop buttons */}
@@ -211,7 +214,7 @@ export function SchemaVisualizer({
       </div>
 
       {/* Content */}
-      <div className="p-4 overflow-auto" style={{ height: isFullscreen ? 'calc(100vh - 140px)' : '600px' }}>
+      <div className="p-3 sm:p-4 overflow-auto relative" style={{ height: isFullscreen ? 'calc(100vh - 180px)' : '600px' }}>
         {config.mode === 'explorer' && (
           <ExplorerView
             schema={schema}
