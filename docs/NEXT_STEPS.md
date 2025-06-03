@@ -5,16 +5,23 @@
 - Added missing tables (exchanges, sectors, industries, economic_indicators, exchange_rates)
 - Now correctly shows all 9 tables in the visualization
 
-## 2. 🔧 Fix Mobile Touch Issues (IN PROGRESS)
+## 2. 🔧 Fix Mobile Touch Issues (ATTEMPTED)
 - **Problem**: Buttons not tappable on mobile devices
-- **Solution**: Implementing native HTML elements with simpler interaction model
-- **Approach**: Using radio buttons styled as tabs for mobile view mode selection
+- **Solution**: Tried multiple approaches including native HTML elements
+- **Status**: Issue persists - may be device/browser specific
+- **Note**: Moving to other priorities, will revisit later
 
-## 3. 📋 Backend Integration (TODO)
-- Connect schema visualization to actual database schema API
-- Replace mock data with real schema extraction
-- Add dynamic schema loading based on selected data source
-- Implement schema refresh functionality
+## 3. 🔧 Backend Integration (IN PROGRESS)
+- ✅ Created `/api/schema/visualize` endpoint to fetch schema
+- ✅ Created `/api/schema/refresh` endpoint to refresh schema
+- ✅ Added schema transformation to match frontend format
+- ✅ Added semantic type detection based on column names
+- ✅ Added table categorization logic
+- ✅ Updated frontend to fetch real schema data
+- ✅ Added error handling and fallback to mock data
+- ✅ Added refresh button to update schema
+- 📋 TODO: Test with real database connection
+- 📋 TODO: Add loading states for better UX
 
 ## 4. 📋 Enhance Schema Context (TODO)
 - Upgrade backend schema context to match frontend visualization

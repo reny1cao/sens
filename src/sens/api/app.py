@@ -19,6 +19,7 @@ from .routers.nl2sql_session import router as nl2sql_session_router  # Session-b
 from .routers.retrieval import router as retrieval_router
 from .routers.table_search.router import router as table_search_router
 from .routers.datasource import router as datasource_router
+from .routers.schema import router as schema_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -134,6 +135,7 @@ app.include_router(
 )
 app.include_router(retrieval_router, prefix="/retrieval", tags=["retrieval"])
 app.include_router(datasource_router, prefix="/api", tags=["datasource"])
+app.include_router(schema_router, prefix="/api", tags=["schema"])
 
 
 @app.get("/health")

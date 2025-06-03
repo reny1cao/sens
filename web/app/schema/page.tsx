@@ -5,9 +5,14 @@ import { SchemaVisualizer } from '@/components/schema-viz/SchemaVisualizer';
 import { UniversalSchema } from '@/types/schema';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Database } from 'lucide-react';
+import { Database, AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { fetchSchema, refreshSchema } from '@/lib/api/schema';
+import { useSearchParams } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
-// Mock schema data for demonstration
+// Keep mock schema as fallback
 const mockSchema: UniversalSchema = {
   source: {
     type: 'postgresql',
@@ -427,16 +432,54 @@ const mockSchema: UniversalSchema = {
 };
 
 export default function SchemaPage() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session') || undefined;
+  
   const [schema, setSchema] = useState<UniversalSchema | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [useMockData, setUseMockData] = useState(false);
 
   useEffect(() => {
-    // Simulate loading schema from API
-    setTimeout(() => {
-      setSchema(mockSchema);
+    loadSchema();
+  }, [sessionId]);
+
+  const loadSchema = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const data = await fetchSchema(sessionId);
+      setSchema(data);
+      setUseMockData(false);
+    } catch (err) {
+      console.error('Failed to fetch schema:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load schema');
+      
+      // Fall back to mock data in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Using mock data as fallback');
+        setSchema(mockSchema);
+        setUseMockData(true);
+      }
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshSchema(sessionId);
+      await loadSchema();
+    } catch (err) {
+      console.error('Failed to refresh schema:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh schema');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleTableSelect = (tableId: string) => {
     console.log('Selected table:', tableId);
@@ -551,12 +594,34 @@ export default function SchemaPage() {
       </header>
       
       <div className="max-w-7xl mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Schema Visualization</h1>
-          <p className="text-muted-foreground">
-            Interactive visualization of your database schema with multiple view modes
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Schema Visualization</h1>
+            <p className="text-muted-foreground">
+              Interactive visualization of your database schema with multiple view modes
+              {useMockData && <span className="text-amber-600 ml-2">(Using mock data)</span>}
+            </p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            Refresh Schema
+          </Button>
         </div>
+        
+        {error && !schema && (
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
         
         <SchemaVisualizer
           schema={schema}
