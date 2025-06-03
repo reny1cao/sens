@@ -11,8 +11,7 @@ import {
   Search,
   Filter,
   Download,
-  Maximize2,
-  ChevronDown
+  Maximize2
 } from 'lucide-react';
 import { 
   UniversalSchema, 
@@ -131,25 +130,29 @@ export function SchemaVisualizer({
         </div>
 
         {/* View Mode Selector and Controls */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-          <div className="flex items-center gap-2">
-            {/* Mobile dropdown */}
-            <div className="md:hidden flex-1 relative z-10">
-              <select
-                value={config.mode}
-                onChange={(e) => setConfig(prev => ({ ...prev, mode: e.target.value as any }))}
-                className="appearance-none w-full h-10 rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-                style={{ WebkitAppearance: 'none', touchAction: 'manipulation' }}
-              >
-                {viewModes.map((mode) => (
-                  <option key={mode.id} value={mode.id}>
-                    {mode.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none text-muted-foreground" />
+        <div className="flex flex-col gap-3">
+          {/* Mobile view mode selector */}
+          <div className="md:hidden">
+            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              {viewModes.map((mode) => {
+                const Icon = mode.icon;
+                return (
+                  <Button
+                    key={mode.id}
+                    variant={config.mode === mode.id ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setConfig(prev => ({ ...prev, mode: mode.id }))}
+                    className="flex-1 gap-1 px-2"
+                  >
+                    <Icon className="h-3 w-3" />
+                    <span className="text-xs">{mode.label === 'ER Diagram' ? 'ER' : mode.label.slice(0, 5)}</span>
+                  </Button>
+                );
+              })}
             </div>
-            
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             {/* Desktop buttons */}
             <div className="hidden md:flex gap-1 p-1 bg-muted rounded-lg">
               {viewModes.map((mode) => {
@@ -169,38 +172,25 @@ export function SchemaVisualizer({
               })}
             </div>
 
-            {/* Filter - visible on mobile next to dropdown */}
-            <div className="md:hidden">
-              <FilterPanel
-                schema={schema}
-                selectedCategories={selectedCategories}
-                onCategoryChange={setSelectedCategories}
-                config={config}
-                onConfigChange={setConfig}
-              />
-            </div>
-          </div>
+            {/* Search and Filter */}
+            <div className="flex items-center gap-2 flex-1">
+              {/* Search */}
+              <div className="flex-1 max-w-xs sm:max-w-sm">
+                <SchemaSearch
+                  schema={schema}
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onSelect={(item) => {
+                    if (item.type === 'table') {
+                      onTableSelect?.(item.entity.id);
+                    } else if (item.type === 'column' && item.attribute) {
+                      onColumnSelect?.(item.entity.id, item.attribute.id);
+                    }
+                  }}
+                />
+              </div>
 
-          {/* Search and Filter for desktop */}
-          <div className="flex items-center gap-2 sm:gap-4 flex-1">
-            {/* Search */}
-            <div className="flex-1 max-w-xs sm:max-w-sm">
-              <SchemaSearch
-                schema={schema}
-                value={searchQuery}
-                onChange={setSearchQuery}
-                onSelect={(item) => {
-                  if (item.type === 'table') {
-                    onTableSelect?.(item.entity.id);
-                  } else if (item.type === 'column' && item.attribute) {
-                    onColumnSelect?.(item.entity.id, item.attribute.id);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Filter - desktop */}
-            <div className="hidden md:block">
+              {/* Filter */}
               <FilterPanel
                 schema={schema}
                 selectedCategories={selectedCategories}
