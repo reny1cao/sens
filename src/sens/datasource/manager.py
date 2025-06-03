@@ -77,6 +77,9 @@ class DataSourceManager:
         
         # Initialize default PostgreSQL source
         self._init_default_source()
+        
+        # Schedule schema extraction for default database
+        self._default_schema_extracted = False
     
     def _init_default_source(self):
         """Initialize the default PostgreSQL data source."""
@@ -93,6 +96,46 @@ class DataSourceManager:
             name="Default Database"
         )
         self.sources["default"] = default_source
+    
+    async def ensure_default_schema_extracted(self):
+        """Ensure the default database schema is extracted."""
+        if self._default_schema_extracted:
+            return
+            
+        default_source = self.sources.get("default")
+        if not default_source:
+            return
+            
+        try:
+            # Check if schema is cached
+            cache_key = f"schema:default"
+            cached_schema = await self.cache_manager.get(cache_key)
+            
+            if cached_schema:
+                default_source.unified_schema = cached_schema
+                default_source.schema_extracted = True
+                self._default_schema_extracted = True
+                logger.info("default_schema_loaded_from_cache")
+                return
+            
+            # Extract schema
+            logger.info("extracting_default_database_schema")
+            await self._extract_schema(default_source)
+            
+            # Cache the schema for 24 hours
+            if default_source.unified_schema:
+                await self.cache_manager.set(
+                    cache_key, 
+                    default_source.unified_schema, 
+                    ttl=timedelta(hours=24)
+                )
+            
+            self._default_schema_extracted = True
+            logger.info("default_schema_extracted_and_cached")
+            
+        except Exception as e:
+            logger.error("default_schema_extraction_failed", error=str(e))
+            # Don't fail initialization if schema extraction fails
     
     async def create_file_source(
         self,
@@ -325,6 +368,34 @@ class DataSourceManager:
             await self.cache_manager.set(cache_key, suggestions, ttl=timedelta(minutes=30))
             
             return suggestions
+    
+    async def refresh_query_suggestions(self, source: DataSource) -> List[str]:
+        """Force refresh query suggestions for a data source."""
+        # Clear cache for this source
+        schema_fingerprint = {
+            "source_id": source.id,
+            "tables": [
+                {
+                    "name": table.name,
+                    "column_count": len(table.columns),
+                    "row_count": table.row_count
+                }
+                for table in source.unified_schema.tables
+            ] if source.unified_schema else []
+        }
+        
+        cache_key = self.cache_manager.generate_key(
+            "query_suggestions",
+            source.id,
+            schema_fingerprint=schema_fingerprint
+        )
+        
+        # Clear the cache
+        await self.cache_manager.delete(cache_key)
+        logger.info("query_suggestions_cache_cleared", source_id=source.id)
+        
+        # Regenerate suggestions
+        return await self.get_query_suggestions(source)
     
     async def cleanup_expired_sessions(self):
         """Clean up expired sessions and their data."""

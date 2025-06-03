@@ -281,7 +281,24 @@ async def get_query_suggestions(
     
     # If no session ID, return suggestions for default database
     if not session_id:
-        # Return default database suggestions
+        # Ensure default database schema is extracted
+        await datasource_manager.ensure_default_schema_extracted()
+        
+        # Get the default source
+        default_source = datasource_manager.get_source("default")
+        if default_source:
+            try:
+                # Use LLM-powered suggestions for default database
+                suggestions = await datasource_manager.get_query_suggestions(default_source)
+                return {
+                    "session_id": "default",
+                    "source_name": default_source.name,
+                    "suggestions": suggestions
+                }
+            except Exception as e:
+                logger.warning("default_db_suggestions_failed", error=str(e))
+        
+        # Fallback to generic suggestions
         default_suggestions = [
             "Show all tables in the database",
             "Count total number of records across all tables",
@@ -329,3 +346,50 @@ async def get_query_suggestions(
                 f"Show summary statistics"
             ]
         }
+
+
+@router.post("/suggestions/refresh")
+async def refresh_query_suggestions(
+    session_id: Optional[str] = Header(None, alias="X-Session-Id"),
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+):
+    """Force refresh query suggestions for a data source."""
+    
+    # Determine which source to refresh
+    if not session_id:
+        # Refresh default database suggestions
+        await datasource_manager.ensure_default_schema_extracted()
+        default_source = datasource_manager.get_source("default")
+        if default_source:
+            try:
+                suggestions = await datasource_manager.refresh_query_suggestions(default_source)
+                return {
+                    "session_id": "default",
+                    "source_name": default_source.name,
+                    "suggestions": suggestions,
+                    "refreshed": True
+                }
+            except Exception as e:
+                logger.error("default_suggestions_refresh_failed", error=str(e))
+                raise HTTPException(status_code=500, detail="Failed to refresh suggestions")
+        else:
+            raise HTTPException(status_code=404, detail="Default database not found")
+    
+    # Refresh session-specific source
+    source = datasource_manager.get_session_source(session_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        suggestions = await datasource_manager.refresh_query_suggestions(source)
+        return {
+            "session_id": session_id,
+            "source_name": source.name,
+            "suggestions": suggestions,
+            "refreshed": True
+        }
+    except Exception as e:
+        logger.error("suggestions_refresh_failed", 
+                    session_id=session_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to refresh suggestions")

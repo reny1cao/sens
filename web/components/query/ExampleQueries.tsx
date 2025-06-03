@@ -26,7 +26,7 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
     fetchSuggestions();
   }, [activeSource, sessionId]);
 
-  const fetchSuggestions = async () => {
+  const fetchSuggestions = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
       // Only send session ID if we have one and it's not the default source
@@ -35,7 +35,13 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
         headers['X-Session-Id'] = sessionId;
       }
       
-      const response = await fetch('/api/datasource/suggestions', {
+      // Use refresh endpoint if force refresh is requested
+      const endpoint = forceRefresh 
+        ? '/api/datasource/suggestions/refresh' 
+        : '/api/datasource/suggestions';
+      
+      const response = await fetch(endpoint, {
+        method: forceRefresh ? 'POST' : 'GET',
         headers,
       });
 
@@ -68,10 +74,10 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={fetchSuggestions}
+          onClick={() => fetchSuggestions(true)}
           disabled={isLoading}
           className="h-7 px-2 text-xs"
-          title="Get new suggestions"
+          title="Refresh suggestions"
         >
           <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
