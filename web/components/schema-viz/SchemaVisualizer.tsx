@@ -131,22 +131,35 @@ export function SchemaVisualizer({
 
         {/* View Mode Selector and Controls */}
         <div className="flex flex-col gap-3">
-          {/* Mobile view mode selector */}
+          {/* Mobile view mode selector - using native radio buttons */}
           <div className="md:hidden">
-            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            <div className="flex gap-0 p-1 bg-muted rounded-lg" role="tablist">
               {viewModes.map((mode) => {
                 const Icon = mode.icon;
+                const isSelected = config.mode === mode.id;
                 return (
-                  <Button
+                  <label
                     key={mode.id}
-                    variant={config.mode === mode.id ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setConfig(prev => ({ ...prev, mode: mode.id }))}
-                    className="flex-1 gap-1 px-2"
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-md cursor-pointer transition-colors",
+                      "text-sm font-medium",
+                      isSelected 
+                        ? "bg-background text-foreground shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
-                    <Icon className="h-3 w-3" />
+                    <input
+                      type="radio"
+                      name="mobile-view-mode"
+                      value={mode.id}
+                      checked={isSelected}
+                      onChange={() => setConfig(prev => ({ ...prev, mode: mode.id }))}
+                      className="sr-only"
+                      aria-label={`${mode.label} view`}
+                    />
+                    <Icon className="h-4 w-4" />
                     <span className="text-xs">{mode.label === 'ER Diagram' ? 'ER' : mode.label.slice(0, 5)}</span>
-                  </Button>
+                  </label>
                 );
               })}
             </div>
