@@ -223,19 +223,21 @@ class FinancialDataLoader:
                     'low_price', 'close_price', 'adj_close', 'volume', 'data_source'
                 ])
                 
-                # Write data
+                # Write data - filter to dates that have partitions (2023-2026)
                 for price in prices:
-                    csv_writer.writerow([
-                        price.symbol,
-                        price.trade_date.strftime('%Y-%m-%d'),
-                        str(price.open_price) if price.open_price else '',
-                        str(price.high_price) if price.high_price else '',
-                        str(price.low_price) if price.low_price else '',
-                        str(price.close_price) if price.close_price else '',
-                        str(price.adj_close) if price.adj_close else '',
-                        str(price.volume) if price.volume else '',
-                        price.data_source.value
-                    ])
+                    # Only include data from 2023 onwards
+                    if price.trade_date.year >= 2023:
+                        csv_writer.writerow([
+                            price.symbol,
+                            price.trade_date.strftime('%Y-%m-%d'),
+                            str(price.open_price) if price.open_price else '',
+                            str(price.high_price) if price.high_price else '',
+                            str(price.low_price) if price.low_price else '',
+                            str(price.close_price) if price.close_price else '',
+                            str(price.adj_close) if price.adj_close else '',
+                            str(price.volume) if price.volume else '',
+                            price.data_source.value
+                        ])
                 
                 temp_file_path = temp_file.name
             

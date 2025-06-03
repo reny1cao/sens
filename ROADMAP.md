@@ -3,6 +3,8 @@
 ## Vision
 Transform SENS from a reactive query tool into a proactive data intelligence platform that anticipates user needs and delivers insights before questions are asked.
 
+> **Note**: This roadmap now incorporates the Agentic Query Architecture. See [agentic_query_architecture.md](./docs/agentic_query_architecture.md) for detailed design of the intelligent query understanding system that forms the foundation of Phase 1.
+
 ## Current State Analysis
 
 ### Strengths
@@ -41,10 +43,78 @@ Transform SENS from a reactive query tool into a proactive data intelligence pla
 - [ ] API documentation with examples
 ```
 
-### Phase 1: Query Intelligence Enhancement (Weeks 5-12)
-**Goal**: Make current queries smarter and more useful
+### Phase 1: Agentic Query Intelligence (Weeks 5-14)
+**Goal**: Build intelligent query understanding with value discovery and self-correction
 
-#### Component 1: Result Enhancement Engine
+#### Component 1: Query Planning Agent
+```python
+class QueryPlanningAgent:
+    """ReAct-style agent for intelligent query planning."""
+    
+    async def plan_query(self, user_input: str) -> QueryPlan:
+        """
+        Use reasoning and tools to understand user intent.
+        
+        Example:
+        User: "Show me tech giants' performance"
+        
+        Thought 1: Need to map "tech giants" to database values
+        Action 1: SearchDatabaseValues(table="securities", column="company_name")
+        Observation 1: Found AAPL, GOOGL, MSFT, META, NVDA in Technology sector
+        
+        Thought 2: Define "giants" using market cap distribution
+        Action 2: GetValueStatistics(table="securities", column="market_cap")
+        Observation 2: Top tech companies have market_cap > $500B
+        
+        Final Plan: Query for Technology sector with market_cap > $500B
+        """
+```
+
+#### Component 2: Value Discovery System
+```python
+class ValueDiscoverySystem:
+    """Tools for exploring and mapping database values."""
+    
+    async def discover_values(self, user_term: str) -> ValueMapping:
+        # Search across columns for similar values
+        candidates = await self.similarity_search(user_term)
+        
+        # Use LLM to validate mappings
+        validated = await self.validate_mappings(user_term, candidates)
+        
+        # Learn from successful mappings
+        await self.update_value_index(user_term, validated)
+        
+        return validated
+```
+
+#### Component 3: Self-Correcting Executor
+```python
+class SelfCorrectingExecutor:
+    """Execute queries with automatic error recovery."""
+    
+    async def execute_with_correction(self, sql: str) -> QueryResult:
+        result = await self.execute(sql)
+        
+        if result.is_empty():
+            # Diagnose why query returned no results
+            diagnosis = await self.diagnose_empty_result(sql)
+            
+            # Apply corrections based on diagnosis
+            if diagnosis.type == "value_mismatch":
+                sql = await self.fix_value_mismatches(sql)
+            elif diagnosis.type == "date_range_issue":
+                sql = await self.expand_date_range(sql)
+            elif diagnosis.type == "join_issue":
+                sql = await self.fix_joins(sql)
+                
+            # Retry with corrected query
+            result = await self.execute(sql)
+            
+        return result
+```
+
+#### Component 4: Result Enhancement Engine
 ```python
 class ResultEnhancer:
     """Add statistical analysis and insights to query results."""
@@ -80,13 +150,18 @@ class QueryChainExecutor:
 ```
 
 #### Deliverables:
+- [ ] ReAct-based query planning agent
+- [ ] Value discovery and mapping system
+- [ ] Self-correcting query executor
+- [ ] Cross-column value search index
+- [ ] Learning value mapper with confidence scoring
 - [ ] Statistical summaries for all queries
 - [ ] Trend detection in time-series data
 - [ ] Multi-step query execution
 - [ ] Export to Excel/CSV with insights
 - [ ] Basic visualization support
 
-### Phase 2: Behavioral Learning System (Weeks 13-20)
+### Phase 2: Behavioral Learning System (Weeks 15-22)
 **Goal**: Understand user patterns and preferences
 
 #### Component 1: User Behavior Tracker
@@ -131,7 +206,7 @@ class QueryPatternAnalyzer:
 - [ ] Preference learning algorithm
 - [ ] Privacy-compliant data storage
 
-### Phase 3: Proactive Monitoring Engine (Weeks 21-32)
+### Phase 3: Proactive Monitoring Engine (Weeks 23-34)
 **Goal**: Monitor data continuously and generate insights
 
 #### Component 1: Change Detection System
@@ -218,7 +293,7 @@ class SmartNotificationSystem:
 - [ ] Multi-channel notifications
 - [ ] Notification fatigue management
 
-### Phase 4: Conversational Intelligence (Weeks 33-40)
+### Phase 4: Conversational Intelligence (Weeks 35-42)
 **Goal**: Natural, contextual interactions with insights
 
 #### Component 1: Conversational Insight Narrator
@@ -270,7 +345,7 @@ class InteractiveInsightExplorer:
 - [ ] Interactive insight exploration
 - [ ] Voice interface support (future)
 
-### Phase 5: Self-Improving Platform (Weeks 41-52)
+### Phase 5: Self-Improving Platform (Weeks 43-54)
 **Goal**: System that learns and improves autonomously
 
 #### Component 1: Feedback Learning System

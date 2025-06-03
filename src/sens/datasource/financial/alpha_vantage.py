@@ -48,6 +48,7 @@ class AlphaVantageClient:
         
         self.client = httpx.AsyncClient(timeout=30.0)
         self.rate_limit_delay = 12  # seconds (5 calls per minute for free tier)
+        self.last_request_time = None
         
     async def __aenter__(self):
         return self
@@ -57,10 +58,19 @@ class AlphaVantageClient:
     
     async def _make_request(self, params: Dict[str, str]) -> Dict[str, Any]:
         """Make HTTP request to Alpha Vantage API with rate limiting."""
+        # Enforce rate limiting
+        if self.last_request_time:
+            elapsed = (datetime.now() - self.last_request_time).total_seconds()
+            if elapsed < self.rate_limit_delay:
+                wait_time = self.rate_limit_delay - elapsed
+                logger.info("rate_limit_wait", wait_seconds=wait_time)
+                await asyncio.sleep(wait_time)
+        
         params['apikey'] = self.api_key
         
         try:
             logger.info("alpha_vantage_request", function=params.get('function'), symbol=params.get('symbol'))
+            self.last_request_time = datetime.now()
             
             response = await self.client.get(self.BASE_URL, params=params)
             response.raise_for_status()
@@ -78,8 +88,22 @@ class AlphaVantageClient:
             if 'Note' in data and 'API call frequency' in data['Note']:
                 raise RateLimitError("Rate limit exceeded")
             
-            if 'Information' in data and 'API call frequency' in data['Information']:
-                raise RateLimitError("Rate limit exceeded")
+            if 'Information' in data:
+                info_msg = data['Information']
+                logger.warning("alpha_vantage_info_response", info=info_msg)
+                
+                # Check if it's about API call frequency
+                if 'API call frequency' in info_msg or 'calls per minute' in info_msg:
+                    # This is likely a rate limit message, wait longer
+                    logger.warning("rate_limit_detected", message="Waiting 60s due to rate limit")
+                    await asyncio.sleep(60)
+                    # Retry once after waiting
+                    params['retry'] = 'true'
+                    if params.get('retry') != 'true':
+                        return await self._make_request(params)
+                
+                # Return empty data for other Information messages
+                return {}
             
             return data
             
@@ -106,7 +130,7 @@ class AlphaVantageClient:
             List of StockPrice objects
         """
         params = {
-            'function': 'TIME_SERIES_DAILY_ADJUSTED',
+            'function': 'TIME_SERIES_DAILY',  # Use non-adjusted for free tier
             'symbol': symbol,
             'outputsize': outputsize,
             'datatype': 'json'
@@ -130,8 +154,8 @@ class AlphaVantageClient:
                     high_price=Decimal(price_data['2. high']),
                     low_price=Decimal(price_data['3. low']),
                     close_price=Decimal(price_data['4. close']),
-                    adj_close=Decimal(price_data['5. adjusted close']),
-                    volume=int(price_data['6. volume']),
+                    adj_close=Decimal(price_data.get('5. adjusted close', price_data['4. close'])),  # Use close if no adjusted
+                    volume=int(price_data.get('6. volume', price_data.get('5. volume', 0))),  # Volume key changes
                     data_source=FinancialDataSource.ALPHA_VANTAGE
                 )
                 prices.append(price)
@@ -146,7 +170,7 @@ class AlphaVantageClient:
     async def get_daily_prices_csv(self, symbol: str) -> List[StockPrice]:
         """Get daily prices using CSV format (faster for large datasets)."""
         params = {
-            'function': 'TIME_SERIES_DAILY_ADJUSTED',
+            'function': 'TIME_SERIES_DAILY',  # Use non-adjusted for free tier
             'symbol': symbol,
             'outputsize': 'full',
             'datatype': 'csv'
@@ -169,7 +193,7 @@ class AlphaVantageClient:
                     high_price=Decimal(row['high']),
                     low_price=Decimal(row['low']),
                     close_price=Decimal(row['close']),
-                    adj_close=Decimal(row['adjusted_close']),
+                    adj_close=Decimal(row.get('adjusted_close', row['close'])),  # Use close if no adjusted
                     volume=int(row['volume']),
                     data_source=FinancialDataSource.ALPHA_VANTAGE
                 )
