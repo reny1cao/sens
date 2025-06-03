@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic_settings import BaseSettings
 
 # Valid environments
 EnvironmentType = Literal["development", "staging", "production"]
@@ -295,3 +296,58 @@ class CacheConfig(BaseModel):
         gt=0,
         validation_alias="SENS_CACHE_SCHEMA_TTL_HOURS",
     )
+
+
+class FinancialDataConfig(BaseSettings):
+    """Financial data API configuration."""
+
+    alpha_vantage_api_key: Optional[str] = Field(
+        default=None,
+        description="Alpha Vantage API key for stock market data",
+        repr=False,
+        validation_alias="SENS_ALPHA_VANTAGE_API_KEY",
+    )
+    fred_api_key: Optional[str] = Field(
+        default=None,
+        description="FRED API key for economic data",
+        repr=False,
+        validation_alias="SENS_FRED_API_KEY",
+    )
+    rate_limit_delay: int = Field(
+        default=12,
+        description="Rate limit delay in seconds between API calls",
+        gt=0,
+        validation_alias="SENS_FINANCIAL_RATE_LIMIT_DELAY",
+    )
+    max_concurrent_requests: int = Field(
+        default=5,
+        description="Maximum concurrent API requests",
+        gt=0,
+        le=20,
+        validation_alias="SENS_FINANCIAL_MAX_CONCURRENT",
+    )
+    default_symbols: List[str] = Field(
+        default_factory=lambda: ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"],
+        description="Default stock symbols to load",
+        validation_alias="SENS_FINANCIAL_DEFAULT_SYMBOLS",
+    )
+    update_frequency_hours: int = Field(
+        default=24,
+        description="How often to update financial data (hours)",
+        gt=0,
+        validation_alias="SENS_FINANCIAL_UPDATE_FREQUENCY_HOURS",
+    )
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "extra": "ignore",
+    }
+
+    @field_validator("alpha_vantage_api_key", "fred_api_key")
+    def validate_api_keys(cls, v: Optional[str]) -> Optional[str]:
+        """Validate API key format if provided."""
+        if v is not None and len(v.strip()) == 0:
+            return None
+        return v

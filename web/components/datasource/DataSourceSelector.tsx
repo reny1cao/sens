@@ -25,7 +25,7 @@ import { useDataSource } from '@/contexts/DataSourceContext';
 import { DataSourceType } from '@/types';
 
 export function DataSourceSelector() {
-  const { activeSource, clearDataSource, deleteTable } = useDataSource();
+  const { activeSource, clearDataSource, deleteTable, switchToDefaultDatabase } = useDataSource();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'upload' | 'connect' | null>(null);
 
@@ -61,14 +61,16 @@ export function DataSourceSelector() {
                 <>
                   {getSourceIcon(activeSource.type)}
                   <span className="max-w-[200px] truncate">{activeSource.name}</span>
-                  <Badge variant={getSourceBadgeVariant(activeSource.type)} className="ml-2">
-                    {activeSource.tables.length} tables
-                  </Badge>
+                  {activeSource.id !== 'default' && (
+                    <Badge variant={getSourceBadgeVariant(activeSource.type)} className="ml-2">
+                      {activeSource.tables.length} tables
+                    </Badge>
+                  )}
                 </>
               ) : (
                 <>
                   <Database className="h-4 w-4" />
-                  <span>Default Database</span>
+                  <span>Select Data Source</span>
                 </>
               )}
               <ChevronDown className="h-4 w-4 ml-2" />
@@ -77,6 +79,24 @@ export function DataSourceSelector() {
           <DropdownMenuContent align="end" className="w-[300px]">
             <DropdownMenuLabel>Data Source</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            
+            {/* Default Database Option */}
+            <DropdownMenuItem
+              onSelect={() => switchToDefaultDatabase()}
+              className={activeSource?.id === 'default' ? 'bg-muted' : ''}
+            >
+              <Database className="mr-2 h-4 w-4" />
+              Default Database
+              {activeSource?.id === 'default' && (
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  Active
+                </Badge>
+              )}
+            </DropdownMenuItem>
+            
+            {activeSource?.id !== 'default' && (
+              <DropdownMenuSeparator />
+            )}
             
             {activeSource && (
               <>
@@ -90,23 +110,29 @@ export function DataSourceSelector() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{activeSource.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {activeSource.tables.length} {activeSource.tables.length === 1 ? 'table' : 'tables'} • {activeSource.totalRows.toLocaleString()} rows
+                          {activeSource.id === 'default' ? (
+                            'Built-in database with sample data'
+                          ) : (
+                            <>{activeSource.tables.length} {activeSource.tables.length === 1 ? 'table' : 'tables'} • {activeSource.totalRows.toLocaleString()} rows</>
+                          )}
                         </p>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearDataSource}
-                      className="h-6 w-6 p-0 flex-shrink-0 ml-2"
-                      title="Clear all data"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    {activeSource.id !== 'default' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearDataSource}
+                        className="h-6 w-6 p-0 flex-shrink-0 ml-2"
+                        title="Clear all data"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   
                   {/* Show individual tables */}
-                  {activeSource.tables.map((table) => (
+                  {activeSource.id !== 'default' && activeSource.tables.map((table) => (
                     <div key={table.name} className="pl-6 pr-2">
                       <div className="flex items-center justify-between text-sm group hover:bg-muted/50 rounded p-1">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -158,7 +184,7 @@ export function DataSourceSelector() {
               </Badge>
             </DropdownMenuItem>
             
-            {activeSource && (
+            {activeSource && activeSource.id !== 'default' && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>

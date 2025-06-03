@@ -37,7 +37,11 @@ export function QueryInterface() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Querying <strong>{activeSource.name}</strong> with {activeSource.tables.length} tables and {activeSource.totalRows.toLocaleString()} total rows
+            {activeSource.id === 'default' ? (
+              <>Querying <strong>{activeSource.name}</strong> - Upload files to query your own data</>
+            ) : (
+              <>Querying <strong>{activeSource.name}</strong> with {activeSource.tables.length} tables and {activeSource.totalRows.toLocaleString()} total rows</>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -75,10 +79,8 @@ export function QueryInterface() {
             </div>
           </form>
 
-          {/* Example Queries - Always show when we have an active data source */}
-          {activeSource && (
-            <ExampleQueries onExampleClick={handleExampleClick} />
-          )}
+          {/* Example Queries - Always show */}
+          <ExampleQueries onExampleClick={handleExampleClick} />
         </CardContent>
       </Card>
 

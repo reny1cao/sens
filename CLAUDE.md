@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SENS (Semantic Natural SQL) is a natural language to SQL conversion tool with semantic understanding. It's built with Python using FastAPI for the API layer and includes a CLI interface.
 
+**Important**: SENS is evolving towards an agentic architecture that intelligently maps user terms to database values. See [docs/agentic_query_architecture.md](docs/agentic_query_architecture.md) for the planned intelligent query system that will handle value mismatches, self-correct queries, and learn from user interactions.
+
 ## Common Development Commands
 
 ```bash
@@ -35,6 +37,14 @@ poetry run sens status
 # Schema management
 poetry run sens extract-schema -o schema.json
 poetry run sens build-index -s schema.json
+
+# Financial data management
+poetry run sens financial setup --create-schema  # Create financial database schema
+poetry run sens financial load --symbols AAPL,GOOGL,MSFT --days 365  # Load stock data
+poetry run sens financial load-economic --preset key_economic  # Load economic indicators
+poetry run sens financial update  # Daily data update
+poetry run sens financial status --detailed  # Show data status
+poetry run sens financial prices AAPL --days 30  # Show recent prices
 ```
 
 ## High-Level Architecture
@@ -82,3 +92,12 @@ The codebase follows a domain-driven design with clear separation of concerns:
 - LLM: Set `SENS_OPENROUTER_API_KEY` and `SENS_OPENROUTER_BASE_URL`
 - Redis (optional): `SENS_REDIS_URL` for session management
 - CLI settings: Environment variables with `SENS_CLI_` prefix control debug, metrics, and output formatting
+
+## Current Known Limitations
+
+1. **Value Mapping**: The system currently expects exact matches between user input and database values (e.g., "Technology" vs "technology", "Apple" vs "AAPL")
+2. **No Self-Correction**: If a query returns no results, the system doesn't attempt to diagnose or fix the issue
+3. **Static Value Understanding**: No ability to explore database values or learn from successful queries
+4. **Limited Temporal Reasoning**: Relative dates like "last month" need explicit date ranges
+
+These limitations are being addressed in the upcoming agentic architecture (see roadmap Phase 1).

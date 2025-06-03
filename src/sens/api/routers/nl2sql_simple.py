@@ -32,6 +32,20 @@ class NL2SQLResponse(BaseModel):
 # Initialize components
 _orchestrator = None
 _session_manager = None
+_schema_initialized = False
+
+
+async def ensure_schema_initialized():
+    """Ensure default schema is initialized before creating orchestrator."""
+    global _schema_initialized, _orchestrator, _session_manager
+    if not _schema_initialized:
+        from sens.datasource.manager import DataSourceManager
+        datasource_manager = DataSourceManager()
+        await datasource_manager.ensure_default_schema_extracted()
+        _schema_initialized = True
+        # Reset orchestrator to pick up new schema
+        _orchestrator = None
+        _session_manager = None
 
 
 def get_orchestrator():
@@ -51,12 +65,44 @@ def get_orchestrator():
     return _orchestrator, _session_manager
 
 
+@router.get("/test-schema")
+async def test_schema():
+    """Test endpoint to check schema status."""
+    from sens.schema.graph import SchemaGraph
+    from sens.datasource.manager import DataSourceManager
+    
+    # Get current schema graph state
+    schema_graph = SchemaGraph.get_instance()
+    current_tables = list(schema_graph._all_tables)
+    
+    # Try to load default database schema
+    datasource_manager = DataSourceManager()
+    await datasource_manager.ensure_default_schema_extracted()
+    
+    # Check again
+    schema_graph_after = SchemaGraph.get_instance()
+    tables_after = list(schema_graph_after._all_tables)
+    
+    return {
+        "before_extraction": {
+            "table_count": len(current_tables),
+            "tables": sorted(current_tables)[:10]  # First 10 tables
+        },
+        "after_extraction": {
+            "table_count": len(tables_after),
+            "tables": sorted(tables_after)[:10]  # First 10 tables
+        }
+    }
+
+
 @router.post("/", response_model=NL2SQLResponse)
 async def nl2sql(request: NL2SQLRequest):
     """Convert natural language to SQL and execute it."""
     start_time = time.time()
 
     try:
+        # Ensure schema is initialized before getting orchestrator
+        await ensure_schema_initialized()
         # Get orchestrator
         orchestrator, session_manager = get_orchestrator()
         if not orchestrator:

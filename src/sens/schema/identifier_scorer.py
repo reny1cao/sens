@@ -86,7 +86,7 @@ class IdentifierScorer:
 
         # Prefer string types as identifiers
         if any(
-            type_name in column.data_type.lower()
+            type_name in column.data_type.value.lower()
             for type_name in ["char", "text", "varchar"]
         ):
             score += 2.0
@@ -100,9 +100,8 @@ class IdentifierScorer:
 
         # Check if column is a foreign key
         is_fk = any(
-            fk
+            column.name in fk.from_columns
             for fk in table_info.foreign_keys
-            if any(pair.from_column == column.name for pair in fk.columns)
         )
         if is_fk:
             score -= 2.0
@@ -110,8 +109,8 @@ class IdentifierScorer:
 
         # Down-rank primary keys that aren't string-based
         # (numeric PKs are usually internal IDs)
-        if column.is_primary and not any(
-            type_name in column.data_type.lower()
+        if column.is_primary_key and not any(
+            type_name in column.data_type.value.lower()
             for type_name in ["char", "text", "varchar"]
         ):
             score -= 1.0

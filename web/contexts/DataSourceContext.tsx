@@ -14,6 +14,7 @@ interface DataSourceContextType {
   deleteTable: (tableName: string) => Promise<void>;
   previewTable: (tableName: string) => Promise<any>;
   refreshSession: () => Promise<void>;
+  switchToDefaultDatabase: () => void;
 }
 
 const DataSourceContext = createContext<DataSourceContextType | undefined>(undefined);
@@ -23,8 +24,18 @@ const generateSessionId = () => {
   return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
+// Default database source
+const DEFAULT_SOURCE: DataSource = {
+  id: 'default',
+  name: 'Default Database',
+  type: 'default' as DataSourceType,
+  tables: [],
+  totalRows: 0,
+  createdAt: new Date(),
+};
+
 export function DataSourceProvider({ children }: { children: React.ReactNode }) {
-  const [activeSource, setActiveSource] = useState<DataSource | null>(null);
+  const [activeSource, setActiveSource] = useState<DataSource | null>(DEFAULT_SOURCE);
   const [sessionId, setSessionId] = useState<string>(() => {
     // Try to get from localStorage or generate new
     if (typeof window !== 'undefined') {
@@ -64,15 +75,15 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
           createdAt: new Date(),
         });
       } else if (response.status === 404) {
-        // Session not found - this is OK, user hasn't uploaded anything yet
-        console.log('No active session found');
-        setActiveSource(null);
+        // Session not found - use default database
+        console.log('No active session found, using default database');
+        setActiveSource(DEFAULT_SOURCE);
       } else {
         console.log('Session load error:', response.status);
-        // For other errors, clear the session and start fresh
+        // For other errors, use default database
         const newSessionId = generateSessionId();
         setSessionId(newSessionId);
-        setActiveSource(null);
+        setActiveSource(DEFAULT_SOURCE);
       }
     } catch (err) {
       // No existing session, that's ok
@@ -157,7 +168,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
       // Generate new session
       const newSessionId = generateSessionId();
       setSessionId(newSessionId);
-      setActiveSource(null);
+      setActiveSource(DEFAULT_SOURCE);
       setError(null);
     } catch (err) {
       console.error('Failed to clear data source:', err);
@@ -194,7 +205,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
       // Show success message
       if (result.remaining_tables && result.remaining_tables.length === 0) {
         // All tables deleted, session was cleaned up
-        setActiveSource(null);
+        setActiveSource(DEFAULT_SOURCE);
       }
     } catch (err) {
       console.error('Failed to delete table:', err);
@@ -221,6 +232,11 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
+  const switchToDefaultDatabase = () => {
+    setActiveSource(DEFAULT_SOURCE);
+    // Don't change session ID, keep it for potential file uploads
+  };
+
   return (
     <DataSourceContext.Provider
       value={{
@@ -234,6 +250,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
         deleteTable,
         previewTable,
         refreshSession,
+        switchToDefaultDatabase,
       }}
     >
       {children}

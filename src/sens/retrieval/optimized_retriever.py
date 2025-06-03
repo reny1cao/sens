@@ -135,11 +135,61 @@ class OptimizedSchemaRetriever:
             # Phase 1: Get initial search results (parallelized)
             token_hits, embedding_hits = await self._parallel_search(question, k)
 
+            # If no hits from search, try to get all tables for basic matching
             if not token_hits and not embedding_hits:
-                raise RetrievalError(
-                    "No schema matches found",
-                    details={"question": question, "k_requested": k},
-                )
+                # Try to get some basic matches from token search
+                all_tables = list(self.precomputed_index.table_indexes.keys())
+                if all_tables:
+                    # Create basic matches for tables that might match the query
+                    query_words = question.lower().split()
+                    
+                    # First try to find tables that contain query words
+                    matched = False
+                    for table in all_tables:
+                        table_lower = table.lower()
+                        # Check if any query word appears in the table name
+                        if any(word in table_lower for word in query_words if len(word) > 2):
+                            token_hits.append(
+                                RetrievedColumn(
+                                    table_name=table,
+                                    column_name="*",
+                                    score=0.5,
+                                    source="fallback",
+                                    metadata={"type": "table_match"}
+                                )
+                            )
+                            matched = True
+                    
+                    # If no matches, provide top tables as fallback
+                    if not matched:
+                        # For financial queries, prioritize certain tables
+                        priority_tables = ['securities', 'daily_prices', 'market_data', 'economic_indicators', 
+                                         'financial_statements', 'trades', 'portfolio_holdings']
+                        
+                        for table in all_tables[:15]:  # Provide more tables as fallback
+                            # Give higher score to priority tables
+                            score = 0.3 if table in priority_tables else 0.2
+                            token_hits.append(
+                                RetrievedColumn(
+                                    table_name=table,
+                                    column_name="*",
+                                    score=score,
+                                    source="fallback",
+                                    metadata={"type": "fallback_match"}
+                                )
+                            )
+                
+                if not token_hits:
+                    log.warning(
+                        "no_schema_matches_found",
+                        question=question,
+                        available_tables=len(all_tables),
+                        sample_tables=all_tables[:5] if all_tables else []
+                    )
+                    raise RetrievalError(
+                        "No schema matches found. The system may still be initializing. Please try again.",
+                        details={"question": question, "k_requested": k, "available_tables": len(all_tables)},
+                    )
 
             # Phase 2: Merge and deduplicate
             merged_columns = self._merge_results(token_hits, embedding_hits)

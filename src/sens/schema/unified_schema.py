@@ -110,6 +110,7 @@ class DataSourceType(str, Enum):
     CSV = "csv"
     EXCEL = "excel"
     UPLOADED_FILE = "uploaded_file"
+    DEFAULT_POSTGRES = "default_postgres"
     
 
 class UnifiedSchema(BaseModel):

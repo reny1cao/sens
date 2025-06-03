@@ -63,7 +63,18 @@ class DataSource:
 class DataSourceManager:
     """Manages multiple data sources and sessions."""
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DataSourceManager, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
+        if DataSourceManager._initialized:
+            return
+            
         self.sources: Dict[str, DataSource] = {}
         self.sessions: Dict[str, SessionInfo] = {}
         self.settings = get_settings()
@@ -77,6 +88,11 @@ class DataSourceManager:
         
         # Initialize default PostgreSQL source
         self._init_default_source()
+        
+        # Schedule schema extraction for default database
+        self._default_schema_extracted = False
+        
+        DataSourceManager._initialized = True
     
     def _init_default_source(self):
         """Initialize the default PostgreSQL data source."""
@@ -93,6 +109,59 @@ class DataSourceManager:
             name="Default Database"
         )
         self.sources["default"] = default_source
+    
+    async def ensure_default_schema_extracted(self):
+        """Ensure the default database schema is extracted."""
+        # Check if schema is already extracted AND SchemaGraph has the correct schema
+        if self._default_schema_extracted:
+            # Verify SchemaGraph has the financial database schema
+            from sens.schema.graph import SchemaGraph
+            schema_graph = SchemaGraph.get_instance()
+            if len(schema_graph._all_tables) > 10:  # Financial DB has 57 tables
+                return
+            else:
+                logger.info("schema_graph_has_demo_schema_reextracting", 
+                          current_table_count=len(schema_graph._all_tables))
+            
+        default_source = self.sources.get("default")
+        if not default_source:
+            return
+            
+        try:
+            # Check if schema is cached
+            cache_key = f"schema:default"
+            cached_schema = await self.cache_manager.get(cache_key)
+            
+            if cached_schema:
+                default_source.unified_schema = cached_schema
+                default_source.schema_extracted = True
+                self._default_schema_extracted = True
+                logger.info("default_schema_loaded_from_cache")
+                # Initialize indexes with cached schema
+                await self._initialize_indexes_with_schema(cached_schema)
+                return
+            
+            # Extract schema
+            logger.info("extracting_default_database_schema")
+            await self._extract_schema(default_source)
+            
+            # Cache the schema for 24 hours
+            if default_source.unified_schema:
+                await self.cache_manager.set(
+                    cache_key, 
+                    default_source.unified_schema, 
+                    ttl=timedelta(hours=24)
+                )
+                
+                # Initialize indexes with the extracted schema
+                await self._initialize_indexes_with_schema(default_source.unified_schema)
+            
+            self._default_schema_extracted = True
+            logger.info("default_schema_extracted_and_cached")
+            
+        except Exception as e:
+            logger.error("default_schema_extraction_failed", error=str(e))
+            # Don't fail initialization if schema extraction fails
     
     async def create_file_source(
         self,
@@ -326,6 +395,34 @@ class DataSourceManager:
             
             return suggestions
     
+    async def refresh_query_suggestions(self, source: DataSource) -> List[str]:
+        """Force refresh query suggestions for a data source."""
+        # Clear cache for this source
+        schema_fingerprint = {
+            "source_id": source.id,
+            "tables": [
+                {
+                    "name": table.name,
+                    "column_count": len(table.columns),
+                    "row_count": table.row_count
+                }
+                for table in source.unified_schema.tables
+            ] if source.unified_schema else []
+        }
+        
+        cache_key = self.cache_manager.generate_key(
+            "query_suggestions",
+            source.id,
+            schema_fingerprint=schema_fingerprint
+        )
+        
+        # Clear the cache
+        await self.cache_manager.delete(cache_key)
+        logger.info("query_suggestions_cache_cleared", source_id=source.id)
+        
+        # Regenerate suggestions
+        return await self.get_query_suggestions(source)
+    
     async def cleanup_expired_sessions(self):
         """Clean up expired sessions and their data."""
         now = datetime.utcnow()
@@ -364,3 +461,108 @@ class DataSourceManager:
             
         except Exception as e:
             logger.error("session_cleanup_failed", session_id=session_id, error=str(e))
+    
+    async def _initialize_indexes_with_schema(self, schema: UnifiedSchema):
+        """Initialize retrieval indexes with the provided schema.
+        
+        This ensures that token and embedding search can find the default database schema.
+        """
+        try:
+            # Import here to avoid circular dependency
+            from sens.schema.format_adapter import SchemaFormatAdapter
+            from sens.schema.graph import SchemaGraph
+            from sens.retrieval.embedding.search import EmbeddingSearch
+            import json
+            import tempfile
+            
+            logger.info("initializing_indexes_with_schema", table_count=len(schema.tables))
+            
+            # Convert UnifiedSchema to legacy format for SchemaGraph
+            # We need to create a temporary schema file that matches the expected format
+            schema_data = {
+                "tables": {},
+                "relationships": [],
+                "metadata": {
+                    "source_type": schema.source_type.value,
+                    "source_id": schema.source_id,
+                    "database_name": schema.database_name,
+                    "schema_name": schema.schema_name
+                }
+            }
+            
+            # Convert tables
+            for table in schema.tables:
+                table_data = {
+                    "name": table.name,
+                    "columns": [],
+                    "primary_keys": table.primary_keys,
+                    "row_count": table.row_count,
+                    "description": table.description
+                }
+                
+                # Convert columns
+                for col in table.columns:
+                    col_data = {
+                        "name": col.name,
+                        "data_type": col.data_type.value,
+                        "is_nullable": col.is_nullable,
+                        "is_primary_key": col.is_primary_key,
+                        "is_foreign_key": col.is_foreign_key,
+                        "is_unique": col.is_unique,
+                        "description": col.description,
+                        "default_value": col.default_value
+                    }
+                    table_data["columns"].append(col_data)
+                
+                schema_data["tables"][table.name] = table_data
+            
+            # Convert foreign keys
+            for fk in schema.get_foreign_keys():
+                fk_data = {
+                    "from_table": fk.from_table,
+                    "from_columns": fk.from_columns,
+                    "to_table": fk.to_table,
+                    "to_columns": fk.to_columns,
+                    "constraint_name": fk.constraint_name
+                }
+                schema_data["relationships"].append(fk_data)
+            
+            # Save to temporary file for SchemaGraph
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(schema_data, f, indent=2)
+                temp_schema_path = f.name
+            
+            try:
+                # Re-initialize SchemaGraph with the default database schema
+                SchemaGraph.reset_instance()
+                schema_graph = SchemaGraph.get_instance(schema_path=temp_schema_path)
+                logger.info("schema_graph_initialized_with_default_db", 
+                           table_count=len(schema_graph._all_tables))
+                
+                # Reset the orchestrator so it picks up the new schema
+                from sens.api.routers.nl2sql import reset_orchestrator
+                reset_orchestrator()
+                logger.info("orchestrator_reset_after_schema_update")
+                
+                # Build embedding index if needed
+                if self.settings.index_dir.exists():
+                    index_file = self.settings.index_dir / "columns.index"
+                    if not index_file.exists():
+                        try:
+                            logger.info("building_embedding_index_for_default_db")
+                            embedding_search = EmbeddingSearch(index_dir=str(self.settings.index_dir))
+                            embedding_search.build_index(temp_schema_path)
+                            logger.info("embedding_index_built_successfully")
+                        except Exception as e:
+                            logger.warning("embedding_index_build_failed_continuing", error=str(e))
+                            # Continue without embedding index - token search will still work
+                
+            finally:
+                # Clean up temporary file
+                import os
+                if os.path.exists(temp_schema_path):
+                    os.unlink(temp_schema_path)
+                    
+        except Exception as e:
+            logger.error("index_initialization_failed", error=str(e))
+            # Don't fail if index initialization fails - queries might still work with fallback

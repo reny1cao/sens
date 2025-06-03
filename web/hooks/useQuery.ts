@@ -44,7 +44,7 @@ function mapPipelineStepsToUI(pipelineMetrics: any): ProcessingStep[] {
 export function useQuery() {
   const [steps, setSteps] = useState<ProcessingStep[]>(INITIAL_STEPS);
   const [isPolling, setIsPolling] = useState(false);
-  const { sessionId } = useDataSource();
+  const { sessionId, activeSource } = useDataSource();
 
   const resetSteps = useCallback(() => {
     setSteps(INITIAL_STEPS.map(step => ({ ...step, status: 'pending' })));
@@ -61,12 +61,12 @@ export function useQuery() {
           idx === 0 ? { ...step, status: 'running', startTime: Date.now() } : step
         ));
 
-        // Make the API call with session ID
+        // Make the API call with session ID (only if not using default database)
         const response = await fetch('/api/nl2sql', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(sessionId && { 'X-Session-Id': sessionId }),
+            ...(sessionId && activeSource?.id !== 'default' && { 'X-Session-Id': sessionId }),
           },
           body: JSON.stringify(request),
         });
