@@ -209,6 +209,176 @@ const mockSchema: UniversalSchema = {
           metadata: { unit: '%' }
         }
       ]
+    },
+    {
+      id: 'exchanges',
+      name: 'exchanges',
+      type: 'table',
+      category: 'Reference Data',
+      displayName: 'Exchanges',
+      description: 'Stock exchanges and trading venues',
+      stats: { rowCount: 50, lastUpdated: new Date() },
+      attributes: [
+        {
+          id: 'exch_id',
+          name: 'exchange_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { primaryKey: true }
+        },
+        {
+          id: 'exch_code',
+          name: 'exchange_code',
+          dataType: 'varchar(10)',
+          semanticType: 'text' as any,
+          constraints: { unique: true, nullable: false }
+        },
+        {
+          id: 'exch_name',
+          name: 'name',
+          dataType: 'varchar(100)',
+          semanticType: 'text' as any,
+          constraints: { nullable: false }
+        }
+      ]
+    },
+    {
+      id: 'sectors',
+      name: 'sectors',
+      type: 'table',
+      category: 'Reference Data',
+      displayName: 'Sectors',
+      description: 'Business sectors classification',
+      stats: { rowCount: 11, lastUpdated: new Date() },
+      attributes: [
+        {
+          id: 'sect_id',
+          name: 'sector_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { primaryKey: true }
+        },
+        {
+          id: 'sect_name',
+          name: 'sector_name',
+          dataType: 'varchar(100)',
+          semanticType: 'text' as any,
+          constraints: { unique: true, nullable: false }
+        }
+      ]
+    },
+    {
+      id: 'industries',
+      name: 'industries',
+      type: 'table',
+      category: 'Reference Data',
+      displayName: 'Industries',
+      description: 'Industry classification within sectors',
+      stats: { rowCount: 150, lastUpdated: new Date() },
+      attributes: [
+        {
+          id: 'ind_id',
+          name: 'industry_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { primaryKey: true }
+        },
+        {
+          id: 'ind_name',
+          name: 'industry_name',
+          dataType: 'varchar(100)',
+          semanticType: 'text' as any,
+          constraints: { nullable: false }
+        },
+        {
+          id: 'ind_sector_id',
+          name: 'sector_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { 
+            foreignKey: { entity: 'sectors', attribute: 'sector_id' },
+            nullable: false
+          }
+        }
+      ]
+    },
+    {
+      id: 'economic_indicators',
+      name: 'economic_indicators',
+      type: 'table',
+      category: 'Market Data',
+      displayName: 'Economic Indicators',
+      description: 'Economic indicators and macro data',
+      stats: { rowCount: 500000, lastUpdated: new Date() },
+      attributes: [
+        {
+          id: 'ei_id',
+          name: 'indicator_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { primaryKey: true }
+        },
+        {
+          id: 'ei_name',
+          name: 'indicator_name',
+          dataType: 'varchar(100)',
+          semanticType: 'text' as any,
+          constraints: { nullable: false }
+        },
+        {
+          id: 'ei_value',
+          name: 'value',
+          dataType: 'decimal(20,4)',
+          semanticType: 'quantity' as any,
+          constraints: { nullable: false }
+        },
+        {
+          id: 'ei_date',
+          name: 'release_date',
+          dataType: 'date',
+          semanticType: 'date' as any,
+          constraints: { nullable: false }
+        }
+      ]
+    },
+    {
+      id: 'exchange_rates',
+      name: 'exchange_rates',
+      type: 'table',
+      category: 'Market Data',
+      displayName: 'Exchange Rates',
+      description: 'Currency exchange rates',
+      stats: { rowCount: 1000000, lastUpdated: new Date() },
+      attributes: [
+        {
+          id: 'fx_id',
+          name: 'rate_id',
+          dataType: 'uuid',
+          semanticType: 'id' as any,
+          constraints: { primaryKey: true }
+        },
+        {
+          id: 'fx_pair',
+          name: 'currency_pair',
+          dataType: 'varchar(10)',
+          semanticType: 'text' as any,
+          constraints: { nullable: false }
+        },
+        {
+          id: 'fx_rate',
+          name: 'exchange_rate',
+          dataType: 'decimal(20,6)',
+          semanticType: 'money' as any,
+          constraints: { nullable: false }
+        },
+        {
+          id: 'fx_date',
+          name: 'rate_date',
+          dataType: 'date',
+          semanticType: 'date' as any,
+          constraints: { nullable: false }
+        }
+      ]
     }
   ],
   relationships: [
@@ -238,11 +408,20 @@ const mockSchema: UniversalSchema = {
       sourceAttribute: 'security_id',
       targetAttribute: 'security_id',
       label: 'holds'
+    },
+    {
+      id: 'rel_4',
+      source: 'industries',
+      target: 'sectors',
+      type: 'many-to-one',
+      sourceAttribute: 'sector_id',
+      targetAttribute: 'sector_id',
+      label: 'belongs to'
     }
   ],
   categories: {
-    'Reference Data': ['securities'],
-    'Market Data': ['daily_prices'],
+    'Reference Data': ['securities', 'exchanges', 'sectors', 'industries'],
+    'Market Data': ['daily_prices', 'economic_indicators', 'exchange_rates'],
     'Analytics': ['portfolios', 'portfolio_holdings']
   }
 };
