@@ -229,7 +229,7 @@ export function ERDiagramView({
         fitViewOptions={{ padding: 0.1 }}
         attributionPosition="bottom-left"
       >
-        <Background variant="dots" gap={12} size={1} />
+        <Background variant={'dots' as any} gap={12} size={1} />
         
         <MiniMap 
           nodeColor={nodeColor}

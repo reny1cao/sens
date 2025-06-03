@@ -67,7 +67,7 @@ export interface SchemaRelationship {
   id: string;
   source: string;
   target: string;
-  type: 'one-to-one' | 'one-to-many' | 'many-to-many';
+  type: 'one-to-one' | 'one-to-many' | 'many-to-many' | 'many-to-one';
   sourceAttribute: string;
   targetAttribute: string;
   label?: string;
