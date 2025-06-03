@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Schema Test</title>
+</head>
+<body>
+    <h1>Testing Schema Visualization</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function testSchema() {
+            const results = document.getElementById('results');
+            
+            try {
+                // Test backend directly
+                const backendResponse = await fetch('http://localhost:8000/api/schema/visualize');
+                const backendData = await backendResponse.json();
+                results.innerHTML += `<p>✓ Backend API: ${backendData.entities.length} tables found</p>`;
+                
+                // Test frontend API proxy
+                const frontendResponse = await fetch('http://localhost:3000/api/schema/visualize');
+                if (frontendResponse.ok) {
+                    const frontendData = await frontendResponse.json();
+                    results.innerHTML += `<p>✓ Frontend proxy: ${frontendData.entities.length} tables found</p>`;
+                } else {
+                    results.innerHTML += `<p>✗ Frontend proxy: ${frontendResponse.status} ${frontendResponse.statusText}</p>`;
+                }
+                
+                // Show some table names
+                results.innerHTML += '<h3>Sample tables:</h3><ul>';
+                backendData.entities.slice(0, 5).forEach(table => {
+                    results.innerHTML += `<li>${table.name} (${table.category})</li>`;
+                });
+                results.innerHTML += '</ul>';
+                
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        testSchema();
+    </script>
+</body>
+</html>
