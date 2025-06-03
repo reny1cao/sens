@@ -15,6 +15,7 @@ from .models import (
     CacheConfig,
     DatabaseConfig,
     EnvironmentType,
+    FinancialDataConfig,
     IntentExtractorConfig,
     LoggingConfig,
     OpenRouterConfig,
@@ -86,6 +87,21 @@ class Settings(BaseSettings):
     def db_url(self) -> str:
         """Get the database URL constructed from components."""
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+    
+    @property
+    def database_url(self) -> str:
+        """Alias for db_url for compatibility."""
+        return self.db_url
+
+    @property
+    def alpha_vantage_api_key(self) -> Optional[str]:
+        """Get Alpha Vantage API key from financial config."""
+        return self.financial.alpha_vantage_api_key
+
+    @property
+    def fred_api_key(self) -> Optional[str]:
+        """Get FRED API key from financial config."""
+        return self.financial.fred_api_key
 
     # OpenRouter Configuration
     # -----------------------
@@ -126,6 +142,12 @@ class Settings(BaseSettings):
     cache: CacheConfig = Field(
         default_factory=CacheConfig,
         description="Cache configuration",
+    )
+
+    # Financial data configuration
+    financial: FinancialDataConfig = Field(
+        default_factory=FinancialDataConfig,
+        description="Financial data API configuration",
     )
 
     # API Security Settings

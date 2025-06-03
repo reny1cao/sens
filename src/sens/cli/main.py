@@ -699,6 +699,19 @@ def main() -> None:
         "key", nargs="?", help="Optional specific key to get"
     )
 
+    # Financial data management command (handled by click)
+    financial_parser = subparsers.add_parser("financial", help="Financial data management", add_help=False)
+    # Note: Financial subcommands are handled by click, not argparse
+
+    # Handle financial command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == 'financial':
+        # Import and run financial commands using click directly
+        from sens.cli.commands.financial import financial
+        # Remove 'sens' from argv and call financial with remaining args
+        sys.argv = ['financial'] + sys.argv[2:]
+        financial()
+        return
+    
     args = parser.parse_args()
 
     # Configure logging first, before any other operations
@@ -724,6 +737,7 @@ def main() -> None:
         handle_performance(args, log)
     elif args.command == "config":
         handle_config_command(args, log)
+    # Financial command is handled above before argparse
 
 
 if __name__ == "__main__":

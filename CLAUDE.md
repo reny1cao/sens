@@ -35,6 +35,14 @@ poetry run sens status
 # Schema management
 poetry run sens extract-schema -o schema.json
 poetry run sens build-index -s schema.json
+
+# Financial data management
+poetry run sens financial setup --create-schema  # Create financial database schema
+poetry run sens financial load --symbols AAPL,GOOGL,MSFT --days 365  # Load stock data
+poetry run sens financial load-economic --preset key_economic  # Load economic indicators
+poetry run sens financial update  # Daily data update
+poetry run sens financial status --detailed  # Show data status
+poetry run sens financial prices AAPL --days 30  # Show recent prices
 ```
 
 ## High-Level Architecture

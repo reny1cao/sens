@@ -53,3 +53,4 @@ logs/
 .backend.pid
 cloudflared*
 *.pid
+gh_2.58.0_linux_amd64/
