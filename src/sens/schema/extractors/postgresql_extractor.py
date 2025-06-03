@@ -420,24 +420,20 @@ class PostgreSQLExtractor(SchemaExtractor):
     async def _analyze_sticky_columns(self, conn, tables: List[TableInfo]):
         """Analyze and mark sticky columns using IdentifierScorer."""
         for table in tables:
-            # Get column names for analysis
-            column_names = [col.name for col in table.columns]
-            
-            # Score columns
-            scores = self._identifier_scorer.score_columns(
-                table.name, column_names
-            )
-            
-            # Get top sticky columns (score > 0.5)
-            sticky_columns = self._identifier_scorer.get_sticky_columns(
-                scores, threshold=0.5
-            )
-            
-            # Update column info
+            # Score each column individually
+            column_scores = {}
             for col in table.columns:
-                if col.name in sticky_columns:
+                score = self._identifier_scorer.score_column(col, table)
+                column_scores[col.name] = score.score
+            
+            # Mark columns with score > 0.5 as sticky
+            sticky_columns = []
+            for col in table.columns:
+                if column_scores[col.name] > 0.5:
                     col.is_sticky = True
+                    sticky_columns.append(col.name)
                     
-            logger.info("sticky_columns_identified",
-                       table=table.name,
-                       sticky_columns=sticky_columns)
+            if sticky_columns:
+                logger.info("sticky_columns_identified",
+                           table=table.name,
+                           sticky_columns=sticky_columns)
