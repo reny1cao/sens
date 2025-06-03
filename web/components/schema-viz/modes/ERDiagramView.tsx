@@ -45,7 +45,7 @@ interface ERNodeData extends SchemaEntity {
 // Custom node component for ER diagram
 const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) => {
   const primaryKeys = data.attributes.filter(attr => attr.constraints.primaryKey);
-  const foreignKeys = data.attributes.filter(attr => attr.constraints.foreignKey);
+  const foreignKeys = data.attributes.filter(attr => attr.constraints.foreignKey && !attr.constraints.primaryKey);
   const partitionKeys = data.attributes.filter(attr => attr.constraints.partitionKey && !attr.constraints.primaryKey);
   const regularColumns = data.attributes.filter(
     attr => !attr.constraints.primaryKey && !attr.constraints.foreignKey && !attr.constraints.partitionKey
@@ -69,6 +69,9 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
               {primaryKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
                   <span className="font-bold text-primary text-xs">PK</span>
+                  {attr.constraints.partitionKey && (
+                    <span className="font-bold text-green-600 text-xs">+PART</span>
+                  )}
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>

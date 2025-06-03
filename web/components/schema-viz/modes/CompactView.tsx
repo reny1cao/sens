@@ -157,10 +157,14 @@ export function CompactView({
                 <div className="mt-2 space-y-1">
                   {keyColumns.slice(0, 3).map(attr => (
                     <div key={attr.id} className="flex items-center gap-2 text-xs">
-                      {attr.constraints.primaryKey ? (
+                      {attr.constraints.primaryKey && (
                         <Badge variant="default" className="h-4 px-1">PK</Badge>
-                      ) : (
+                      )}
+                      {attr.constraints.foreignKey && (
                         <Badge variant="secondary" className="h-4 px-1">FK</Badge>
+                      )}
+                      {attr.constraints.partitionKey && (
+                        <Badge variant="secondary" className="h-4 px-1">PART</Badge>
                       )}
                       <span className="font-mono">{attr.name}</span>
                     </div>
@@ -212,6 +216,9 @@ export function CompactView({
                       )}
                       {attr.constraints.foreignKey && (
                         <Badge variant="outline" className="text-xs h-4 px-1">FK</Badge>
+                      )}
+                      {attr.constraints.partitionKey && (
+                        <Badge variant="secondary" className="text-xs h-4 px-1">PART</Badge>
                       )}
                     </div>
                   </div>
