@@ -52,24 +52,24 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
 
   return (
     <Card className={cn(
-      "min-w-[250px] transition-all duration-200",
+      "min-w-[200px] sm:min-w-[250px] transition-all duration-200",
       selected && "ring-2 ring-primary",
       data.highlighted && "ring-2 ring-amber-500"
     )}>
-      <div className="p-3 border-b bg-muted/30">
-        <h4 className="font-semibold text-sm">{data.displayName || data.name}</h4>
+      <div className="p-2 sm:p-3 border-b bg-muted/30">
+        <h4 className="font-semibold text-xs sm:text-sm truncate">{data.displayName || data.name}</h4>
       </div>
       
       {data.showColumns !== false && (
-        <div className="p-2 space-y-2">
+        <div className="p-1.5 sm:p-2 space-y-1.5 sm:space-y-2">
           {/* Primary Keys */}
           {primaryKeys.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-0.5 sm:space-y-1">
               {primaryKeys.map(attr => (
-                <div key={attr.id} className="flex items-center gap-2 text-xs">
-                  <span className="font-bold text-primary">PK</span>
-                  <span className="font-mono">{attr.name}</span>
-                  <span className="text-muted-foreground">{attr.dataType}</span>
+                <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
+                  <span className="font-bold text-primary text-xs">PK</span>
+                  <span className="font-mono truncate flex-1">{attr.name}</span>
+                  <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>
               ))}
             </div>
@@ -77,12 +77,12 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
           
           {/* Foreign Keys */}
           {foreignKeys.length > 0 && (
-            <div className="space-y-1 border-t pt-2">
+            <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
               {foreignKeys.map(attr => (
-                <div key={attr.id} className="flex items-center gap-2 text-xs">
-                  <span className="font-bold text-blue-600">FK</span>
-                  <span className="font-mono">{attr.name}</span>
-                  <span className="text-muted-foreground">{attr.dataType}</span>
+                <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
+                  <span className="font-bold text-blue-600 text-xs">FK</span>
+                  <span className="font-mono truncate flex-1">{attr.name}</span>
+                  <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>
               ))}
             </div>
@@ -90,17 +90,17 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
           
           {/* Regular Columns (limited) */}
           {regularColumns.length > 0 && data.showColumns && (
-            <div className="space-y-1 border-t pt-2">
-              {regularColumns.slice(0, 5).map(attr => (
-                <div key={attr.id} className="flex items-center gap-2 text-xs">
-                  <span className="w-6"></span>
-                  <span className="font-mono">{attr.name}</span>
-                  <span className="text-muted-foreground">{attr.dataType}</span>
+            <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
+              {regularColumns.slice(0, 3).map(attr => (
+                <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
+                  <span className="w-4 sm:w-6"></span>
+                  <span className="font-mono truncate flex-1">{attr.name}</span>
+                  <span className="text-muted-foreground text-xs hidden lg:inline">{attr.dataType}</span>
                 </div>
               ))}
-              {regularColumns.length > 5 && (
-                <div className="text-xs text-muted-foreground pl-6">
-                  +{regularColumns.length - 5} more columns...
+              {regularColumns.length > 3 && (
+                <div className="text-xs text-muted-foreground pl-4 sm:pl-6">
+                  +{regularColumns.length - 3} more...
                 </div>
               )}
             </div>
@@ -226,8 +226,17 @@ export function ERDiagramView({
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
-        fitViewOptions={{ padding: 0.1 }}
+        fitViewOptions={{ padding: 0.1, maxZoom: 1 }}
         attributionPosition="bottom-left"
+        zoomOnScroll={true}
+        zoomOnPinch={true}
+        panOnScroll={false}
+        panOnDrag={true}
+        preventScrolling={true}
+        nodesDraggable={true}
+        nodesConnectable={false}
+        minZoom={0.1}
+        maxZoom={2}
       >
         <Background variant={'dots' as any} gap={12} size={1} />
         
@@ -236,42 +245,48 @@ export function ERDiagramView({
           nodeStrokeWidth={3}
           pannable
           zoomable
+          className="hidden lg:block"
           style={{
             backgroundColor: 'hsl(var(--background))',
             border: '1px solid hsl(var(--border))',
           }}
         />
         
-        <Controls />
+        <Controls className="left-2 bottom-2 md:left-auto md:bottom-auto" />
         
         <Panel position="top-right" className="flex gap-2">
-          <Card className="p-2">
-            <div className="flex items-center gap-2">
+          <Card className="p-1 sm:p-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Toggle
                 pressed={showAllColumns}
                 onPressedChange={setShowAllColumns}
                 size="sm"
                 aria-label="Toggle column visibility"
+                className="text-xs sm:text-sm"
               >
-                {showAllColumns ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                <span className="ml-1">Columns</span>
+                {showAllColumns ? <Eye className="h-3 w-3 sm:h-4 sm:w-4" /> : <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />}
+                <span className="ml-1 hidden sm:inline">Columns</span>
               </Toggle>
               
-              <div className="w-px h-6 bg-border" />
+              <div className="w-px h-6 bg-border hidden sm:block" />
               
               <Button
                 size="sm"
                 variant={layout === 'hierarchical' ? 'default' : 'outline'}
                 onClick={() => setLayout('hierarchical')}
+                className="text-xs sm:text-sm px-2 sm:px-3"
               >
-                Tree
+                <span className="hidden sm:inline">Tree</span>
+                <span className="sm:hidden">T</span>
               </Button>
               <Button
                 size="sm"
                 variant={layout === 'force' ? 'default' : 'outline'}
                 onClick={() => setLayout('force')}
+                className="text-xs sm:text-sm px-2 sm:px-3"
               >
-                Force
+                <span className="hidden sm:inline">Force</span>
+                <span className="sm:hidden">F</span>
               </Button>
             </div>
           </Card>

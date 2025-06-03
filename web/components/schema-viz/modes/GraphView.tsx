@@ -133,8 +133,17 @@ export function GraphView({
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.1, maxZoom: 1 }}
         attributionPosition="bottom-left"
+        zoomOnScroll={true}
+        zoomOnPinch={true}
+        panOnScroll={false}
+        panOnDrag={true}
+        preventScrolling={true}
+        nodesDraggable={true}
+        nodesConnectable={false}
+        minZoom={0.1}
+        maxZoom={2}
       >
         <Background variant={'dots' as any} gap={12} size={1} />
         
@@ -143,37 +152,44 @@ export function GraphView({
           nodeStrokeWidth={3}
           pannable
           zoomable
+          className="hidden lg:block"
           style={{
             backgroundColor: 'hsl(var(--background))',
             border: '1px solid hsl(var(--border))',
           }}
         />
         
-        <Controls />
+        <Controls className="left-2 bottom-2 md:left-auto md:bottom-auto" />
         
         <Panel position="top-right" className="flex gap-2">
-          <Card className="p-2">
-            <div className="flex gap-1">
+          <Card className="p-1 sm:p-2">
+            <div className="flex gap-0.5 sm:gap-1">
               <Button
                 size="sm"
                 variant={layout === 'hierarchical' ? 'default' : 'outline'}
                 onClick={() => setLayout('hierarchical')}
+                className="text-xs sm:text-sm px-2 sm:px-3"
               >
-                Tree
+                <span className="hidden sm:inline">Tree</span>
+                <span className="sm:hidden">T</span>
               </Button>
               <Button
                 size="sm"
                 variant={layout === 'force' ? 'default' : 'outline'}
                 onClick={() => setLayout('force')}
+                className="text-xs sm:text-sm px-2 sm:px-3"
               >
-                Force
+                <span className="hidden sm:inline">Force</span>
+                <span className="sm:hidden">F</span>
               </Button>
               <Button
                 size="sm"
                 variant={layout === 'grid' ? 'default' : 'outline'}
                 onClick={() => setLayout('grid')}
+                className="text-xs sm:text-sm px-2 sm:px-3"
               >
-                Grid
+                <span className="hidden sm:inline">Grid</span>
+                <span className="sm:hidden">G</span>
               </Button>
             </div>
           </Card>

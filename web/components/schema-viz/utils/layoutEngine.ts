@@ -29,21 +29,25 @@ export function layoutNodes(
 }
 
 function hierarchicalLayout(nodes: Node[], edges: Edge[]): Node[] {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const nodeWidth = isMobile ? 250 : 350;
+  const nodeHeight = isMobile ? 150 : 200;
+  
   const g = new dagre.graphlib.Graph();
   g.setGraph({ 
     rankdir: 'TB', 
-    nodesep: 100, 
-    ranksep: 150,
-    marginx: 50,
-    marginy: 50
+    nodesep: isMobile ? 50 : 100, 
+    ranksep: isMobile ? 100 : 150,
+    marginx: isMobile ? 20 : 50,
+    marginy: isMobile ? 20 : 50
   });
   g.setDefaultEdgeLabel(() => ({}));
 
   // Add nodes to graph
   nodes.forEach((node) => {
     g.setNode(node.id, { 
-      width: 350, 
-      height: 200 
+      width: nodeWidth, 
+      height: nodeHeight 
     });
   });
 
@@ -61,19 +65,25 @@ function hierarchicalLayout(nodes: Node[], edges: Edge[]): Node[] {
     return {
       ...node,
       position: {
-        x: position.x - 175, // Center the node (width/2)
-        y: position.y - 100  // Center the node (height/2)
+        x: position.x - nodeWidth / 2, // Center the node
+        y: position.y - nodeHeight / 2  // Center the node
       }
     };
   });
 }
 
 function forceLayout(nodes: Node[], edges: Edge[]): Node[] {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const centerX = isMobile ? 200 : 500;
+  const centerY = isMobile ? 300 : 400;
+  const nodeDistance = isMobile ? 150 : 200;
+  const collisionRadius = isMobile ? 150 : 200;
+  
   // Create simulation nodes
   const simNodes: SimulationNode[] = nodes.map(node => ({
     ...node,
-    x: node.position.x || Math.random() * 1000,
-    y: node.position.y || Math.random() * 1000
+    x: node.position.x || Math.random() * (isMobile ? 400 : 1000),
+    y: node.position.y || Math.random() * (isMobile ? 600 : 1000)
   }));
 
   // Create simulation links
@@ -86,15 +96,15 @@ function forceLayout(nodes: Node[], edges: Edge[]): Node[] {
   const simulation = forceSimulation(simNodes)
     .force('link', forceLink(simLinks)
       .id((d: any) => d.id)
-      .distance(200)
+      .distance(nodeDistance)
       .strength(0.5)
     )
     .force('charge', forceManyBody()
-      .strength(-1000)
-      .distanceMax(500)
+      .strength(isMobile ? -500 : -1000)
+      .distanceMax(isMobile ? 300 : 500)
     )
-    .force('center', forceCenter(500, 400))
-    .force('collision', forceCollide(200))
+    .force('center', forceCenter(centerX, centerY))
+    .force('collision', forceCollide(collisionRadius))
     .alpha(1)
     .alphaDecay(0.02);
 
@@ -112,10 +122,12 @@ function forceLayout(nodes: Node[], edges: Edge[]): Node[] {
 }
 
 function gridLayout(nodes: Node[]): Node[] {
-  const cols = Math.ceil(Math.sqrt(nodes.length));
-  const spacing = 400;
-  const startX = 100;
-  const startY = 100;
+  // Adjust columns based on screen width (assuming mobile if we have many nodes)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const cols = isMobile ? Math.min(2, Math.ceil(Math.sqrt(nodes.length))) : Math.ceil(Math.sqrt(nodes.length));
+  const spacing = isMobile ? 250 : 400;
+  const startX = isMobile ? 50 : 100;
+  const startY = isMobile ? 50 : 100;
 
   return nodes.map((node, index) => ({
     ...node,

@@ -114,7 +114,7 @@ export function ExplorerView({
       <div key={entity.id} className="mb-2">
         <div
           className={cn(
-            "flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer",
+            "flex items-center justify-between p-3 sm:p-2 rounded-lg hover:bg-muted/50 cursor-pointer touch-manipulation",
             searchQuery && entity.name.toLowerCase().includes(searchQuery.toLowerCase()) && "bg-yellow-100/50"
           )}
           onClick={() => {
@@ -122,11 +122,11 @@ export function ExplorerView({
             toggleTable(entity.id);
           }}
         >
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
               variant="ghost"
               size="sm"
-              className="p-0 h-5 w-5"
+              className="p-0 h-8 w-8 sm:h-5 sm:w-5 flex-shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleTable(entity.id);
@@ -134,16 +134,16 @@ export function ExplorerView({
             >
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
-            <Table className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium text-sm">{entity.displayName || entity.name}</span>
+            <Table className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="font-medium text-sm truncate">{entity.displayName || entity.name}</span>
             {entity.isPartitioned && (
-              <Badge variant="secondary" className="text-xs">Partitioned</Badge>
+              <Badge variant="secondary" className="text-xs hidden sm:inline-flex">Partitioned</Badge>
             )}
           </div>
           
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
             {config.showStats && entity.stats?.rowCount !== undefined && (
-              <span>{entity.stats.rowCount.toLocaleString()} rows</span>
+              <span className="hidden sm:inline">{entity.stats.rowCount.toLocaleString()} rows</span>
             )}
             {primaryKeys.length > 0 && (
               <div className="flex items-center gap-1">
@@ -157,7 +157,7 @@ export function ExplorerView({
                 <span>{foreignKeys.length}</span>
               </div>
             )}
-            <span>{entity.attributes.length} cols</span>
+            <span className="hidden xs:inline">{entity.attributes.length} cols</span>
           </div>
         </div>
 
@@ -168,32 +168,35 @@ export function ExplorerView({
         )}
 
         {isExpanded && (
-          <div className="ml-7 mt-2 space-y-1">
+          <div className="ml-4 sm:ml-7 mt-2 space-y-1">
             {entity.attributes.map(attr => (
               <div
                 key={attr.id}
                 className={cn(
-                  "flex items-center justify-between text-xs p-1.5 rounded hover:bg-muted/30 cursor-pointer",
+                  "flex items-center justify-between text-xs p-2 sm:p-1.5 rounded hover:bg-muted/30 cursor-pointer touch-manipulation",
                   searchQuery && attr.name.toLowerCase().includes(searchQuery.toLowerCase()) && "bg-yellow-100/50"
                 )}
                 onClick={() => onColumnSelect?.(entity.id, attr.id)}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   {getSemanticIcon(attr.semanticType)}
-                  <span className="font-mono">{attr.name}</span>
-                  {attr.constraints.primaryKey && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">PK</Badge>
-                  )}
-                  {attr.constraints.foreignKey && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">FK</Badge>
-                  )}
-                  {attr.constraints.unique && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">UQ</Badge>
-                  )}
+                  <span className="font-mono truncate">{attr.name}</span>
+                  <div className="flex gap-1 flex-shrink-0">
+                    {attr.constraints.primaryKey && (
+                      <Badge variant="outline" className="text-xs h-4 px-1">PK</Badge>
+                    )}
+                    {attr.constraints.foreignKey && (
+                      <Badge variant="outline" className="text-xs h-4 px-1">FK</Badge>
+                    )}
+                    {attr.constraints.unique && (
+                      <Badge variant="outline" className="text-xs h-4 px-1 hidden sm:inline-flex">UQ</Badge>
+                    )}
+                  </div>
                 </div>
-                <span className="text-muted-foreground">
-                  {attr.dataType}
-                  {!attr.constraints.nullable && ' NOT NULL'}
+                <span className="text-muted-foreground text-xs flex-shrink-0 ml-2">
+                  <span className="hidden sm:inline">{attr.dataType}</span>
+                  <span className="sm:hidden">{attr.dataType.split('(')[0]}</span>
+                  {!attr.constraints.nullable && <span className="hidden lg:inline"> NOT NULL</span>}
                 </span>
               </div>
             ))}

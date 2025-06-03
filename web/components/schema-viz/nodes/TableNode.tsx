@@ -70,21 +70,21 @@ export const TableNode = memo(({ data, selected }: NodeProps<TableNodeData>) => 
       <Handle type="target" position={Position.Top} className="w-3 h-3" />
       
       <Card className={cn(
-        "min-w-[280px] max-w-[350px] transition-all duration-200",
+        "min-w-[200px] max-w-[280px] sm:min-w-[280px] sm:max-w-[350px] transition-all duration-200",
         selected && "ring-2 ring-primary",
         data.highlighted && "ring-2 ring-amber-500",
         "hover:shadow-lg cursor-pointer"
       )}>
-        <CardHeader className="pb-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Table className="w-4 h-4 text-muted-foreground" />
-              <span className="font-semibold text-sm">{displayName}</span>
+        <CardHeader className="p-3 sm:pb-3 space-y-1 sm:space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <Table className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
+              <span className="font-semibold text-xs sm:text-sm truncate">{displayName}</span>
             </div>
             {data.category && (
               <Badge 
                 variant="outline" 
-                className={cn("text-xs", getCategoryColor(data.category))}
+                className={cn("text-xs flex-shrink-0", getCategoryColor(data.category))}
               >
                 {data.category}
               </Badge>
@@ -92,28 +92,28 @@ export const TableNode = memo(({ data, selected }: NodeProps<TableNodeData>) => 
           </div>
           
           {data.description && (
-            <p className="text-xs text-muted-foreground line-clamp-2">
+            <p className="text-xs text-muted-foreground line-clamp-2 hidden sm:block">
               {data.description}
             </p>
           )}
           
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
             {data.stats?.rowCount !== undefined && (
-              <span>{data.stats.rowCount.toLocaleString()} rows</span>
+              <span className="hidden sm:inline">{data.stats.rowCount.toLocaleString()} rows</span>
             )}
             {data.isPartitioned && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
                 Partitioned
               </Badge>
             )}
             {primaryKeys.length > 0 && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 <Key className="w-3 h-3" />
                 <span>{primaryKeys.length}</span>
               </div>
             )}
             {foreignKeys.length > 0 && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 <Link className="w-3 h-3" />
                 <span>{foreignKeys.length}</span>
               </div>
@@ -121,25 +121,26 @@ export const TableNode = memo(({ data, selected }: NodeProps<TableNodeData>) => 
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-1 pb-3">
+        <CardContent className="space-y-0.5 sm:space-y-1 p-2 sm:pb-3">
           {data.attributes.slice(0, maxVisibleColumns).map((attr) => (
             <div 
               key={attr.id} 
-              className="flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-muted/50"
+              className="flex items-center justify-between text-xs py-0.5 sm:py-1 px-1 sm:px-2 rounded hover:bg-muted/50"
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
                 {getSemanticIcon(attr.semanticType)}
-                <span className="font-mono">{attr.name}</span>
+                <span className="font-mono text-xs truncate">{attr.name}</span>
                 {attr.constraints.primaryKey && (
-                  <Badge variant="outline" className="ml-1 text-xs h-4 px-1">PK</Badge>
+                  <Badge variant="outline" className="ml-1 text-xs h-3 sm:h-4 px-0.5 sm:px-1 flex-shrink-0">PK</Badge>
                 )}
                 {attr.constraints.foreignKey && (
-                  <Badge variant="outline" className="ml-1 text-xs h-4 px-1">FK</Badge>
+                  <Badge variant="outline" className="ml-1 text-xs h-3 sm:h-4 px-0.5 sm:px-1 flex-shrink-0">FK</Badge>
                 )}
               </div>
-              <span className="text-muted-foreground text-xs">
-                {attr.dataType}
-                {attr.metadata?.unit && ` (${attr.metadata.unit})`}
+              <span className="text-muted-foreground text-xs flex-shrink-0 ml-1">
+                <span className="hidden sm:inline">{attr.dataType}</span>
+                <span className="sm:hidden">{attr.dataType.split('(')[0]}</span>
+                {attr.metadata?.unit && <span className="hidden lg:inline"> ({attr.metadata.unit})</span>}
               </span>
             </div>
           ))}
