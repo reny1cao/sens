@@ -25,7 +25,7 @@ import { useDataSource } from '@/contexts/DataSourceContext';
 import { DataSourceType } from '@/types';
 
 export function DataSourceSelector() {
-  const { activeSource, clearDataSource, deleteTable } = useDataSource();
+  const { activeSource, clearDataSource, deleteTable, switchToDefaultDatabase } = useDataSource();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'upload' | 'connect' | null>(null);
 
@@ -79,6 +79,24 @@ export function DataSourceSelector() {
           <DropdownMenuContent align="end" className="w-[300px]">
             <DropdownMenuLabel>Data Source</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            
+            {/* Default Database Option */}
+            <DropdownMenuItem
+              onSelect={() => switchToDefaultDatabase()}
+              className={activeSource?.id === 'default' ? 'bg-muted' : ''}
+            >
+              <Database className="mr-2 h-4 w-4" />
+              Default Database
+              {activeSource?.id === 'default' && (
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  Active
+                </Badge>
+              )}
+            </DropdownMenuItem>
+            
+            {activeSource?.id !== 'default' && (
+              <DropdownMenuSeparator />
+            )}
             
             {activeSource && (
               <>

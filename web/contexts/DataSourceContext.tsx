@@ -14,6 +14,7 @@ interface DataSourceContextType {
   deleteTable: (tableName: string) => Promise<void>;
   previewTable: (tableName: string) => Promise<any>;
   refreshSession: () => Promise<void>;
+  switchToDefaultDatabase: () => void;
 }
 
 const DataSourceContext = createContext<DataSourceContextType | undefined>(undefined);
@@ -204,7 +205,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
       // Show success message
       if (result.remaining_tables && result.remaining_tables.length === 0) {
         // All tables deleted, session was cleaned up
-        setActiveSource(null);
+        setActiveSource(DEFAULT_SOURCE);
       }
     } catch (err) {
       console.error('Failed to delete table:', err);
@@ -231,6 +232,11 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
+  const switchToDefaultDatabase = () => {
+    setActiveSource(DEFAULT_SOURCE);
+    // Don't change session ID, keep it for potential file uploads
+  };
+
   return (
     <DataSourceContext.Provider
       value={{
@@ -244,6 +250,7 @@ export function DataSourceProvider({ children }: { children: React.ReactNode }) 
         deleteTable,
         previewTable,
         refreshSession,
+        switchToDefaultDatabase,
       }}
     >
       {children}

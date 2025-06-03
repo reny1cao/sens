@@ -22,20 +22,21 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
   const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_EXAMPLES);
   const [isLoading, setIsLoading] = useState(false);
   useEffect(() => {
-    if (activeSource && sessionId) {
-      fetchSuggestions();
-    } else {
-      setSuggestions(DEFAULT_EXAMPLES);
-    }
+    // Always fetch suggestions, even for default database
+    fetchSuggestions();
   }, [activeSource, sessionId]);
 
   const fetchSuggestions = async () => {
     setIsLoading(true);
     try {
+      // Only send session ID if we have one and it's not the default source
+      const headers: Record<string, string> = {};
+      if (sessionId && activeSource?.id !== 'default') {
+        headers['X-Session-Id'] = sessionId;
+      }
+      
       const response = await fetch('/api/datasource/suggestions', {
-        headers: {
-          'X-Session-Id': sessionId,
-        },
+        headers,
       });
 
       if (response.ok) {
@@ -44,10 +45,14 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
           // Take first 5 suggestions
           setSuggestions(data.suggestions.slice(0, 5));
         }
+      } else {
+        // Use default suggestions if API fails
+        setSuggestions(DEFAULT_EXAMPLES);
       }
     } catch (error) {
       console.error('Failed to fetch suggestions:', error);
       // Keep default suggestions on error
+      setSuggestions(DEFAULT_EXAMPLES);
     } finally {
       setIsLoading(false);
     }
@@ -60,18 +65,16 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
           <span>{activeSource ? 'Suggested queries for your data:' : 'Try these examples:'}</span>
           {isLoading && <span className="text-xs text-gray-500">(Loading...)</span>}
         </div>
-        {activeSource && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchSuggestions}
-            disabled={isLoading}
-            className="h-7 px-2 text-xs"
-            title="Get new suggestions"
-          >
-            <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={fetchSuggestions}
+          disabled={isLoading}
+          className="h-7 px-2 text-xs"
+          title="Get new suggestions"
+        >
+          <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
       <div className="flex flex-wrap gap-2">
         {suggestions.map((example) => (

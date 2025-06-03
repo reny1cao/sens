@@ -274,14 +274,39 @@ async def list_sources(
 
 @router.get("/suggestions")
 async def get_query_suggestions(
-    session_id: str = Header(..., alias="X-Session-Id"),
+    session_id: Optional[str] = Header(None, alias="X-Session-Id"),
     datasource_manager: DataSourceManager = Depends(get_datasource_manager)
 ):
-    """Get contextual query suggestions based on the uploaded data."""
+    """Get contextual query suggestions based on the data source."""
+    
+    # If no session ID, return suggestions for default database
+    if not session_id:
+        # Return default database suggestions
+        default_suggestions = [
+            "Show all tables in the database",
+            "Count total number of records across all tables",
+            "Show database schema information",
+            "List all columns and their data types",
+            "Show sample data from each table"
+        ]
+        return {
+            "session_id": "default",
+            "source_name": "Default Database",
+            "suggestions": default_suggestions
+        }
     
     source = datasource_manager.get_session_source(session_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Session not found")
+        # Return default suggestions if session not found
+        return {
+            "session_id": session_id,
+            "source_name": "Unknown",
+            "suggestions": [
+                "Upload a CSV or Excel file to get started",
+                "Connect to a database for analysis",
+                "Try querying the default database"
+            ]
+        }
     
     try:
         suggestions = await datasource_manager.get_query_suggestions(source)
@@ -294,4 +319,13 @@ async def get_query_suggestions(
         logger.error("query_suggestions_failed", 
                     session_id=session_id,
                     error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return generic suggestions on error
+        return {
+            "session_id": session_id,
+            "source_name": source.name,
+            "suggestions": [
+                f"Show all data from {source.name}",
+                f"Count records in {source.name}",
+                f"Show summary statistics"
+            ]
+        }
