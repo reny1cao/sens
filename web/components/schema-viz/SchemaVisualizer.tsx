@@ -1,0 +1,224 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { 
+  FolderTree, 
+  GitBranch, 
+  Network, 
+  List,
+  Search,
+  Filter,
+  Download,
+  Maximize2
+} from 'lucide-react';
+import { 
+  UniversalSchema, 
+  SchemaVisualizationConfig 
+} from '@/types/schema';
+import { cn } from '@/lib/utils';
+
+// Import visualization modes
+import { ExplorerView } from './modes/ExplorerView';
+import { GraphView } from './modes/GraphView';
+import { ERDiagramView } from './modes/ERDiagramView';
+import { CompactView } from './modes/CompactView';
+
+// Import controls
+import { SchemaSearch } from './controls/SchemaSearch';
+import { FilterPanel } from './controls/FilterPanel';
+
+interface SchemaVisualizerProps {
+  schema: UniversalSchema;
+  className?: string;
+  defaultMode?: SchemaVisualizationConfig['mode'];
+  onTableSelect?: (tableId: string) => void;
+  onColumnSelect?: (tableId: string, columnId: string) => void;
+}
+
+export function SchemaVisualizer({
+  schema,
+  className,
+  defaultMode = 'explorer',
+  onTableSelect,
+  onColumnSelect
+}: SchemaVisualizerProps) {
+  const [config, setConfig] = useState<SchemaVisualizationConfig>({
+    mode: defaultMode,
+    showStats: true,
+    showDescriptions: true,
+    groupByCategory: true,
+    highlightRelationships: true
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Auto-switch to compact mode on mobile
+  useEffect(() => {
+    const checkScreenSize = () => {
+      if (window.innerWidth < 768 && config.mode !== 'compact') {
+        setConfig(prev => ({ ...prev, mode: 'compact' }));
+      }
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, [config.mode]);
+
+  const viewModes = [
+    { id: 'explorer', label: 'Explorer', icon: FolderTree },
+    { id: 'graph', label: 'Graph', icon: Network },
+    { id: 'er', label: 'ER Diagram', icon: GitBranch },
+    { id: 'compact', label: 'List', icon: List }
+  ] as const;
+
+  const handleExport = () => {
+    // Export schema as JSON or generate documentation
+    const dataStr = JSON.stringify(schema, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `schema-${schema.source.name}-${new Date().toISOString()}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  return (
+    <Card className={cn(
+      "relative",
+      isFullscreen && "fixed inset-0 z-50 rounded-none",
+      className
+    )}>
+      {/* Header */}
+      <div className="border-b p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Database Schema</h3>
+            <p className="text-sm text-muted-foreground">
+              {schema.source.name} ({schema.source.type}) - 
+              {' '}{schema.metadata.totalTables} tables, 
+              {' '}{schema.metadata.totalColumns} columns
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExport}
+              title="Export schema"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* View Mode Selector */}
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex gap-1 p-1 bg-muted rounded-lg">
+            {viewModes.map((mode) => {
+              const Icon = mode.icon;
+              return (
+                <Button
+                  key={mode.id}
+                  variant={config.mode === mode.id ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setConfig(prev => ({ ...prev, mode: mode.id }))}
+                  className="gap-2"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden lg:inline">{mode.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Search */}
+          <div className="flex-1 max-w-sm">
+            <SchemaSearch
+              schema={schema}
+              value={searchQuery}
+              onChange={setSearchQuery}
+              onSelect={(item) => {
+                if (item.type === 'table') {
+                  onTableSelect?.(item.entity.id);
+                } else if (item.type === 'column' && item.attribute) {
+                  onColumnSelect?.(item.entity.id, item.attribute.id);
+                }
+              }}
+            />
+          </div>
+
+          {/* Filter */}
+          <FilterPanel
+            schema={schema}
+            selectedCategories={selectedCategories}
+            onCategoryChange={setSelectedCategories}
+            config={config}
+            onConfigChange={setConfig}
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4 overflow-auto" style={{ height: isFullscreen ? 'calc(100vh - 140px)' : '600px' }}>
+        {config.mode === 'explorer' && (
+          <ExplorerView
+            schema={schema}
+            searchQuery={searchQuery}
+            selectedCategories={selectedCategories}
+            config={config}
+            onTableSelect={onTableSelect}
+            onColumnSelect={onColumnSelect}
+          />
+        )}
+        
+        {config.mode === 'graph' && (
+          <GraphView
+            schema={schema}
+            searchQuery={searchQuery}
+            selectedCategories={selectedCategories}
+            config={config}
+            onTableSelect={onTableSelect}
+            onColumnSelect={onColumnSelect}
+          />
+        )}
+        
+        {config.mode === 'er' && (
+          <ERDiagramView
+            schema={schema}
+            searchQuery={searchQuery}
+            selectedCategories={selectedCategories}
+            config={config}
+            onTableSelect={onTableSelect}
+            onColumnSelect={onColumnSelect}
+          />
+        )}
+        
+        {config.mode === 'compact' && (
+          <CompactView
+            schema={schema}
+            searchQuery={searchQuery}
+            selectedCategories={selectedCategories}
+            config={config}
+            onTableSelect={onTableSelect}
+            onColumnSelect={onColumnSelect}
+          />
+        )}
+      </div>
+    </Card>
+  );
+}

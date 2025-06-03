@@ -20,7 +20,21 @@ export default function Home() {
                   <h1 className="text-xl font-semibold text-gray-900">SENS</h1>
                   <span className="text-sm text-gray-500">Natural Language SQL</span>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
+                  <nav className="flex items-center gap-4">
+                    <a 
+                      href="/" 
+                      className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                    >
+                      Query
+                    </a>
+                    <a 
+                      href="/schema" 
+                      className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                    >
+                      Schema
+                    </a>
+                  </nav>
                   <DataSourceSelector />
                 </div>
               </div>
