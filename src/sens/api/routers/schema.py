@@ -146,119 +146,144 @@ async def get_schema_for_visualization(
 ) -> UniversalSchemaResponse:
     """Get schema in a format suitable for frontend visualization."""
     
-    # Get the appropriate data source
-    if not session_id or session_id == "default":
-        # Ensure default database schema is extracted
-        await datasource_manager.ensure_default_schema_extracted()
-        source = datasource_manager.get_source("default")
-        if not source:
-            raise HTTPException(status_code=404, detail="Default database not available")
-    else:
-        source = datasource_manager.get_session_source(session_id)
-        if not source:
-            raise HTTPException(status_code=404, detail="Session not found")
-    
-    # Extract schema if not already done
-    if not source.unified_schema:
-        await datasource_manager._extract_schema(source)
-    
-    schema = source.unified_schema
-    
-    # Convert to frontend format
-    entities = []
-    relationships = []
-    categories = {}
-    
-    # Process tables
-    for table in schema.tables:
-        # Map columns to attributes
-        attributes = []
-        for col in table.columns:
-            attr = SchemaAttribute(
-                id=f"{table.name}_{col.name}",
-                name=col.name,
-                dataType=col.data_type.value,
-                semanticType=map_data_type_to_semantic(col.data_type.value, col.name),
-                constraints={
-                    "primaryKey": col.is_primary_key,
-                    "foreignKey": {"entity": col.foreign_key_table, "attribute": col.foreign_key_column} if col.is_foreign_key else None,
-                    "unique": getattr(col, 'is_unique', False),
-                    "nullable": col.is_nullable
-                }
+    try:
+        # Get the appropriate data source
+        if not session_id or session_id == "default":
+            # Ensure default database schema is extracted
+            await datasource_manager.ensure_default_schema_extracted()
+            source = datasource_manager.get_source("default")
+            if not source:
+                raise HTTPException(status_code=404, detail="Default database not available")
+        else:
+            source = datasource_manager.get_session_source(session_id)
+            if not source:
+                raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Extract schema if not already done
+        if not source.unified_schema:
+            await datasource_manager._extract_schema(source)
+        
+        schema = source.unified_schema
+        
+        # Convert to frontend format
+        entities = []
+        relationships = []
+        categories = {}
+        
+        # Process tables
+        for table in schema.tables:
+            # Map columns to attributes
+            attributes = []
+            
+            # Build foreign key map for quick lookup
+            fk_map = {}
+            for fk in table.foreign_keys:
+                # Map each from_column to the foreign key info
+                for from_col in fk.from_columns:
+                    fk_map[from_col] = fk
+            
+            for col in table.columns:
+                # Get the data type string
+                data_type_str = col.data_type.value if hasattr(col.data_type, 'value') else str(col.data_type)
+                
+                # Check if this column is a foreign key
+                fk_info = fk_map.get(col.name)
+                
+                attr = SchemaAttribute(
+                    id=f"{table.name}_{col.name}",
+                    name=col.name,
+                    dataType=data_type_str,
+                    semanticType=map_data_type_to_semantic(data_type_str, col.name),
+                    constraints={
+                        "primaryKey": col.is_primary_key,
+                        "foreignKey": {"entity": fk_info.to_table, "attribute": fk_info.to_columns[0] if fk_info.to_columns else "id"} if fk_info else None,
+                        "unique": col.is_unique,
+                        "nullable": col.is_nullable
+                    }
+                )
+                
+                # Add metadata for specific types
+                if attr.semanticType == 'money':
+                    attr.metadata = {"unit": "USD"}  # Default currency
+                elif attr.semanticType == 'percentage':
+                    attr.metadata = {"unit": "%"}
+                
+                attributes.append(attr)
+            
+            # Determine category
+            category = categorize_table(table.name, schema)
+            
+            # Check if partitioned
+            is_partitioned = any(word in table.name.lower() for word in ['_y', '_m', '_q', '_partition'])
+            
+            # Create entity
+            entity = SchemaEntity(
+                id=table.name,
+                name=table.name,
+                type="table",
+                category=category,
+                displayName=table.name.replace('_', ' ').title(),
+                description=table.description,
+                attributes=attributes,
+                stats={
+                    "rowCount": table.row_count,
+                    "lastUpdated": datetime.utcnow().isoformat()
+                },
+                isPartitioned=is_partitioned
             )
             
-            # Add metadata for specific types
-            if attr.semanticType == 'money':
-                attr.metadata = {"unit": "USD"}  # Default currency
-            elif attr.semanticType == 'percentage':
-                attr.metadata = {"unit": "%"}
+            entities.append(entity)
             
-            attributes.append(attr)
-        
-        # Determine category
-        category = categorize_table(table.name, schema)
-        
-        # Check if partitioned
-        is_partitioned = any(word in table.name.lower() for word in ['_y', '_m', '_q', '_partition'])
-        
-        # Create entity
-        entity = SchemaEntity(
-            id=table.name,
-            name=table.name,
-            type="table",
-            category=category,
-            displayName=table.name.replace('_', ' ').title(),
-            description=table.description,
-            attributes=attributes,
-            stats={
-                "rowCount": table.row_count,
-                "lastUpdated": datetime.utcnow()
-            },
-            isPartitioned=is_partitioned
-        )
-        
-        entities.append(entity)
-        
-        # Track categories
-        if category:
-            if category not in categories:
-                categories[category] = []
-            categories[category].append(table.name)
-        
-        # Extract relationships from foreign keys
-        for col in table.columns:
-            if col.is_foreign_key and col.foreign_key_table:
-                rel_id = f"rel_{table.name}_{col.name}"
+            # Track categories
+            if category:
+                if category not in categories:
+                    categories[category] = []
+                categories[category].append(table.name)
+            
+            # Extract relationships from foreign keys
+            for fk in table.foreign_keys:
+                # Use the first column if it's a composite foreign key
+                from_col = fk.from_columns[0] if fk.from_columns else "unknown"
+                to_col = fk.to_columns[0] if fk.to_columns else "id"
+                
+                rel_id = f"rel_{table.name}_{from_col}"
                 relationship = SchemaRelationship(
                     id=rel_id,
                     source=table.name,
-                    target=col.foreign_key_table,
+                    target=fk.to_table,
                     type="many-to-one",
-                    sourceAttribute=col.name,
-                    targetAttribute=col.foreign_key_column or "id",
-                    label=col.name.replace('_id', '').replace('_', ' ')
+                    sourceAttribute=from_col,
+                    targetAttribute=to_col,
+                    label=from_col.replace('_id', '').replace('_', ' ')
                 )
                 relationships.append(relationship)
-    
-    # Build response
-    response = UniversalSchemaResponse(
-        source={
-            "type": source.type.value.lower().replace('_', ''),
-            "name": source.name,
-            "version": getattr(schema, 'db_version', 'unknown')
-        },
-        entities=entities,
-        relationships=relationships,
-        categories=categories if categories else None,
-        metadata={
-            "extractedAt": datetime.utcnow(),
-            "totalTables": len(entities),
-            "totalColumns": sum(len(e.attributes) for e in entities),
-            "totalRelationships": len(relationships)
-        }
-    )
-    
-    return response
+        
+        # Get source type string
+        source_type_str = source.type.value if hasattr(source.type, 'value') else str(source.type)
+        source_type_str = source_type_str.lower().replace('_', '')
+        
+        # Build response
+        response = UniversalSchemaResponse(
+            source={
+                "type": source_type_str,
+                "name": source.name,
+                "version": getattr(schema, 'db_version', 'unknown')
+            },
+            entities=entities,
+            relationships=relationships,
+            categories=categories if categories else None,
+            metadata={
+                "extractedAt": datetime.utcnow().isoformat(),
+                "totalTables": len(entities),
+                "totalColumns": sum(len(e.attributes) for e in entities),
+                "totalRelationships": len(relationships)
+            }
+        )
+        
+        return response
+    except Exception as e:
+        logger.error("schema_visualization_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/refresh")
