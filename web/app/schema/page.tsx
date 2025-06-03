@@ -102,7 +102,7 @@ const mockSchema: UniversalSchema = {
           name: 'trade_date',
           dataType: 'date',
           semanticType: 'date' as any,
-          constraints: { nullable: false }
+          constraints: { nullable: false, partitionKey: true }
         },
         {
           id: 'dp_open',
@@ -451,6 +451,18 @@ export default function SchemaPage() {
     
     try {
       const data = await fetchSchema(sessionId);
+      
+      // Debug: Log the schema to see partition key info
+      console.log('Fetched schema:', data);
+      if (data.entities) {
+        const dailyPrices = data.entities.find(e => e.name === 'daily_prices');
+        if (dailyPrices) {
+          console.log('Daily prices table:', dailyPrices);
+          const tradeDateAttr = dailyPrices.attributes.find(a => a.name === 'trade_date');
+          console.log('Trade date attribute:', tradeDateAttr);
+        }
+      }
+      
       setSchema(data);
       setUseMockData(false);
     } catch (err) {

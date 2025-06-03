@@ -44,6 +44,16 @@ export function SchemaVisualizer({
   onTableSelect,
   onColumnSelect
 }: SchemaVisualizerProps) {
+  // Debug: Log schema on component mount/update
+  useEffect(() => {
+    console.log('SchemaVisualizer received schema:', schema);
+    const dailyPrices = schema.entities.find(e => e.name === 'daily_prices');
+    if (dailyPrices) {
+      const tradeDateAttr = dailyPrices.attributes.find(a => a.name === 'trade_date');
+      console.log('Trade date constraints in visualizer:', tradeDateAttr?.constraints);
+    }
+  }, [schema]);
+  
   const [config, setConfig] = useState<SchemaVisualizationConfig>({
     mode: defaultMode,
     showStats: true,
