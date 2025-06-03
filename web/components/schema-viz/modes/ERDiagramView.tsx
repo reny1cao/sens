@@ -46,8 +46,9 @@ interface ERNodeData extends SchemaEntity {
 const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) => {
   const primaryKeys = data.attributes.filter(attr => attr.constraints.primaryKey);
   const foreignKeys = data.attributes.filter(attr => attr.constraints.foreignKey);
+  const partitionKeys = data.attributes.filter(attr => attr.constraints.partitionKey && !attr.constraints.primaryKey);
   const regularColumns = data.attributes.filter(
-    attr => !attr.constraints.primaryKey && !attr.constraints.foreignKey
+    attr => !attr.constraints.primaryKey && !attr.constraints.foreignKey && !attr.constraints.partitionKey
   );
 
   return (
@@ -81,6 +82,19 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
               {foreignKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
                   <span className="font-bold text-blue-600 text-xs">FK</span>
+                  <span className="font-mono truncate flex-1">{attr.name}</span>
+                  <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Partition Keys */}
+          {partitionKeys.length > 0 && (
+            <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
+              {partitionKeys.map(attr => (
+                <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
+                  <span className="font-bold text-green-600 text-xs">PT</span>
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>

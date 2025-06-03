@@ -23,6 +23,7 @@ export interface SchemaAttribute {
     unique?: boolean;
     nullable?: boolean;
     default?: any;
+    partitionKey?: boolean;
   };
   metadata?: {
     description?: string;

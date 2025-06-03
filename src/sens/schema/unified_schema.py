@@ -51,6 +51,7 @@ class ColumnInfo(BaseModel):
     is_foreign_key: bool = False
     is_unique: bool = False
     is_sticky: bool = False  # High-value identifier
+    is_partition_key: bool = False  # Column used for partitioning
     default_value: Optional[str] = None
     description: Optional[str] = None
     max_length: Optional[int] = None

@@ -202,7 +202,8 @@ async def get_schema_for_visualization(
                         "primaryKey": col.is_primary_key,
                         "foreignKey": {"entity": fk_info.to_table, "attribute": fk_info.to_columns[0] if fk_info.to_columns else "id"} if fk_info else None,
                         "unique": col.is_unique,
-                        "nullable": col.is_nullable
+                        "nullable": col.is_nullable,
+                        "partitionKey": getattr(col, 'is_partition_key', False)
                     }
                 )
                 
@@ -220,16 +221,8 @@ async def get_schema_for_visualization(
             # Check if partitioned from database metadata
             is_partitioned = hasattr(table, 'is_partitioned') and table.is_partitioned
             
-            # Enhance description for partitioned tables
+            # Keep original description without partition info
             description = table.description
-            if is_partitioned and hasattr(table, 'partition_key') and table.partition_key:
-                # Extract the partition key from PostgreSQL format like "RANGE (trade_date)"
-                partition_key = table.partition_key
-                if 'RANGE' in partition_key:
-                    key_match = partition_key.split('(')[1].rstrip(')')
-                    description = (description or "") + f" (Partitioned by {key_match})"
-                else:
-                    description = (description or "") + f" (Partitioned)"
             
             # Create entity
             entity = SchemaEntity(

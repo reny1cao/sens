@@ -206,6 +206,17 @@ class PostgreSQLExtractor(SchemaExtractor):
         # Check if table is partitioned or is a partition
         partition_info = await self._extract_partition_info(conn, table_name)
         
+        # Mark partition key column if this is a partitioned table
+        if partition_info['is_partitioned'] and partition_info['partition_key']:
+            # Extract column name from partition key definition like "RANGE (trade_date)"
+            import re
+            match = re.search(r'\(([^)]+)\)', partition_info['partition_key'])
+            if match:
+                partition_column = match.group(1).strip()
+                for col in columns:
+                    if col.name == partition_column:
+                        col.is_partition_key = True
+        
         # Get sample data if requested
         sample_data = None
         if self.include_sample_data and row_count > 0:
