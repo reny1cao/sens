@@ -1,62 +1,113 @@
 # SENS Documentation
 
-This directory contains design documents, architecture specifications, and implementation plans for the SENS project.
+Welcome to the SENS (Semantic Natural SQL) documentation. This guide will help you navigate the project documentation.
 
-## Core Architecture Documents
+## 📚 Documentation Structure
 
-### Current System
-- [**Schema Context**](./schema_context.md) - Design for schema context management
-- [**Schema Extraction Architecture**](./schema_extraction_architecture.md) - How schema is extracted from databases
-- [**Data Source Architecture**](./data_source_architecture.md) - Multi-datasource support design
-- [**CLI Commands**](./cli_commands.md) - Command-line interface specification
+### Getting Started
+- [Main README](../README.md) - Project overview and quick start
+- [CLAUDE.md](../CLAUDE.md) - Instructions for AI-assisted development
+- [Deployment Guide](../DEPLOYMENT.md) - Comprehensive deployment instructions
+- [Test Coverage](../TEST_COVERAGE.md) - Current test coverage status
 
-### Future Architecture (Agentic System)
-- [**Agentic Query Architecture**](./agentic_query_architecture.md) 🆕 - Intelligent query understanding with value discovery and self-correction
-- [**Agentic Implementation Plan**](./agentic_implementation_plan.md) 🆕 - Practical steps to implement the agentic system
-- [**Agent Architecture Design**](./agent_architecture_design.md) - General agent architecture patterns
-- [**Proactive Architecture**](./proactive_architecture.md) - Design for proactive insights and monitoring
+### 📐 Current Architecture
 
-## Feature Specifications
+Documentation for the existing SENS system:
 
-### UI/UX
-- [**UI/UX Design**](./ui_ux_design.md) - User interface design principles
-- [**UI Implementation Plan**](./ui_implementation_plan.md) - Frontend implementation strategy
+#### Core Systems
+- [Data Loading Guide](./data_loading.md) - **Complete guide to loading financial data**
+- [Schema Context Management](./architecture/current/schema_context.md) - How SENS understands database schemas
+- [Schema Extraction](./architecture/current/schema_extraction_architecture.md) - Extracting metadata from databases
+- [Data Source Architecture](./architecture/current/data_source_architecture.md) - Multi-datasource support (PostgreSQL, DuckDB, etc.)
+- [CLI Commands](./architecture/current/cli_commands.md) - Command-line interface specification
 
-### Multi-File Support
-- [**Multi-File Product Architecture**](./multi_file_product_architecture.md) - Support for multiple data files
+#### Features
+- [UI/UX Design](./features/ui_ux_design.md) - Frontend design and implementation
+- [Multi-File Support](./features/multi_file_product_architecture.md) - Handling multiple related CSV/Excel files
+- [Schema Visualization](./features/schema_visualization_implementation_2025.md) - Interactive schema explorer
 
-### Implementation
-- [**Implementation Plan**](./implementation_plan.md) - General implementation strategy
+### 🚀 Future Architecture (Agentic System)
 
-## Key Concepts
+Documentation for the planned intelligent query system:
 
-### Value Mapping Problem
-The agentic architecture addresses a fundamental limitation where user input doesn't directly map to database values:
-- User says "tech companies" → Database has "Technology"
-- User says "Apple" → Database has "AAPL"
-- User says "large companies" → Need to infer market cap thresholds
+- [Agentic Query Architecture](./architecture/future/agentic_query_architecture.md) - Core design for intelligent query understanding
+- [Implementation Plan](./architecture/future/agentic_implementation_plan.md) - Step-by-step implementation guide
+- [Agent Architecture Design](./architecture/future/agent_architecture_design.md) - Detailed agent patterns and behaviors
+- [Proactive Insights](./architecture/future/proactive_architecture.md) - System for generating insights before users ask
 
-### Agentic Solution
-The new architecture introduces:
-1. **ReAct-based reasoning** to explore and understand user intent
-2. **Value discovery tools** to find actual database values
-3. **Self-correcting execution** that diagnoses and fixes empty results
-4. **Learning system** that improves mappings over time
+### 🗺️ Roadmap & Planning
 
-## Reading Order
+- [ROADMAP.md](../ROADMAP.md) - Long-term vision and implementation phases
+- [Next Steps](./NEXT_STEPS.md) - Immediate priorities and action items
 
-For understanding the current system:
-1. Schema Context
-2. Schema Extraction Architecture
-3. Data Source Architecture
+## 🔍 Quick Links by Topic
 
-For understanding the future direction:
-1. Agentic Query Architecture (comprehensive design)
-2. Agentic Implementation Plan (how to build it)
-3. Proactive Architecture (long-term vision)
+### For Users
+- [Getting Started](../README.md#quick-start)
+- [CLI Usage](./cli_commands.md)
+- [Deployment Guide](../DEPLOYMENT.md)
 
-## Status
+### For Developers
+- [Architecture Overview](./schema_context.md)
+- [Test Coverage](../TEST_COVERAGE.md)
+- [Contributing Guidelines](../README.md#contributing)
 
-- ✅ Current system is operational with basic NL2SQL
-- 🚧 Agentic architecture is in design phase
-- 📅 Implementation planned for Q1 2025
+### For AI Development
+- [Claude Instructions](../CLAUDE.md)
+- [Agentic Architecture](./agentic_query_architecture.md)
+
+## 📊 System Overview
+
+```mermaid
+graph TD
+    A[User Query] --> B[Intent Extraction]
+    B --> C[Schema Retrieval]
+    C --> D[SQL Generation]
+    D --> E[Validation]
+    E --> F[Execution]
+    F --> G[Response]
+    
+    H[Schema Extraction] --> I[Schema Context]
+    I --> C
+    
+    J[Future: Query Agent] -.-> B
+    K[Future: Value Discovery] -.-> D
+    L[Future: Self-Correction] -.-> F
+```
+
+## 🏗️ Architecture Principles
+
+1. **Modular Design** - Each component has a single responsibility
+2. **Safety First** - Multiple validation layers before execution
+3. **Performance** - Optimized retrieval with caching
+4. **Extensibility** - Plugin architecture for new data sources
+5. **Intelligence** - Moving towards self-learning system
+
+## 📈 Project Status
+
+- **Current Phase**: Foundation Strengthening & Early Agentic Features
+- **Test Coverage**: 87.3%
+- **Supported Databases**: PostgreSQL, DuckDB, MySQL (beta)
+- **API Stability**: Stable v1.0
+
+## 🤝 Contributing
+
+See the [main README](../README.md#contributing) for contribution guidelines.
+
+For documentation updates:
+1. Keep docs close to code
+2. Update when features change
+3. Include examples
+4. Follow existing style
+
+## 📝 Documentation TODO
+
+- [ ] Add API reference documentation
+- [ ] Create user tutorials
+- [ ] Add architecture decision records (ADRs)
+- [ ] Document deployment best practices
+- [ ] Add troubleshooting guide
+
+---
+
+Last updated: January 2025

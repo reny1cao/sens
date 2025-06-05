@@ -3,6 +3,43 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Mobile touch fixes */
+@media (hover: none) and (pointer: coarse) {
+  /* Ensure interactive elements work properly on mobile */
+  button, 
+  [role="button"], 
+  [role="tab"], 
+  label {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  
+  /* Fix for iOS Safari */
+  input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+  }
+}
+
+/* Ensure Radix UI tabs work on mobile */
+[data-radix-collection-item] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix z-index stacking issues */
+[role="tablist"] {
+  position: relative;
+  z-index: 1;
+}
+
+[role="tab"] {
+  position: relative;
+  z-index: 2;
+}
+
+
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

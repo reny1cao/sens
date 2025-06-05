@@ -95,8 +95,83 @@ sens build-index -s schema.json
 # Run tests
 poetry run pytest
 
-# Run linting
-poetry run flake8
+```
+
+## 📚 Documentation
+
+- [Full Documentation](./docs/README.md) - Complete documentation index
+- [Architecture Overview](./docs/schema_context.md) - System design
+- [API Reference](http://localhost:8000/docs) - Interactive API docs
+- [Deployment Guide](./DEPLOYMENT.md) - Production deployment
+- [Test Coverage](./TEST_COVERAGE.md) - Testing status
+
+## 🗺️ Roadmap
+
+SENS is evolving towards an intelligent, proactive data platform:
+
+### Current (v1.0)
+- ✅ Natural language to SQL
+- ✅ Multi-datasource support
+- ✅ Web interface
+- ✅ Session management
+
+### Next (v2.0) - Agentic System
+- 🚧 Intelligent value mapping
+- 🚧 Self-correcting queries
+- 🚧 Learning from interactions
+- 📅 Proactive insights
+
+See the full [Roadmap](./ROADMAP.md) for details.
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/yourusername/sens.git
+cd sens
+
+# Install development dependencies
+poetry install --with dev
+
+# Set up pre-commit hooks
+pre-commit install
+
+# Run tests before committing
+poetry run pytest
+```
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- OpenRouter for LLM infrastructure
+- The FastAPI team for the excellent framework
+- All contributors who have helped improve SENS
+
+## 📞 Support
+
+- 📖 [Documentation](./docs/README.md)
+- 🐛 [Issue Tracker](https://github.com/yourusername/sens/issues)
+- 💬 [Discussions](https://github.com/yourusername/sens/discussions)
+- 📧 Email: support@sens-ai.dev
+
+---
+
+<p align="center">
+  Made with ❤️ by the SENS team
+</p>
 
 # Run type checking
 poetry run mypy src

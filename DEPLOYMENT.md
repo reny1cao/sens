@@ -1,6 +1,65 @@
-# SENS Production Deployment Guide
+# SENS Deployment Guide
 
-This guide covers deploying SENS to production using:
+This comprehensive guide covers:
+- **Quick Start** - Get SENS running locally in minutes
+- **Production Deployment** - Deploy to cloud providers
+- **Cloudflare Tunnels** - Secure local development
+- **Deployment Checklist** - Ensure nothing is missed
+
+## Quick Start
+
+### Local Development Setup
+
+1. **Clone and install**:
+   ```bash
+   git clone https://github.com/yourusername/sens.git
+   cd sens
+   
+   # Backend
+   poetry install
+   
+   # Frontend
+   cd web
+   npm install
+   ```
+
+2. **Configure environment**:
+   ```bash
+   # Copy example configs
+   cp .env.example .env
+   cp web/.env.local.example web/.env.local
+   ```
+
+3. **Set up PostgreSQL**:
+   ```bash
+   # Using Docker
+   docker run -d --name sens-postgres \
+     -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=sens \
+     -p 5432:5432 \
+     postgres:14
+   
+   # Create schema
+   psql postgresql://postgres:postgres@localhost/sens < scripts/create_financial_schema.sql
+   ```
+
+4. **Start services**:
+   ```bash
+   # Terminal 1: Backend
+   poetry run uvicorn sens.api.app:app --reload
+   
+   # Terminal 2: Frontend
+   cd web && npm run dev
+   ```
+
+5. **Access SENS**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+
+## Production Deployment
+
+Production deployment uses:
 - **Frontend**: Vercel (free tier)
 - **Backend**: Railway (PostgreSQL + Redis included)
 - **File Storage**: Cloudflare R2 or AWS S3
@@ -197,6 +256,76 @@ chmod +x scripts/deploy.sh
 
 Total: ~$5-10/month for a production deployment
 
+## Cloudflare Tunnel Deployment
+
+For secure local development with HTTPS:
+
+1. **Install Cloudflare CLI**:
+   ```bash
+   # macOS
+   brew install cloudflare/cloudflare/cloudflared
+   
+   # Linux
+   wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+   sudo dpkg -i cloudflared-linux-amd64.deb
+   ```
+
+2. **Authenticate**:
+   ```bash
+   cloudflared tunnel login
+   ```
+
+3. **Create tunnel**:
+   ```bash
+   cloudflared tunnel create sens-dev
+   cloudflared tunnel route dns sens-dev sens-dev.yourdomain.com
+   ```
+
+4. **Configure tunnel** (`~/.cloudflared/config.yml`):
+   ```yaml
+   url: http://localhost:8000
+   tunnel: YOUR_TUNNEL_ID
+   credentials-file: /home/user/.cloudflared/YOUR_TUNNEL_ID.json
+   ```
+
+5. **Run tunnel**:
+   ```bash
+   cloudflared tunnel run sens-dev
+   ```
+
+## Deployment Checklist
+
+### Pre-Deployment
+- [ ] All tests passing (`poetry run pytest`)
+- [ ] Environment variables configured
+- [ ] Database migrations applied
+- [ ] API keys secured (not in code)
+- [ ] CORS origins configured
+- [ ] File upload limits set
+
+### Backend Deployment
+- [ ] Railway project created
+- [ ] PostgreSQL addon configured
+- [ ] Redis addon configured
+- [ ] Environment variables set
+- [ ] Custom domain configured
+- [ ] Health check endpoint verified
+
+### Frontend Deployment
+- [ ] Build successful (`npm run build`)
+- [ ] Environment variables set
+- [ ] API URL configured
+- [ ] Custom domain configured
+- [ ] CSP headers configured
+
+### Post-Deployment
+- [ ] End-to-end test completed
+- [ ] Monitoring configured
+- [ ] Backup strategy implemented
+- [ ] SSL certificates verified
+- [ ] Rate limiting enabled
+- [ ] Error tracking setup
+
 ## Scaling Considerations
 
 1. **Database**: Railway PostgreSQL can be scaled vertically
@@ -213,3 +342,17 @@ Total: ~$5-10/month for a production deployment
 - [ ] Enable audit logging
 - [ ] Regular security updates
 - [ ] Backup database regularly
+
+## Monitoring & Maintenance
+
+### Recommended Tools
+- **Error Tracking**: Sentry
+- **Analytics**: Vercel Analytics + Posthog
+- **Uptime**: Better Uptime or Uptime Robot
+- **Logs**: Railway logs + Axiom
+
+### Regular Tasks
+- Weekly: Review error logs
+- Monthly: Update dependencies
+- Quarterly: Security audit
+- Yearly: Review scaling needs

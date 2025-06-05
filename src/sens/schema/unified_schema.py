@@ -51,6 +51,7 @@ class ColumnInfo(BaseModel):
     is_foreign_key: bool = False
     is_unique: bool = False
     is_sticky: bool = False  # High-value identifier
+    is_partition_key: bool = False  # Column used for partitioning
     default_value: Optional[str] = None
     description: Optional[str] = None
     max_length: Optional[int] = None
@@ -88,6 +89,11 @@ class TableInfo(BaseModel):
     row_count: Optional[int] = None
     description: Optional[str] = None
     sample_data: Optional[List[Dict[str, Any]]] = None
+    # Partition information
+    is_partitioned: bool = False
+    partition_key: Optional[str] = None
+    is_partition: bool = False
+    parent_table: Optional[str] = None
     
     def get_column(self, column_name: str) -> Optional[ColumnInfo]:
         """Get column info by name."""
