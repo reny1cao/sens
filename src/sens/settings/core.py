@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     )
 
     index_dir: Path = Field(
-        default=PROJECT_ROOT / "src/sens/data/indices",
+        default=PROJECT_ROOT / "indices",
         description="Directory for storing FAISS indices",
         validation_alias="SENS_INDEX_DIR",
     )
