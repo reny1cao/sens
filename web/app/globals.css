@@ -5,18 +5,14 @@
 
 /* Mobile touch fixes */
 @media (hover: none) and (pointer: coarse) {
-  /* Ensure labels are tappable on mobile */
+  /* Ensure interactive elements work properly on mobile */
+  button, 
+  [role="button"], 
+  [role="tab"], 
   label {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    user-select: none;
-  }
-  
-  /* Ensure minimum touch target size */
-  label[class*="cursor-pointer"] {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
+    cursor: pointer;
   }
   
   /* Fix for iOS Safari */
@@ -25,6 +21,24 @@
     opacity: 0;
   }
 }
+
+/* Ensure Radix UI tabs work on mobile */
+[data-radix-collection-item] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fix z-index stacking issues */
+[role="tablist"] {
+  position: relative;
+  z-index: 1;
+}
+
+[role="tab"] {
+  position: relative;
+  z-index: 2;
+}
+
+
 
 @theme inline {
   --color-background: var(--background);

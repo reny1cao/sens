@@ -136,6 +136,9 @@ export const TableNode = memo(({ data, selected }: NodeProps<TableNodeData>) => 
                 {attr.constraints.foreignKey && (
                   <Badge variant="outline" className="ml-1 text-xs h-3 sm:h-4 px-0.5 sm:px-1 flex-shrink-0">FK</Badge>
                 )}
+                {attr.constraints.partitionKey && (
+                  <Badge variant="outline" className="ml-1 text-xs h-3 sm:h-4 px-0.5 sm:px-1 text-purple-600 border-purple-600 flex-shrink-0">PT</Badge>
+                )}
               </div>
               <span className="text-muted-foreground text-xs flex-shrink-0 ml-1">
                 <span className="hidden sm:inline">{attr.dataType}</span>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   FolderTree, 
   GitBranch, 
@@ -141,39 +142,33 @@ export function SchemaVisualizer({
 
         {/* View Mode Selector and Controls */}
         <div className="flex flex-col gap-3">
-          {/* Mobile view mode selector - using native radio buttons */}
-          <div className="md:hidden">
-            <div className="flex gap-0 p-1 bg-muted rounded-lg" role="tablist">
+          {/* Mobile view mode selector - using shadcn Tabs */}
+          <Tabs 
+            value={config.mode} 
+            onValueChange={(value) => setConfig(prev => ({ ...prev, mode: value as any }))}
+            className="md:hidden w-full"
+          >
+            <TabsList className="grid w-full grid-cols-4 h-11">
               {viewModes.map((mode) => {
                 const Icon = mode.icon;
-                const isSelected = config.mode === mode.id;
                 return (
-                  <label
-                    key={mode.id}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-md cursor-pointer transition-colors",
-                      "text-sm font-medium",
-                      isSelected 
-                        ? "bg-background text-foreground shadow-sm" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
+                  <TabsTrigger 
+                    key={mode.id} 
+                    value={mode.id}
+                    className="data-[state=active]:text-foreground gap-1 px-2"
                   >
-                    <input
-                      type="radio"
-                      name="mobile-view-mode"
-                      value={mode.id}
-                      checked={isSelected}
-                      onChange={() => setConfig(prev => ({ ...prev, mode: mode.id }))}
-                      className="sr-only"
-                      aria-label={`${mode.label} view`}
-                    />
                     <Icon className="h-4 w-4" />
-                    <span className="text-xs">{mode.label === 'ER Diagram' ? 'ER' : mode.label.slice(0, 5)}</span>
-                  </label>
+                    <span className="text-xs hidden sm:inline">
+                      {mode.label === 'ER Diagram' ? 'ER' : mode.label}
+                    </span>
+                    <span className="text-xs sm:hidden">
+                      {mode.label === 'ER Diagram' ? 'ER' : mode.label.slice(0, 5)}
+                    </span>
+                  </TabsTrigger>
                 );
               })}
-            </div>
-          </div>
+            </TabsList>
+          </Tabs>
           
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             {/* Desktop buttons */}

@@ -17,6 +17,7 @@ import 'reactflow/dist/style.css';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
+import { Badge } from '@/components/ui/badge';
 import { Eye, EyeOff } from 'lucide-react';
 import { 
   UniversalSchema, 
@@ -68,9 +69,9 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
             <div className="space-y-0.5 sm:space-y-1">
               {primaryKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
-                  <span className="font-bold text-primary text-xs">PK</span>
+                  <Badge variant="outline" className="text-xs h-4 px-1 text-primary border-primary">PK</Badge>
                   {attr.constraints.partitionKey && (
-                    <span className="font-bold text-purple-600 text-xs">+PT</span>
+                    <Badge variant="outline" className="text-xs h-4 px-1 text-purple-600 border-purple-600">PT</Badge>
                   )}
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
@@ -84,7 +85,7 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
             <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
               {foreignKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
-                  <span className="font-bold text-blue-600 text-xs">FK</span>
+                  <Badge variant="outline" className="text-xs h-4 px-1 text-blue-600 border-blue-600">FK</Badge>
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>
@@ -97,7 +98,7 @@ const ERNode = ({ data, selected }: { data: ERNodeData; selected?: boolean }) =>
             <div className="space-y-0.5 sm:space-y-1 border-t pt-1.5 sm:pt-2">
               {partitionKeys.map(attr => (
                 <div key={attr.id} className="flex items-center gap-1 sm:gap-2 text-xs">
-                  <span className="font-bold text-purple-600 text-xs">PT</span>
+                  <Badge variant="outline" className="text-xs h-4 px-1 text-purple-600 border-purple-600">PT</Badge>
                   <span className="font-mono truncate flex-1">{attr.name}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">{attr.dataType}</span>
                 </div>
