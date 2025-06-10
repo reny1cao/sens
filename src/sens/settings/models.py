@@ -209,9 +209,9 @@ class DatabaseConfig(BaseModel):
 
     @field_validator("password")
     def validate_password(cls, v: str) -> str:
-        """Validate that password is not empty."""
-        if not v:
-            raise ValueError("Database password cannot be empty")
+        """Validate password - allow empty for development."""
+        # Allow empty password for development/Railway environments
+        # Railway provides DATABASE_URL which includes credentials
         return v
 
 

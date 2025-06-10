@@ -65,6 +65,13 @@ class Settings(BaseSettings):
 
     # Database Configuration
     # --------------------
+    # Check for Railway's DATABASE_URL first
+    database_url_env: Optional[str] = Field(
+        default=None,
+        description="Railway-provided DATABASE_URL",
+        validation_alias="DATABASE_URL",
+    )
+
     db_host: str = Field(
         default="localhost",
         description="Database host",
@@ -86,8 +93,11 @@ class Settings(BaseSettings):
     @property
     def db_url(self) -> str:
         """Get the database URL constructed from components."""
+        # Use Railway's DATABASE_URL if available
+        if self.database_url_env:
+            return self.database_url_env
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
-    
+
     @property
     def database_url(self) -> str:
         """Alias for db_url for compatibility."""
@@ -237,18 +247,20 @@ class Settings(BaseSettings):
                 ),
             )
 
-        # Initialize database config
-        object.__setattr__(
-            self,
-            "database",
-            DatabaseConfig(
-                host=self.db_host,
-                port=self.db_port,
-                name=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-            ),
-        )
+        # Initialize database config only if DATABASE_URL is not provided
+        # or if we have explicit database settings
+        if not self.database_url_env or self.db_password:
+            object.__setattr__(
+                self,
+                "database",
+                DatabaseConfig(
+                    host=self.db_host,
+                    port=self.db_port,
+                    name=self.db_name,
+                    user=self.db_user,
+                    password=self.db_password if self.db_password else "dummy",
+                ),
+            )
 
     @field_validator("cors_origins", "cors_methods", "cors_headers", mode="before")
     @classmethod
