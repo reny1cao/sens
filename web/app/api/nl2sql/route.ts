@@ -1,6 +1,7 @@
+import { getBackendUrl } from '@/lib/api/config';
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = getBackendUrl();
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const sessionId = request.headers.get('X-Session-Id');
 
     // Determine which endpoint to use based on session
-    const endpoint = sessionId 
+    const endpoint = sessionId
       ? `${API_URL}/api/nl2sql/session/query/`
       : `${API_URL}/api/nl2sql/`;
 
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       if (!data.results.columns) {
         data.results.columns = [];
       }
-      
+
       // Convert rows to data if needed
       if (data.results.rows && !data.results.data) {
         data.results.data = data.results.rows.map((row: any[]) => {
@@ -50,12 +51,12 @@ export async function POST(request: NextRequest) {
         });
         delete data.results.rows;
       }
-      
+
       // Ensure data exists
       if (!data.results.data) {
         data.results.data = [];
       }
-      
+
       // Ensure row_count exists
       if (data.results.row_count === undefined) {
         data.results.row_count = data.results.data.length;
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       if (data.metadata.execution_time !== undefined && data.metadata.execution_time_ms === undefined) {
         data.metadata.execution_time_ms = data.metadata.execution_time * 1000;
       }
-      
+
       // Default values for required fields
       data.metadata.tables_used = data.metadata.tables_used || [];
       data.metadata.query_type = data.metadata.query_type || 'select';

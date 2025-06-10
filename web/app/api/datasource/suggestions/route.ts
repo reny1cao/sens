@@ -1,11 +1,12 @@
+import { getBackendUrl } from '@/lib/api/config';
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = getBackendUrl();
 
 export async function GET(request: NextRequest) {
   try {
     const sessionId = request.headers.get('X-Session-Id');
-    
+
     // Build headers - session ID is optional
     const headers: Record<string, string> = {};
     if (sessionId) {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   // Refresh endpoint
   try {
     const sessionId = request.headers.get('X-Session-Id');
-    
+
     // Build headers - session ID is optional
     const headers: Record<string, string> = {};
     if (sessionId) {

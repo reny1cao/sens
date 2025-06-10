@@ -1,6 +1,7 @@
+import { getBackendUrl } from '@/lib/api/config';
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function GET(
   try {
     const { tableName } = await params;
     const sessionId = request.headers.get('X-Session-Id');
-    
+
     if (!sessionId) {
       return NextResponse.json(
         { error: 'Session ID required' },

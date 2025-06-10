@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { getBackendUrl } from '@/lib/api/config';
+
+const API_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
@@ -8,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await params;
-    
+
     const response = await fetch(`${API_URL}/api/datasource/session/${sessionId}`, {
       headers: {
         'X-Session-Id': sessionId,
@@ -46,7 +48,7 @@ export async function DELETE(
 ) {
   try {
     const { sessionId } = await params;
-    
+
     const response = await fetch(`${API_URL}/api/datasource/session/${sessionId}`, {
       method: 'DELETE',
       headers: {

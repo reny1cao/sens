@@ -110,3 +110,6 @@ export interface QueryPattern {
   sqlTemplate?: string;
   category: string;
 }
+
+// API Response type
+export type SchemaResponse = UniversalSchema;
