@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     // Determine which endpoint to use based on session
     const endpoint = sessionId
       ? `${API_URL}/api/nl2sql/session/query`
-      : `${API_URL}/api/nl2sql`;
+      : `${API_URL}/api/nl2sql/`;
 
     // Forward request to FastAPI backend
     const response = await fetch(endpoint, {
