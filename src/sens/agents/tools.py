@@ -244,37 +244,35 @@ class AgentTools:
                 modified_query = modified_query.replace(user_term, db_value)
                 log.info("applying_mapping", from_term=user_term, to_value=db_value)
 
-        # Use existing SQL generator
+        # Use existing SQL generator with proper intent extraction
         if not self.chat_orchestrator:
             self.chat_orchestrator = ChatOrchestrator()
 
-        # Create mock intent for SQL generation
-        from sens.llm.intent_validator import ValidIntent
-        from sens.llm.models import Intent
+        try:
+            # Use the proper intent extraction pipeline instead of mocking
+            # This extracts real intent, validates it, and creates proper schema context
+            intent = await self.chat_orchestrator.intent_extractor.extract(
+                modified_query
+            )
 
-        # Extract table names from schema
-        table_names = []
-        if isinstance(schema, dict) and "tables" in schema:
-            table_names = [
-                t.get("table_name") or t.get("name", "") for t in schema["tables"][:3]
-            ]  # Use first 3 tables
+            # Validate the intent using the proper validator
+            validated_intent = await self.chat_orchestrator.intent_validator.validate(
+                intent=intent, question=modified_query
+            )
 
-        base_intent = Intent(
-            query_type="lookup",
-            confidence=1.0,
-            tables=table_names,
-            columns=[],
-            entities=[],
-        )
-
-        # Wrap in ValidIntent as expected by SQL generator
-        intent = ValidIntent(original_intent=base_intent, enhanced_metadata={})
-
-        result = await self.chat_orchestrator.sql_generator.generate(
-            question=modified_query,
-            intent=intent,
-            schema_context=None,  # Let it build from intent
-        )
+            result = await self.chat_orchestrator.sql_generator.generate(
+                question=modified_query,
+                intent=validated_intent,
+                schema_context=None,  # Let the generator build the proper schema context
+            )
+        except Exception as e:
+            log.error("intent_extraction_failed", error=str(e), query=modified_query)
+            # Fallback: use direct SQL generation without intent
+            result = await self.chat_orchestrator.sql_generator.generate(
+                question=modified_query,
+                intent=None,  # Let the generator handle the lack of intent
+                schema_context=None,
+            )
 
         return result.sql
 
