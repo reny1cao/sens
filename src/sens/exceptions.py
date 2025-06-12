@@ -45,3 +45,9 @@ class PipelineError(SensError):
     """Raised when the pipeline encounters an unrecoverable error."""
 
     pass
+
+
+class AgentError(SensError):
+    """Raised when the agent encounters an error."""
+
+    pass

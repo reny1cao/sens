@@ -240,6 +240,31 @@ class ResponseBuilderConfig(ModelConfig):
     )
 
 
+class AgentReasoningConfig(ModelConfig):
+    """Agent reasoning engine configuration."""
+
+    primary_model: str = Field(
+        default="google/gemini-2.0-flash-001",
+        description="Primary model for agent reasoning",
+    )
+    fallback_model: Optional[str] = Field(
+        default="openai/gpt-4o-mini",
+        description="Fallback model for agent reasoning",
+    )
+    max_tokens: int = Field(
+        default=1000,
+        description="Maximum tokens for reasoning",
+    )
+    temperature: float = Field(
+        default=0.3,
+        description="Temperature for reasoning (lower = more consistent)",
+    )
+    timeout_seconds: int = Field(
+        default=30,
+        description="Timeout in seconds for reasoning requests",
+    )
+
+
 class CacheConfig(BaseModel):
     """Cache configuration."""
 
