@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
       headers['X-Session-Id'] = sessionId;
     }
 
-    // Forward to backend schema endpoint
-    const response = await fetch(`${API_URL}/api/schema`, {
+    // Forward to backend schema visualize endpoint
+    const response = await fetch(`${API_URL}/api/schema/visualize`, {
       method: 'GET',
       headers,
     });

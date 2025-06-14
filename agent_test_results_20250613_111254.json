@@ -1,0 +1,31 @@
+{
+  "timestamp": "20250613_111254",
+  "test_type": "agent_improvements_after_intent_fix",
+  "total_scenarios": 4,
+  "results": [
+    {
+      "success": false,
+      "error": "[Errno 32] Broken pipe",
+      "scenario": "Basic Stock Query",
+      "processing_time": 0
+    },
+    {
+      "success": false,
+      "error": "[Errno 32] Broken pipe",
+      "scenario": "Complex Financial Query",
+      "processing_time": 0
+    },
+    {
+      "success": false,
+      "error": "[Errno 32] Broken pipe",
+      "scenario": "Ambiguous Query",
+      "processing_time": 0
+    },
+    {
+      "success": false,
+      "error": "[Errno 32] Broken pipe",
+      "scenario": "Value Discovery Query",
+      "processing_time": 0
+    }
+  ]
+}

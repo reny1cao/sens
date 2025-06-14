@@ -12,6 +12,7 @@ from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .models import (
+    AgentReasoningConfig,
     CacheConfig,
     DatabaseConfig,
     EnvironmentType,
@@ -146,6 +147,12 @@ class Settings(BaseSettings):
     response_builder: ResponseBuilderConfig = Field(
         default_factory=ResponseBuilderConfig,
         description="Response builder component configuration",
+    )
+
+    # Add Agent Reasoning configuration
+    agent_reasoning: AgentReasoningConfig = Field(
+        default_factory=AgentReasoningConfig,
+        description="Agent reasoning engine configuration",
     )
 
     # Cache configuration

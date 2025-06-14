@@ -2,7 +2,7 @@
 
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { DataSourceProvider } from '@/contexts/DataSourceContext';
-import { QueryInterface } from '@/components/query/QueryInterface';
+import { QueryInterfaceWithAgent } from '@/components/query/QueryInterfaceWithAgent';
 import { DataSourceSelector } from '@/components/datasource/DataSourceSelector';
 import { Database } from 'lucide-react';
 
@@ -22,14 +22,14 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-6">
                   <nav className="flex items-center gap-4">
-                    <a 
-                      href="/" 
+                    <a
+                      href="/"
                       className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                     >
                       Query
                     </a>
-                    <a 
-                      href="/schema" 
+                    <a
+                      href="/schema"
                       className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                     >
                       Schema
@@ -52,7 +52,7 @@ export default function Home() {
             </p>
           </div>
 
-          <QueryInterface />
+          <QueryInterfaceWithAgent />
         </main>
 
         {/* Footer */}
