@@ -5,9 +5,9 @@ const API_BASE_URL = getBackendUrl();
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { queryId: string } }
+  { params }: { params: Promise<{ queryId: string }> }
 ) {
-  const { queryId } = params;
+  const { queryId } = await params;
   const sessionId = request.headers.get('X-Session-Id');
 
   // Build headers
