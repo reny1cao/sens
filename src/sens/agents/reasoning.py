@@ -108,17 +108,52 @@ Based on the above context, reason about what to do next. Consider:
 
 IMPORTANT: If you've already searched for schema multiple times successfully, move on to generating SQL. Don't get stuck repeating the same action.
 
+LIMITED TOOLS MODE - Only 3 tools available:
+- EXPLORE_DATABASE: Execute SELECT queries to understand database structure and discover data
+- GENERATE_SQL: Generates SQL query based on discovered schema and user query
+- EXECUTE_SQL: Executes the generated SQL query against the database
+
+ALL OTHER TOOLS ARE DISABLED. You must work with only these three tools.
+
+Strategy:
+1. First EXPLORE_DATABASE to understand table structures, column names, and sample data
+2. Then GENERATE_SQL based on what you discovered
+3. Finally EXECUTE_SQL to get the user's requested data
+4. If results are empty or wrong, use EXPLORE_DATABASE again to investigate
+
+DECISION RULES:
+- If you have NO schema knowledge: use EXPLORE_DATABASE to find tables
+- If you found tables but need column info: use EXPLORE_DATABASE to examine table structure
+- If you found company mappings (e.g., Apple→AAPL): you have enough info to GENERATE_SQL
+- If you have SQL but haven't executed it: use EXECUTE_SQL
+- If you've explored 3+ times: move to GENERATE_SQL even with limited info
+
 Respond in this format:
-THOUGHT: <Your reasoning about the current situation and what to do next>
+THOUGHT: <Your reasoning about current situation and next action>
 CONFIDENCE: <0.0 to 1.0>
-ACTION: <One of: SEARCH_SCHEMA, SEARCH_VALUES, GENERATE_SQL, EXECUTE_SQL, DIAGNOSE_EMPTY_RESULTS, FIND_SIMILAR_VALUES>
+ACTION: <One of: EXPLORE_DATABASE, GENERATE_SQL, EXECUTE_SQL>
 PARAMETERS: <JSON parameters for the action>
 
-Example:
-THOUGHT: The query returned no results. The user asked for "Apple" but the database might store it as "AAPL". I should search for the correct symbol.
+Examples:
+THOUGHT: I need to understand the database structure first. Let me find what tables exist.
+CONFIDENCE: 0.9
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"}}
+
+THOUGHT: I found a securities table. Let me check if Apple is stored as "Apple" or "AAPL".
 CONFIDENCE: 0.8
-ACTION: SEARCH_VALUES
-PARAMETERS: {{"table": "securities", "column": "symbol", "pattern": "A"}}
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT symbol, company_name FROM securities WHERE company_name LIKE '%Apple%' OR symbol LIKE '%AAPL%'"}}
+
+THOUGHT: Now I know Apple is "AAPL" and I found the daily_prices tables. I can generate SQL for the user's request.
+CONFIDENCE: 0.9
+ACTION: GENERATE_SQL
+PARAMETERS: {{}}
+
+IMPORTANT Instructions:
+- EXPLORE_DATABASE: Use {{"query": "SELECT ..."}} with your SQL exploration query
+- GENERATE_SQL: Use empty {{}} - parameters will be filled automatically
+- EXECUTE_SQL: Use empty {{}} - SQL will be taken from state
 """
 
     async def _call_llm(self, prompt: str) -> str:

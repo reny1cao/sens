@@ -12,14 +12,17 @@ from sens.settings import get_settings  # Updated to use new settings module
 
 from .common.logging import RequestLoggingMiddleware, configure_logging
 from .routers.column_search.router import router as column_search_router
+from .routers.datasource import router as datasource_router
 from .routers.intent.router import router as intent_router
 from .routers.nl2sql import router as nl2sql_router  # Main implementation
+from .routers.nl2sql_agent import router as nl2sql_agent_router  # Agent-based with SSE
 from .routers.nl2sql_dev import router as nl2sql_dev_router  # Development/mock endpoint
-from .routers.nl2sql_session import router as nl2sql_session_router  # Session-based for uploads
+from .routers.nl2sql_session import (
+    router as nl2sql_session_router,  # Session-based for uploads
+)
 from .routers.retrieval import router as retrieval_router
-from .routers.table_search.router import router as table_search_router
-from .routers.datasource import router as datasource_router
 from .routers.schema import router as schema_router
+from .routers.table_search.router import router as table_search_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -59,54 +62,60 @@ async def lifespan(app: FastAPI):
     - Validates embedding index
     """
     logger.info("Starting up Sens API...")
-    
+
     # Initialize default database schema at startup
     try:
         from sens.datasource.manager import DataSourceManager
         from sens.schema.graph import SchemaGraph
-        
+
         logger.info("Initializing default database schema...")
-        
+
         # Extract schema from default PostgreSQL database
         datasource_manager = DataSourceManager()
         await datasource_manager.ensure_default_schema_extracted()
-        
+
         # Verify schema is loaded correctly
         schema_graph = SchemaGraph.get_instance()
         table_count = len(schema_graph._all_tables)
         logger.info(f"Schema initialized with {table_count} tables")
-        
+
         if table_count < 10:
-            logger.warning(f"Schema only has {table_count} tables - might be using demo schema instead of real database")
+            logger.warning(
+                f"Schema only has {table_count} tables - might be using demo schema instead of real database"
+            )
         else:
             # Pre-create the orchestrator with the correct schema loaded
-            logger.info("Pre-initializing ChatOrchestrator with financial database schema...")
+            logger.info(
+                "Pre-initializing ChatOrchestrator with financial database schema..."
+            )
             from sens.api.routers.nl2sql import get_orchestrator
+
             orchestrator = get_orchestrator()
             logger.info("ChatOrchestrator pre-initialized successfully")
-            
+
         # Try to build embedding index
         try:
-            from sens.retrieval.embedding.search import EmbeddingSearch
             from pathlib import Path
-            
+
+            from sens.retrieval.embedding.search import EmbeddingSearch
+
             index_dir = settings.index_dir
             index_file = index_dir / "columns.index"
-            
+
             if not index_file.exists():
                 logger.info("Embedding index not found, will build on first query")
                 # Don't build at startup due to _ctypes issue
                 # Will be built on demand with proper error handling
             else:
                 logger.info(f"Embedding index found at {index_file}")
-                
+
         except Exception as e:
             logger.warning(f"Embedding index check failed: {e}")
-            
+
     except Exception as e:
         logger.error(f"Failed to initialize schema at startup: {e}")
         # Don't fail startup - schema can be loaded on demand
-        
+
     # Keep original schema validation for backward compatibility
     schema_path = settings.schema_path
     if schema_path.exists():
@@ -128,6 +137,7 @@ app.router.lifespan_context = lifespan
 app.include_router(nl2sql_router, prefix="/api", tags=["nl2sql"])
 app.include_router(nl2sql_dev_router, prefix="/api", tags=["nl2sql-dev"])
 app.include_router(nl2sql_session_router, prefix="/api", tags=["nl2sql-session"])
+app.include_router(nl2sql_agent_router, prefix="/api", tags=["nl2sql-agent"])
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(

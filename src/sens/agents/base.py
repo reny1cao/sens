@@ -34,6 +34,9 @@ class ActionType(Enum):
     ANALYZE_ERROR = "analyze_error"
     SUGGEST_FIXES = "suggest_fixes"
 
+    # Database exploration
+    EXPLORE_DATABASE = "explore_database"
+
     # Memory operations
     STORE_MAPPING = "store_mapping"
     RECALL_MAPPING = "recall_mapping"
@@ -104,6 +107,7 @@ class AgentState:
     current_sql: Optional[str] = None
     retrieved_schema: Optional[Dict[str, Any]] = None
     discovered_mappings: Dict[str, str] = field(default_factory=dict)
+    exploration_results: Dict[str, Any] = field(default_factory=dict)
 
     # Results
     final_result: Optional[Any] = None

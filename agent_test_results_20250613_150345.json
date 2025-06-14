@@ -1,0 +1,84 @@
+{
+  "timestamp": "20250613_150345",
+  "test_type": "agent_improvements_after_intent_fix",
+  "total_scenarios": 4,
+  "results": [
+    {
+      "scenario": "Basic Stock Query",
+      "query": "Show me recent Apple stock prices",
+      "success": false,
+      "processing_time": 21.34574317932129,
+      "iterations": 3,
+      "sql_generated": true,
+      "mappings_discovered": 0,
+      "reasoning_steps": 3,
+      "actions_taken": 3,
+      "improvements_observed": [
+        "Detailed reasoning trace available",
+        "Efficient iteration count",
+        "Fast processing time",
+        "SQL includes filtering",
+        "SQL includes sorting",
+        "Complex SQL generated"
+      ],
+      "issues_found": []
+    },
+    {
+      "scenario": "Complex Financial Query",
+      "query": "What's the correlation between Microsoft stock and GDP?",
+      "success": false,
+      "processing_time": 17.166093826293945,
+      "iterations": 3,
+      "sql_generated": false,
+      "mappings_discovered": 0,
+      "reasoning_steps": 4,
+      "actions_taken": 3,
+      "improvements_observed": [
+        "Detailed reasoning trace available",
+        "Efficient iteration count",
+        "Fast processing time"
+      ],
+      "issues_found": [
+        "No SQL generated"
+      ]
+    },
+    {
+      "scenario": "Ambiguous Query",
+      "query": "Show me technology companies performance last month",
+      "success": false,
+      "processing_time": 12.600477933883667,
+      "iterations": 3,
+      "sql_generated": false,
+      "mappings_discovered": 0,
+      "reasoning_steps": 4,
+      "actions_taken": 3,
+      "improvements_observed": [
+        "Detailed reasoning trace available",
+        "Efficient iteration count",
+        "Fast processing time"
+      ],
+      "issues_found": [
+        "No SQL generated"
+      ]
+    },
+    {
+      "scenario": "Value Discovery Query",
+      "query": "Find stocks similar to Google",
+      "success": false,
+      "processing_time": 9.083887100219727,
+      "iterations": 3,
+      "sql_generated": false,
+      "mappings_discovered": 0,
+      "reasoning_steps": 4,
+      "actions_taken": 3,
+      "improvements_observed": [
+        "Detailed reasoning trace available",
+        "Efficient iteration count",
+        "Fast processing time"
+      ],
+      "issues_found": [
+        "No SQL generated"
+      ]
+    }
+  ]
+}
