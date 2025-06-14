@@ -35,10 +35,8 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
         headers['X-Session-Id'] = sessionId;
       }
       
-      // Use refresh endpoint if force refresh is requested
-      const endpoint = forceRefresh 
-        ? '/api/datasource/suggestions/refresh' 
-        : '/api/datasource/suggestions';
+      // Use same endpoint but different method for refresh
+      const endpoint = '/api/datasource/suggestions';
       
       const response = await fetch(endpoint, {
         method: forceRefresh ? 'POST' : 'GET',
