@@ -25,7 +25,7 @@ interface UseAgentQueryResult {
   isLoading: boolean;
   steps: AgentStep[];
   result: any;
-  error: Error | null;
+  error: string | null;
   reset: () => void;
 }
 
@@ -79,7 +79,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       connectToEventStream(data.query_id);
     },
     onError: (err) => {
-      setError(err as Error);
+      setError(err instanceof Error ? err.message : 'Failed to start query');
       setIsLoading(false);
     },
   });
@@ -96,7 +96,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       console.log('Connected to agent stream');
     });
 
-    eventSource.addEventListener('thought', (event) => {
+    eventSource.addEventListener('thought', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
       addStep({
         id: `thought-${data.iteration}-${Date.now()}`,
@@ -109,7 +109,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       });
     });
 
-    eventSource.addEventListener('action', (event) => {
+    eventSource.addEventListener('action', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
       addStep({
         id: `action-${data.iteration}-${Date.now()}`,
@@ -122,7 +122,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       });
     });
 
-    eventSource.addEventListener('observation', (event) => {
+    eventSource.addEventListener('observation', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
 
       // Mark previous action as completed
@@ -143,7 +143,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       });
     });
 
-    eventSource.addEventListener('complete', async (event) => {
+    eventSource.addEventListener('complete', async (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
 
       // Fetch final results
@@ -163,7 +163,7 @@ export function useAgentQuery(): UseAgentQueryResult {
       cleanup();
     });
 
-    eventSource.addEventListener('error', (event) => {
+    eventSource.addEventListener('error', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
       setError(data.content);
       setIsLoading(false);

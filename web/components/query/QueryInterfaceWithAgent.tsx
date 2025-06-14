@@ -175,7 +175,7 @@ export function QueryInterfaceWithAgent() {
       {/* Error Display */}
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{typeof error === 'string' ? error : error.message}</AlertDescription>
         </Alert>
       )}
 
@@ -184,17 +184,13 @@ export function QueryInterfaceWithAgent() {
         useAgent ? (
           agentQuery.result && (
             <QueryResults
-              sql={agentQuery.result.sql || ''}
-              results={agentQuery.result.result || { columns: [], data: [], row_count: 0 }}
-              metadata={agentQuery.result.metadata || {}}
+              response={agentQuery.result}
             />
           )
         ) : (
           standardQuery.data && (
             <QueryResults
-              sql={standardQuery.data.sql}
-              results={standardQuery.data.results}
-              metadata={standardQuery.data.metadata}
+              response={standardQuery.data}
             />
           )
         )

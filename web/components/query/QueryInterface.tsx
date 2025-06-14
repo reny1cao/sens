@@ -22,12 +22,12 @@ export function QueryInterface() {
     e.preventDefault();
     if (!question.trim() || isLoading) return;
 
-    executeQuery({ question });
+    executeQuery(question);
   };
 
   const handleExampleClick = (example: string) => {
     setQuestion(example);
-    executeQuery({ question: example });
+    executeQuery(example);
   };
 
   return (

@@ -125,8 +125,12 @@ export function useQuery() {
     },
   });
 
+  const executeQuery = useCallback((question: string) => {
+    mutation.mutate({ question });
+  }, [mutation]);
+
   return {
-    executeQuery: mutation.mutate,
+    executeQuery,
     isLoading: mutation.isPending || isPolling,
     data: mutation.data,
     error: mutation.error,
