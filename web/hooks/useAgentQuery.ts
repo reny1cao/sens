@@ -32,7 +32,7 @@ interface UseAgentQueryResult {
 export function useAgentQuery(): UseAgentQueryResult {
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const queryIdRef = useRef<string | null>(null);
@@ -165,14 +165,14 @@ export function useAgentQuery(): UseAgentQueryResult {
 
     eventSource.addEventListener('error', (event) => {
       const data: AgentEvent = JSON.parse(event.data);
-      setError(new Error(data.content));
+      setError(data.content);
       setIsLoading(false);
       cleanup();
     });
 
     eventSource.onerror = (err) => {
       console.error('EventSource error:', err);
-      setError(new Error('Connection to agent stream lost'));
+      setError('Connection to agent stream lost');
       setIsLoading(false);
       cleanup();
     };

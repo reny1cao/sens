@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { QueryResults } from './QueryResults';
+import { QueryResults } from '../results/QueryResults';
 import { ProcessingSteps } from './ProcessingSteps';
 import { AgentProcessingSteps } from './AgentProcessingSteps';
-import { ErrorDisplay } from './ErrorDisplay';
 import { useQuery } from '@/hooks/useQuery';
 import { useAgentQuery } from '@/hooks/useAgentQuery';
 import { Switch } from '@/components/ui/switch';
@@ -42,7 +41,9 @@ export function QueryInterfaceWithAgent() {
   // Select which hook to use based on mode
   const activeQuery = useAgent ? agentQuery : standardQuery;
   const isLoading = activeQuery.isLoading;
-  const error = activeQuery.error;
+  const error = useAgent 
+    ? activeQuery.error 
+    : (activeQuery.error instanceof Error ? activeQuery.error.message : activeQuery.error);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +173,11 @@ export function QueryInterfaceWithAgent() {
       )}
 
       {/* Error Display */}
-      {error && <ErrorDisplay error={error} />}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Results Display */}
       {!error && !isLoading && (
