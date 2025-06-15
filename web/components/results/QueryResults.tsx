@@ -77,7 +77,7 @@ export function QueryResults({ response }: QueryResultsProps) {
   return (
     <div className="space-y-4">
       {/* SQL Display */}
-      <SQLDisplay sql={sql} />
+      <SQLDisplay sql={sql} execution_time_ms={metadata?.execution_time_ms} />
 
       {/* Summary (if available) */}
       {summary && (
