@@ -197,21 +197,25 @@ class AgentTools:
             return False
 
     async def explore_database(self, query: str) -> Dict[str, Any]:
-        """Execute exploratory SQL queries to understand the database.
+        """Execute exploratory SQL queries to understand the PostgreSQL database.
 
         This tool allows direct SQL execution for exploration purposes:
-        - Check table structures
-        - Sample data from tables
-        - Understand value formats
-        - Discover relationships
+        - Check table structures in PostgreSQL
+        - Sample data from tables using PostgreSQL syntax
+        - Understand value formats and data types
+        - Discover relationships and constraints
+        - Use PostgreSQL-specific information_schema queries
+
+        CONTEXT: You are exploring a PostgreSQL database with financial/stock market data.
+        Use PostgreSQL-specific syntax and functions when needed.
 
         Args:
-            query: SQL query to execute (read-only)
+            query: PostgreSQL SQL query to execute (read-only SELECT only)
 
         Returns:
             Dict with query results and metadata
         """
-        log.info("tool_explore_database", query=query)
+        log.info("tool_explore_database_postgresql", query=query)
 
         try:
             # Safety check - only allow SELECT queries
@@ -410,23 +414,33 @@ class AgentTools:
                 },
             )
 
-        prompt = f"""You are a SQL expert. Generate a COMPLETE SQL query for the user's request based only on the database schema discovered through exploration.
+        prompt = f"""You are a PostgreSQL SQL expert. Generate a COMPLETE SQL query for the user's request based only on the database schema discovered through exploration.
+
+DATABASE: PostgreSQL (use PostgreSQL-specific syntax and functions)
 
 User Request: {query}
 
 Database Schema (discovered through exploration):
 {schema_context}
 
-Important Rules:
+POSTGRESQL-SPECIFIC RULES:
 1. Use ONLY the tables and columns mentioned in the schema above
 2. Return ONLY the COMPLETE SQL query with SELECT, FROM, WHERE clauses
-3. Use proper SQL syntax for PostgreSQL
-4. If you need to filter by company names, check if there's a mapping in the schema
-5. Use appropriate date/time filters when dealing with time-based queries
-6. For stock data, common columns are: symbol, trade_date, open, high, low, close, volume
-7. MUST include FROM clause and WHERE clause for filtering
+3. Use PostgreSQL syntax and functions (DATE_TRUNC, EXTRACT, AGE, etc.)
+4. Use proper PostgreSQL date/timestamp handling with INTERVAL syntax
+5. Use PostgreSQL string functions (ILIKE for case-insensitive matching)
+6. For aggregations, use PostgreSQL window functions when appropriate
+7. Use PostgreSQL LIMIT syntax (not TOP)
+8. Use double quotes for case-sensitive identifiers if needed
+9. If you need to filter by company names, check if there's a mapping in the schema
+10. For stock data, common columns are: symbol, trade_date, open, high, low, close, volume
+11. MUST include FROM clause and appropriate WHERE clauses for filtering
 
-Example format: SELECT column1, column2 FROM table_name WHERE condition ORDER BY column LIMIT 100
+PostgreSQL Examples:
+- Time filtering: WHERE trade_date >= CURRENT_DATE - INTERVAL '30 days'
+- Case-insensitive search: WHERE company_name ILIKE '%apple%'
+- Date truncation: SELECT DATE_TRUNC('month', trade_date) as month
+- Window functions: ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY trade_date DESC)
 
 SQL Query:"""
 

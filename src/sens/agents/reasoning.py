@@ -88,7 +88,10 @@ class ReasoningEngine:
         discovered_mappings: Dict[str, str],
     ) -> str:
         """Build prompt for reasoning about next action."""
-        return f"""You are an intelligent database agent helping to answer user queries.
+        return f"""You are an intelligent PostgreSQL database agent helping to answer user queries.
+
+DATABASE TYPE: PostgreSQL (use PostgreSQL-specific syntax and functions)
+DATA DOMAIN: Financial/Stock Market Data
 
 User Query: {user_query}
 Current Iteration: {iteration}/5
@@ -108,10 +111,13 @@ Based on the above context, reason about what to do next. Consider:
 
 IMPORTANT: If you've already searched for schema multiple times successfully, move on to generating SQL. Don't get stuck repeating the same action.
 
+DATABASE CONTEXT: You are working with a PostgreSQL database containing financial data.
+Use PostgreSQL-specific syntax when exploring and generating SQL.
+
 LIMITED TOOLS MODE - Only 3 tools available:
-- EXPLORE_DATABASE: Execute SELECT queries to understand database structure and discover data
-- GENERATE_SQL: Generates SQL query based on discovered schema and user query
-- EXECUTE_SQL: Executes the generated SQL query against the database
+- EXPLORE_DATABASE: Execute PostgreSQL SELECT queries to understand database structure and discover data
+- GENERATE_SQL: Generates PostgreSQL SQL query based on discovered schema and user query
+- EXECUTE_SQL: Executes the generated PostgreSQL SQL query against the database
 
 ALL OTHER TOOLS ARE DISABLED. You must work with only these three tools.
 
@@ -134,18 +140,23 @@ CONFIDENCE: <0.0 to 1.0>
 ACTION: <One of: EXPLORE_DATABASE, GENERATE_SQL, EXECUTE_SQL>
 PARAMETERS: <JSON parameters for the action>
 
-Examples:
-THOUGHT: I need to understand the database structure first. Let me find what tables exist.
+PostgreSQL Examples:
+THOUGHT: I need to understand the PostgreSQL database structure first. Let me find what tables exist.
 CONFIDENCE: 0.9
 ACTION: EXPLORE_DATABASE
-PARAMETERS: {{"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"}}
+PARAMETERS: {{"query": "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"}}
 
-THOUGHT: I found a securities table. Let me check if Apple is stored as "Apple" or "AAPL".
+THOUGHT: I found a securities table. Let me check if Apple is stored as "Apple" or "AAPL" using PostgreSQL ILIKE.
 CONFIDENCE: 0.8
 ACTION: EXPLORE_DATABASE
-PARAMETERS: {{"query": "SELECT symbol, company_name FROM securities WHERE company_name LIKE '%Apple%' OR symbol LIKE '%AAPL%'"}}
+PARAMETERS: {{"query": "SELECT symbol, company_name FROM securities WHERE company_name ILIKE '%apple%' OR symbol ILIKE '%aapl%' LIMIT 10"}}
 
-THOUGHT: Now I know Apple is "AAPL" and I found the daily_prices tables. I can generate SQL for the user's request.
+THOUGHT: I need to see the structure of the daily_prices table using PostgreSQL information_schema.
+CONFIDENCE: 0.8
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'daily_prices' AND table_schema = 'public' ORDER BY ordinal_position"}}
+
+THOUGHT: Now I know Apple is "AAPL" and I found the daily_prices table structure. I can generate PostgreSQL-specific SQL for the user's request.
 CONFIDENCE: 0.9
 ACTION: GENERATE_SQL
 PARAMETERS: {{}}
