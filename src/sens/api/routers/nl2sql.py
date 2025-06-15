@@ -33,6 +33,7 @@ class NL2SQLResponse(BaseModel):
     sql: str
     results: dict
     metadata: dict
+    summary: Optional[str] = None
     error: Optional[dict] = None
 
 
@@ -82,30 +83,30 @@ def get_orchestrator():
 @router.get("/test-schema")
 async def test_schema():
     """Test endpoint to check schema status."""
-    from sens.schema.graph import SchemaGraph
     from sens.datasource.manager import DataSourceManager
-    
+    from sens.schema.graph import SchemaGraph
+
     # Get current schema graph state
     schema_graph = SchemaGraph.get_instance()
     current_tables = list(schema_graph._all_tables)
-    
+
     # Try to load default database schema
     datasource_manager = DataSourceManager()
     await datasource_manager.ensure_default_schema_extracted()
-    
+
     # Check again
     schema_graph_after = SchemaGraph.get_instance()
     tables_after = list(schema_graph_after._all_tables)
-    
+
     return {
         "before_extraction": {
             "table_count": len(current_tables),
-            "tables": current_tables[:10]  # First 10 tables
+            "tables": current_tables[:10],  # First 10 tables
         },
         "after_extraction": {
             "table_count": len(tables_after),
-            "tables": tables_after[:10]  # First 10 tables
-        }
+            "tables": tables_after[:10],  # First 10 tables
+        },
     }
 
 
@@ -117,12 +118,16 @@ async def nl2sql(request: NL2SQLRequest):
     try:
         # Get or create conversation state
         session_id = request.session_id or "default"
-        
+
         # Get orchestrator instance (schema is loaded at startup)
         orchestrator = get_orchestrator()
 
         # Try to load existing state or create new one
-        state = orchestrator.session_manager.get(session_id) if orchestrator.session_manager else None
+        state = (
+            orchestrator.session_manager.get(session_id)
+            if orchestrator.session_manager
+            else None
+        )
         if state is None:
             from sens.chat.state import ConversationState
 
@@ -180,33 +185,34 @@ async def nl2sql(request: NL2SQLRequest):
 
         # Extract results from successful response
         sql = response.get("sql", "")
-        
+
         # ResponseBuilder returns the data in table_preview and row_count
         table_preview = response.get("table_preview", [])
         row_count = response.get("row_count", 0)
         columns = response.get("metadata", {}).get("columns", [])
-        
+
         # Log response structure for debugging
         import structlog
+
         log = structlog.get_logger(__name__)
         log.info(
             "response_data",
             response_keys=list(response.keys()),
             has_table_preview=bool(table_preview),
             has_row_count=bool(row_count),
-            columns_count=len(columns)
+            columns_count=len(columns),
         )
 
         # Format results for frontend using table_preview from ResponseBuilder
         if table_preview and columns:
             # Convert table_preview to list of dicts
             data = []
-            for row in table_preview[:request.limit]:
+            for row in table_preview[: request.limit]:
                 if isinstance(row, list) and len(row) == len(columns):
                     data.append(dict(zip(columns, row)))
                 elif isinstance(row, dict):
                     data.append(row)
-            
+
             results = {
                 "columns": columns,
                 "data": data,
@@ -255,10 +261,14 @@ async def nl2sql(request: NL2SQLRequest):
             "suggested_visualizations": suggested_visualizations,
         }
 
+        # Extract summary from response
+        summary = response.get("summary", "")
+
         return NL2SQLResponse(
             sql=sql,
             results=results,
             metadata=metadata,
+            summary=summary,
         )
 
     except Exception as e:

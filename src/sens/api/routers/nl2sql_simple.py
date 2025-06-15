@@ -26,6 +26,7 @@ class NL2SQLResponse(BaseModel):
     sql: str
     results: dict
     metadata: dict
+    summary: Optional[str] = None
     error: Optional[dict] = None
 
 
@@ -40,6 +41,7 @@ async def ensure_schema_initialized():
     global _schema_initialized, _orchestrator, _session_manager
     if not _schema_initialized:
         from sens.datasource.manager import DataSourceManager
+
         datasource_manager = DataSourceManager()
         await datasource_manager.ensure_default_schema_extracted()
         _schema_initialized = True
@@ -68,30 +70,30 @@ def get_orchestrator():
 @router.get("/test-schema")
 async def test_schema():
     """Test endpoint to check schema status."""
-    from sens.schema.graph import SchemaGraph
     from sens.datasource.manager import DataSourceManager
-    
+    from sens.schema.graph import SchemaGraph
+
     # Get current schema graph state
     schema_graph = SchemaGraph.get_instance()
     current_tables = list(schema_graph._all_tables)
-    
+
     # Try to load default database schema
     datasource_manager = DataSourceManager()
     await datasource_manager.ensure_default_schema_extracted()
-    
+
     # Check again
     schema_graph_after = SchemaGraph.get_instance()
     tables_after = list(schema_graph_after._all_tables)
-    
+
     return {
         "before_extraction": {
             "table_count": len(current_tables),
-            "tables": sorted(current_tables)[:10]  # First 10 tables
+            "tables": sorted(current_tables)[:10],  # First 10 tables
         },
         "after_extraction": {
             "table_count": len(tables_after),
-            "tables": sorted(tables_after)[:10]  # First 10 tables
-        }
+            "tables": sorted(tables_after)[:10],  # First 10 tables
+        },
     }
 
 
@@ -215,7 +217,12 @@ async def nl2sql(request: NL2SQLRequest):
         if "pipeline_metrics" in metadata_info:
             metadata["pipeline_metrics"] = metadata_info["pipeline_metrics"]
 
-        return NL2SQLResponse(sql=sql, results=results, metadata=metadata)
+        # Extract summary from the response
+        summary = response.get("summary", "")
+
+        return NL2SQLResponse(
+            sql=sql, results=results, metadata=metadata, summary=summary
+        )
 
     except Exception as e:
         import structlog

@@ -78,6 +78,19 @@ export function useQuery() {
 
         const data: QueryResponse = await response.json();
 
+        // Debug log the response data
+        console.log('[useQuery] API response:', {
+          hasData: !!data,
+          dataKeys: data ? Object.keys(data) : null,
+          hasResults: !!data?.results,
+          resultsKeys: data?.results ? Object.keys(data.results) : null,
+          rowCount: data?.results?.row_count,
+          hasColumns: !!data?.results?.columns,
+          hasRows: !!data?.results?.data,
+          sql: data?.sql?.substring(0, 100),
+          summary: data?.summary,
+        });
+
         // Update steps based on pipeline metrics
         if (data.metadata?.pipeline_metrics) {
           const realSteps = mapPipelineStepsToUI(data.metadata.pipeline_metrics);
