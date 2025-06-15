@@ -17,6 +17,19 @@ interface QueryResultsProps {
 export function QueryResults({ response }: QueryResultsProps) {
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
 
+  // Debug logging
+  console.log('[QueryResults] Response structure:', {
+    hasResponse: !!response,
+    responseKeys: response ? Object.keys(response) : null,
+    hasResults: !!response?.results,
+    resultsKeys: response?.results ? Object.keys(response.results) : null,
+    summaryInResults: (response?.results as any)?.summary,
+    summaryInResponse: (response as any)?.summary,
+    sql: response?.sql?.substring(0, 50) + '...',
+    rowCount: response?.results?.row_count,
+    columns: response?.results?.columns,
+  });
+
   // Safety check for response
   if (!response || !response.results) {
     console.error('QueryResults: Invalid response', response);
@@ -30,9 +43,8 @@ export function QueryResults({ response }: QueryResultsProps) {
     );
   }
 
-  const { sql, results, metadata } = response;
+  const { sql, results, metadata, summary } = response;
   const isSingleValue = results?.row_count === 1 && results?.columns?.length === 1;
-  const summary = (results as any)?.summary; // Backend sends summary in results
 
   const exportCSV = () => {
     if (!results?.columns || !results?.data) {

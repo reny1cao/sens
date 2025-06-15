@@ -21,6 +21,7 @@ export interface QueryResponse {
   sql: string;
   results: QueryResults;
   metadata: QueryMetadata;
+  summary?: string;  // Natural language summary of the results
   error?: ErrorDetail;
 }
 

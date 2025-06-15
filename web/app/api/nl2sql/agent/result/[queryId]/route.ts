@@ -30,6 +30,17 @@ export async function GET(
     }
 
     const data = await response.json();
+
+    console.log('[Agent Result API] Response structure:', {
+      hasResult: !!data.result,
+      resultKeys: data.result ? Object.keys(data.result) : null,
+      hasSql: !!data.result?.sql,
+      hasResults: !!data.result?.results,
+      resultsKeys: data.result?.results ? Object.keys(data.result.results) : null,
+      hasSummary: !!data.result?.results?.summary,
+      summary: data.result?.results?.summary,
+    });
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching agent results:', error);

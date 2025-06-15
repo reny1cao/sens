@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
+    // Preserve the summary if it exists at any level
+    let summary = data.summary || data.results?.summary || data.metadata?.summary;
+
     // Transform the response to match frontend expectations
     if (data.results) {
       // Ensure results has the correct structure
@@ -91,7 +94,14 @@ export async function POST(request: NextRequest) {
       dataType: Array.isArray(data.results?.data) ? 'array' : typeof data.results?.data,
       columnsType: Array.isArray(data.results?.columns) ? 'array' : typeof data.results?.columns,
       firstRow: data.results?.data?.[0],
+      summaryLocation: summary ? 'found' : 'not found',
+      summaryValue: summary,
     });
+
+    // Ensure summary is at the top level of the response
+    if (summary && !data.summary) {
+      data.summary = summary;
+    }
 
     return NextResponse.json(data);
   } catch (error) {

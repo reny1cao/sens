@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { QueryResults } from '../results/QueryResults';
 import { ProcessingSteps } from './ProcessingSteps';
 import { AgentProcessingSteps } from './AgentProcessingSteps';
+import { ExampleQueriesClient } from './ExampleQueriesClient';
 import { useQuery } from '@/hooks/useQuery';
 import { useAgentQuery } from '@/hooks/useAgentQuery';
 import { Switch } from '@/components/ui/switch';
@@ -20,13 +21,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-// Example queries remain the same
-const exampleQueries = [
-  "Show me all users who signed up in the last 30 days",
-  "What are the top 5 products by revenue this month?",
-  "List customers with orders over $1000",
-  "Find employees in the Engineering department",
-];
 
 export function QueryInterfaceWithAgent() {
   const [query, setQuery] = useState('');
@@ -41,8 +35,8 @@ export function QueryInterfaceWithAgent() {
   // Select which hook to use based on mode
   const activeQuery = useAgent ? agentQuery : standardQuery;
   const isLoading = activeQuery.isLoading;
-  const error = useAgent 
-    ? activeQuery.error 
+  const error = useAgent
+    ? activeQuery.error
     : (activeQuery.error instanceof Error ? activeQuery.error.message : activeQuery.error);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -136,23 +130,7 @@ export function QueryInterfaceWithAgent() {
             </div>
 
             {/* Example Queries */}
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Try an example:</p>
-              <div className="flex flex-wrap gap-2">
-                {exampleQueries.map((example, index) => (
-                  <Button
-                    key={index}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExampleClick(example)}
-                    disabled={isLoading}
-                  >
-                    {example}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <ExampleQueriesClient onExampleClick={handleExampleClick} />
           </form>
         </CardContent>
       </Card>

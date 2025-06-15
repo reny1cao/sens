@@ -7,6 +7,12 @@ export async function GET(request: NextRequest) {
   try {
     const sessionId = request.headers.get('X-Session-Id');
 
+    console.log('[Suggestions API] GET request received', {
+      sessionId,
+      API_BASE_URL,
+      fullUrl: `${API_BASE_URL}/api/datasource/suggestions`
+    });
+
     // Build headers - session ID is optional
     const headers: Record<string, string> = {};
     if (sessionId) {
@@ -17,8 +23,11 @@ export async function GET(request: NextRequest) {
       headers,
     });
 
+    console.log('[Suggestions API] Backend response status:', response.status);
+
     if (!response.ok) {
       const error = await response.text();
+      console.error('[Suggestions API] Backend error:', error);
       return NextResponse.json(
         { error: error || 'Failed to fetch suggestions' },
         { status: response.status }
@@ -26,9 +35,15 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log('[Suggestions API] Backend data:', {
+      source: data.source,
+      suggestionsCount: data.suggestions?.length || 0,
+      firstSuggestion: data.suggestions?.[0]
+    });
+
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching suggestions:', error);
+    console.error('[Suggestions API] Error fetching suggestions:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

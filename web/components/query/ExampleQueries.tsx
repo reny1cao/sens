@@ -21,12 +21,40 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
   const { sessionId, activeSource } = useDataSource();
   const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_EXAMPLES);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Debug render
+  console.log('[ExampleQueries] Component rendered', {
+    suggestions,
+    isLoading,
+    sessionId,
+    activeSourceId: activeSource?.id,
+  });
+
   useEffect(() => {
-    // Always fetch suggestions, even for default database
-    fetchSuggestions();
-  }, [activeSource, sessionId]);
+    // Fetch suggestions on mount and when context changes
+    console.log('[ExampleQueries] useEffect triggered', { activeSource, sessionId });
+
+    // Small delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      fetchSuggestions();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeSource?.id, sessionId]); // Depend on activeSource.id instead of the whole object
+
+  // Debug effect to log when suggestions actually change
+  useEffect(() => {
+    console.log('[ExampleQueries] Suggestions state updated:', suggestions);
+  }, [suggestions]);
 
   const fetchSuggestions = async (forceRefresh = false) => {
+    console.log('[ExampleQueries] fetchSuggestions called', {
+      forceRefresh,
+      sessionId,
+      activeSourceId: activeSource?.id,
+      currentSuggestions: suggestions
+    });
+
     setIsLoading(true);
     try {
       // Only send session ID if we have one and it's not the default source
@@ -34,27 +62,38 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
       if (sessionId && activeSource?.id !== 'default') {
         headers['X-Session-Id'] = sessionId;
       }
-      
+
       // Use same endpoint but different method for refresh
       const endpoint = '/api/datasource/suggestions';
-      
+
+      console.log('[ExampleQueries] Fetching from:', endpoint, 'headers:', headers);
+
       const response = await fetch(endpoint, {
         method: forceRefresh ? 'POST' : 'GET',
         headers,
       });
 
+      console.log('[ExampleQueries] Response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('[ExampleQueries] Fetched data:', data);
+
         if (data.suggestions && data.suggestions.length > 0) {
           // Take first 5 suggestions
-          setSuggestions(data.suggestions.slice(0, 5));
+          const newSuggestions = data.suggestions.slice(0, 5);
+          console.log('[ExampleQueries] Setting new suggestions:', newSuggestions);
+          setSuggestions(newSuggestions);
+        } else {
+          console.log('[ExampleQueries] No suggestions in response, keeping defaults');
         }
       } else {
         // Use default suggestions if API fails
+        console.error('[ExampleQueries] API failed:', response.status, response.statusText);
         setSuggestions(DEFAULT_EXAMPLES);
       }
     } catch (error) {
-      console.error('Failed to fetch suggestions:', error);
+      console.error('[ExampleQueries] Failed to fetch suggestions:', error);
       // Keep default suggestions on error
       setSuggestions(DEFAULT_EXAMPLES);
     } finally {

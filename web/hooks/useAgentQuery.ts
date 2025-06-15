@@ -88,12 +88,13 @@ export function useAgentQuery(): UseAgentQueryResult {
   const connectToEventStream = useCallback((queryId: string) => {
     cleanup(); // Close any existing connection
 
+    console.log('[useAgentQuery] Connecting to stream for query:', queryId);
     const eventSource = new EventSource(`/api/nl2sql/agent/stream/${queryId}`);
     eventSourceRef.current = eventSource;
 
     // Handle different event types
     eventSource.addEventListener('connection', (event) => {
-      console.log('Connected to agent stream');
+      console.log('[useAgentQuery] Connected to agent stream');
     });
 
     eventSource.addEventListener('thought', (event: MessageEvent) => {
@@ -145,17 +146,25 @@ export function useAgentQuery(): UseAgentQueryResult {
 
     eventSource.addEventListener('complete', async (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
+      console.log('[useAgentQuery] Complete event received:', data);
 
       // Fetch final results
       if (queryIdRef.current) {
         try {
+          console.log('[useAgentQuery] Fetching results for query:', queryIdRef.current);
           const response = await fetch(`/api/nl2sql/agent/result/${queryIdRef.current}`);
+          console.log('[useAgentQuery] Result response status:', response.status);
+
           if (response.ok) {
             const resultData = await response.json();
+            console.log('[useAgentQuery] Result data:', resultData);
             setResult(resultData.result);
+          } else {
+            const errorText = await response.text();
+            console.error('[useAgentQuery] Result fetch failed:', errorText);
           }
         } catch (err) {
-          console.error('Failed to fetch results:', err);
+          console.error('[useAgentQuery] Failed to fetch results:', err);
         }
       }
 
@@ -170,8 +179,13 @@ export function useAgentQuery(): UseAgentQueryResult {
       cleanup();
     });
 
+    // Generic message handler to catch any untyped events
+    eventSource.onmessage = (event) => {
+      console.log('[useAgentQuery] Generic message received:', event);
+    };
+
     eventSource.onerror = (err) => {
-      console.error('EventSource error:', err);
+      console.error('[useAgentQuery] EventSource error:', err);
       setError('Connection to agent stream lost');
       setIsLoading(false);
       cleanup();
