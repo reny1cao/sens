@@ -158,18 +158,40 @@ export function QueryInterfaceWithAgent() {
       )}
 
       {/* Results Display */}
+      {(() => {
+        console.log('[QueryInterface] Render state:', {
+          error,
+          isLoading,
+          useAgent,
+          hasStandardData: !!standardQuery.data,
+          hasAgentResult: !!agentQuery.result,
+          standardQueryData: standardQuery.data,
+          agentQueryResult: agentQuery.result,
+        });
+        return null;
+      })()}
+
       {!error && !isLoading && (
         useAgent ? (
-          agentQuery.result && (
+          agentQuery.result ? (
             <QueryResults
               response={agentQuery.result}
             />
+          ) : (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-yellow-800">Agent query completed but no result data found.</p>
+            </div>
           )
         ) : (
-          standardQuery.data && (
+          standardQuery.data ? (
             <QueryResults
               response={standardQuery.data}
             />
+          ) : (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-yellow-800">Standard query completed but no result data found.</p>
+              <pre className="text-xs mt-2">{JSON.stringify(standardQuery, null, 2)}</pre>
+            </div>
           )
         )
       )}

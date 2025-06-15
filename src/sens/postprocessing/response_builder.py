@@ -22,6 +22,7 @@ log = structlog.get_logger()
 # Constants
 DEFAULT_PROMPT_DIR = Path(__file__).parent.parent / "llm" / "prompts"
 DEFAULT_PROMPT_NAME = "summary.prompt.txt"
+ENHANCED_PROMPT_NAME = "enhanced_summary.prompt.txt"
 
 
 class FinalResponse(BaseModel):
@@ -184,7 +185,12 @@ class ResponseBuilder:
         self, question: str, sql: str, result: QueryResult, intent: Intent
     ) -> str:
         """Build a context-aware prompt based on the intent type."""
-        template = self.jinja_env.get_template(DEFAULT_PROMPT_NAME)
+        # Try to use enhanced prompt first, fallback to default
+        try:
+            template = self.jinja_env.get_template(ENHANCED_PROMPT_NAME)
+        except Exception:
+            log.warning("enhanced_prompt_not_found_using_default")
+            template = self.jinja_env.get_template(DEFAULT_PROMPT_NAME)
 
         # Prepare the template context
         context = {
@@ -269,7 +275,22 @@ class ResponseBuilder:
 
     def _generate_fallback_summary(self, result: QueryResult) -> str:
         """Generate a basic summary when LLM calls fail."""
-        return (
-            f"Found {result.row_count} records matching your query. "
-            "Please see the data preview for details."
-        )
+        # Try to generate a more informative fallback summary
+        if result.row_count == 0:
+            return "No matching records were found for your query."
+        elif result.row_count == 1:
+            # Single row result - try to describe it
+            if len(result.columns) == 1:
+                value = result.rows[0][0]
+                return f"The result is {value}."
+            else:
+                return f"Found 1 record with {len(result.columns)} fields."
+        else:
+            # Multiple rows
+            if len(result.columns) == 1:
+                return f"Found {result.row_count} values for {result.columns[0]}."
+            else:
+                return (
+                    f"Found {result.row_count} records with {len(result.columns)} columns. "
+                    "Please see the data preview for details."
+                )
