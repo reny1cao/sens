@@ -25,7 +25,7 @@ export function SQLDisplay({ sql, execution_time_ms }: SQLDisplayProps) {
     try {
       const formatted = format(sql, {
         language: 'postgresql',
-        uppercase: true,
+        keywordCase: 'upper',
         linesBetweenQueries: 2,
       });
       setFormattedSql(formatted);
