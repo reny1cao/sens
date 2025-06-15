@@ -28,16 +28,33 @@ export function QueryResults({ response }: QueryResultsProps) {
     sql: response?.sql?.substring(0, 50) + '...',
     rowCount: response?.results?.row_count,
     columns: response?.results?.columns,
+    dataLength: response?.results?.data?.length,
+    firstDataRow: response?.results?.data?.[0],
   });
 
   // Safety check for response
-  if (!response || !response.results) {
-    console.error('QueryResults: Invalid response', response);
+  if (!response) {
+    console.error('QueryResults: No response provided');
+    return (
+      <Card className="border-yellow-200 bg-yellow-50">
+        <CardContent className="p-4">
+          <h3 className="text-yellow-800 font-medium mb-1">No Results</h3>
+          <p className="text-yellow-700">No query results to display</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!response.results) {
+    console.error('QueryResults: Invalid response format - missing results', response);
     return (
       <Card className="border-red-200 bg-red-50">
         <CardContent className="p-4">
           <h3 className="text-red-800 font-medium mb-1">Error</h3>
-          <p className="text-red-700">Invalid query response format</p>
+          <p className="text-red-700">Invalid query response format - missing results field</p>
+          <pre className="text-xs mt-2 p-2 bg-red-100 rounded">
+            {JSON.stringify(response, null, 2)}
+          </pre>
         </CardContent>
       </Card>
     );
@@ -112,7 +129,7 @@ export function QueryResults({ response }: QueryResultsProps) {
           </div>
         </CardHeader>
         <CardContent>
-          {!results || results.row_count === 0 ? (
+          {!results || !results.data || results.row_count === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No results found</p>
           ) : isSingleValue && results.data?.[0] && results.columns?.[0] ? (
             <SingleValueCard

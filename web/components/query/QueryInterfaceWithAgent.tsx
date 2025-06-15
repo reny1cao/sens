@@ -167,6 +167,8 @@ export function QueryInterfaceWithAgent() {
           hasAgentResult: !!agentQuery.result,
           standardQueryData: standardQuery.data,
           agentQueryResult: agentQuery.result,
+          standardQueryKeys: standardQuery.data ? Object.keys(standardQuery.data) : null,
+          standardQueryResultsKeys: standardQuery.data?.results ? Object.keys(standardQuery.data.results) : null,
         });
         return null;
       })()}
