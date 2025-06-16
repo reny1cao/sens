@@ -24,6 +24,50 @@ from sens.settings import get_settings
 
 log = structlog.get_logger()
 
+
+def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
+    """Transform agent result to match frontend QueryResponse format."""
+    if not agent_result.get("success"):
+        return {
+            "error": {
+                "code": "AGENT_ERROR",
+                "message": agent_result.get("error", "Agent failed to process query"),
+            }
+        }
+
+    # Extract the actual result from agent response
+    result_data = agent_result.get("result", {})
+
+    # Transform rows to data format expected by frontend
+    rows = result_data.get("rows", [])
+    columns = result_data.get("columns", [])
+
+    # Convert rows (list of lists) to data (list of dicts)
+    data = []
+    for row in rows:
+        if isinstance(row, list) and len(row) == len(columns):
+            data.append(dict(zip(columns, row)))
+        elif isinstance(row, dict):
+            data.append(row)
+
+    return {
+        "sql": agent_result.get("sql", ""),
+        "results": {
+            "columns": columns,
+            "data": data,
+            "row_count": result_data.get("row_count", len(data)),
+            "truncated": len(rows) >= 100,  # Agent limits to 100 rows
+        },
+        "metadata": {
+            "execution_time_ms": 0,  # Agent doesn't track this currently
+            "tables_used": [],  # Could extract from SQL
+            "query_type": "select",
+            "confidence_score": 0.9 if agent_result.get("success") else 0.3,
+        },
+        "summary": f"Found {result_data.get('row_count', 0)} results",
+    }
+
+
 # Initialize router
 router = APIRouter(
     prefix="/nl2sql/agent",
@@ -109,10 +153,13 @@ async def process_agent_query(query_id: str, question: str, max_iterations: int)
             user_query=question, conversation_id=active_queries[query_id]["session_id"]
         )
 
+        # Transform result to API format
+        transformed_result = transform_agent_result_to_api_format(result)
+
         # Store results
         query_results[query_id] = {
             "status": "completed",
-            "result": result,
+            "result": transformed_result,
             "completed_at": time.time(),
         }
 

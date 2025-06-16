@@ -1,5 +1,7 @@
 """Simple direct agent API for testing our notes system."""
 
+from typing import Any, Dict
+
 import structlog
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -7,6 +9,42 @@ from pydantic import BaseModel
 from sens.cli.agent_pipeline import AgentNL2SQLPipeline
 
 log = structlog.get_logger()
+
+
+def transform_cli_result_to_api_format(cli_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform CLI agent result to match frontend QueryResponse format."""
+    if cli_result.get("status") == "error":
+        return {
+            "error": {
+                "code": "AGENT_ERROR",
+                "message": cli_result.get("error", "Agent failed to process query"),
+            }
+        }
+
+    # Transform table_preview (list of rows) to data format
+    table_preview = cli_result.get("table_preview", [])
+    columns = cli_result.get("columns", [])
+
+    return {
+        "sql": cli_result.get("sql", ""),
+        "results": {
+            "columns": columns,
+            "data": table_preview,  # Already in correct format (list of dicts)
+            "row_count": cli_result.get("row_count", 0),
+            "truncated": False,  # CLI limits by max_rows parameter
+        },
+        "metadata": {
+            "execution_time_ms": 0,  # Not tracked by CLI
+            "tables_used": [],
+            "query_type": "select",
+            "confidence_score": 0.9,
+            "pipeline_metrics": {
+                "iterations": cli_result.get("metadata", {}).get("iterations", 0),
+            },
+        },
+        "summary": cli_result.get("summary", ""),
+    }
+
 
 router = APIRouter(
     prefix="/nl2sql/simple-agent",
@@ -37,10 +75,11 @@ async def simple_agent_query(request: SimpleAgentRequest):
             question=request.question,
             format_type="json",
             show_preview=True,
-            max_rows=5,
+            max_rows=100,  # Increase to get more results
         )
 
-        return result
+        # Transform to API format
+        return transform_cli_result_to_api_format(result)
 
     except Exception as e:
         log.error("simple_agent_query_failed", error=str(e))
