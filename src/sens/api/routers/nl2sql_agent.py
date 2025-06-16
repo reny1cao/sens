@@ -11,6 +11,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from sens.agents.event_emitter import EventEmittingAgent
+from sens.agents.memory import AgentMemory
+from sens.agents.reasoning import ReasoningEngine
+from sens.agents.tools import AgentTools
 from sens.api.common.sse import (
     AgentEventType,
     SSEMessage,
@@ -82,8 +85,17 @@ async def start_agent_query(request: AgentQueryRequest):
 async def process_agent_query(query_id: str, question: str, max_iterations: int):
     """Process query using agent in background."""
     try:
-        # Create event-emitting agent
-        agent = EventEmittingAgent(max_iterations=max_iterations)
+        # Create event-emitting agent with our notes system
+        tools = AgentTools()
+        memory = AgentMemory()
+        reasoning_engine = ReasoningEngine()
+
+        agent = EventEmittingAgent(
+            tools=tools,
+            memory=memory,
+            reasoning_engine=reasoning_engine,
+            max_iterations=max_iterations,
+        )
 
         # Add event handler to store events
         def store_event(event):
@@ -127,7 +139,6 @@ async def process_agent_query(query_id: str, question: str, max_iterations: int)
 @router.get("/stream/{query_id}")
 async def stream_agent_events(query_id: str, request: Request):
     """Stream agent events via Server-Sent Events."""
-
     if query_id not in active_queries:
         raise HTTPException(status_code=404, detail="Query not found")
 
@@ -245,7 +256,6 @@ async def stream_agent_events(query_id: str, request: Request):
 @router.get("/result/{query_id}")
 async def get_agent_result(query_id: str):
     """Get the final result of an agent query."""
-
     if query_id not in query_results:
         if query_id in active_queries:
             return {
@@ -269,7 +279,6 @@ async def get_agent_result(query_id: str):
 @router.get("/status/{query_id}")
 async def get_query_status(query_id: str):
     """Get the current status of a query."""
-
     if query_id in active_queries:
         query_info = active_queries[query_id]
         return {

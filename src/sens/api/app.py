@@ -20,6 +20,9 @@ from .routers.nl2sql_dev import router as nl2sql_dev_router  # Development/mock 
 from .routers.nl2sql_session import (
     router as nl2sql_session_router,  # Session-based for uploads
 )
+from .routers.nl2sql_simple_agent import (
+    router as nl2sql_simple_agent_router,  # Simple agent with notes
+)
 from .routers.retrieval import router as retrieval_router
 from .routers.schema import router as schema_router
 from .routers.table_search.router import router as table_search_router
@@ -90,13 +93,11 @@ async def lifespan(app: FastAPI):
             )
             from sens.api.routers.nl2sql import get_orchestrator
 
-            orchestrator = get_orchestrator()
+            _ = get_orchestrator()  # Pre-initialize orchestrator
             logger.info("ChatOrchestrator pre-initialized successfully")
 
         # Try to build embedding index
         try:
-            from pathlib import Path
-
             from sens.retrieval.embedding.search import EmbeddingSearch
 
             index_dir = settings.index_dir
@@ -138,6 +139,9 @@ app.include_router(nl2sql_router, prefix="/api", tags=["nl2sql"])
 app.include_router(nl2sql_dev_router, prefix="/api", tags=["nl2sql-dev"])
 app.include_router(nl2sql_session_router, prefix="/api", tags=["nl2sql-session"])
 app.include_router(nl2sql_agent_router, prefix="/api", tags=["nl2sql-agent"])
+app.include_router(
+    nl2sql_simple_agent_router, prefix="/api", tags=["nl2sql-simple-agent"]
+)
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(
