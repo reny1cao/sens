@@ -50,22 +50,22 @@ Transform SENS from a reactive query tool into a proactive data intelligence pla
 ```python
 class QueryPlanningAgent:
     """ReAct-style agent for intelligent query planning."""
-    
+
     async def plan_query(self, user_input: str) -> QueryPlan:
         """
         Use reasoning and tools to understand user intent.
-        
+
         Example:
         User: "Show me tech giants' performance"
-        
+
         Thought 1: Need to map "tech giants" to database values
         Action 1: SearchDatabaseValues(table="securities", column="company_name")
         Observation 1: Found AAPL, GOOGL, MSFT, META, NVDA in Technology sector
-        
+
         Thought 2: Define "giants" using market cap distribution
         Action 2: GetValueStatistics(table="securities", column="market_cap")
         Observation 2: Top tech companies have market_cap > $500B
-        
+
         Final Plan: Query for Technology sector with market_cap > $500B
         """
 ```
@@ -74,17 +74,17 @@ class QueryPlanningAgent:
 ```python
 class ValueDiscoverySystem:
     """Tools for exploring and mapping database values."""
-    
+
     async def discover_values(self, user_term: str) -> ValueMapping:
         # Search across columns for similar values
         candidates = await self.similarity_search(user_term)
-        
+
         # Use LLM to validate mappings
         validated = await self.validate_mappings(user_term, candidates)
-        
+
         # Learn from successful mappings
         await self.update_value_index(user_term, validated)
-        
+
         return validated
 ```
 
@@ -92,14 +92,14 @@ class ValueDiscoverySystem:
 ```python
 class SelfCorrectingExecutor:
     """Execute queries with automatic error recovery."""
-    
+
     async def execute_with_correction(self, sql: str) -> QueryResult:
         result = await self.execute(sql)
-        
+
         if result.is_empty():
             # Diagnose why query returned no results
             diagnosis = await self.diagnose_empty_result(sql)
-            
+
             # Apply corrections based on diagnosis
             if diagnosis.type == "value_mismatch":
                 sql = await self.fix_value_mismatches(sql)
@@ -107,10 +107,10 @@ class SelfCorrectingExecutor:
                 sql = await self.expand_date_range(sql)
             elif diagnosis.type == "join_issue":
                 sql = await self.fix_joins(sql)
-                
+
             # Retry with corrected query
             result = await self.execute(sql)
-            
+
         return result
 ```
 

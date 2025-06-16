@@ -14,10 +14,10 @@ This comprehensive guide covers:
    ```bash
    git clone https://github.com/yourusername/sens.git
    cd sens
-   
+
    # Backend
    poetry install
-   
+
    # Frontend
    cd web
    npm install
@@ -38,7 +38,7 @@ This comprehensive guide covers:
      -e POSTGRES_DB=sens \
      -p 5432:5432 \
      postgres:14
-   
+
    # Create schema
    psql postgresql://postgres:postgres@localhost/sens < scripts/create_financial_schema.sql
    ```
@@ -47,7 +47,7 @@ This comprehensive guide covers:
    ```bash
    # Terminal 1: Backend
    poetry run uvicorn sens.api.app:app --reload
-   
+
    # Terminal 2: Frontend
    cd web && npm run dev
    ```
@@ -70,7 +70,7 @@ Production deployment uses:
    ```bash
    # Vercel CLI
    npm install -g vercel
-   
+
    # Railway CLI
    curl -fsSL https://railway.app/install.sh | sh
    ```
@@ -264,7 +264,7 @@ For secure local development with HTTPS:
    ```bash
    # macOS
    brew install cloudflare/cloudflare/cloudflared
-   
+
    # Linux
    wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
    sudo dpkg -i cloudflared-linux-amd64.deb

@@ -48,6 +48,9 @@ logs/
 
 # Coverage
 .coverage
+htmlcov/
+coverage.xml
+*.cover
 
 # Temporary files
 .backend.pid
@@ -55,3 +58,22 @@ cloudflared*
 *.pid
 gh_2.58.0_linux_amd64/
 .vercel
+
+# Test files
+test_*.py
+!tests/**/test_*.py
+agent_test_results*.json
+*_analysis.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend specific (in /web)
+web/lib/
+!web/lib/utils.ts
