@@ -77,3 +77,4 @@ Thumbs.db
 # Frontend specific (in /web)
 web/lib/
 !web/lib/utils.ts
+!web/lib/api/
