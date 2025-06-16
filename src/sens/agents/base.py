@@ -103,6 +103,9 @@ class AgentState:
     actions: List[AgentAction] = field(default_factory=list)
     observations: List[AgentObservation] = field(default_factory=list)
 
+    # Agent's running notes about discoveries
+    agent_notes: str = ""
+
     # Current context
     current_sql: Optional[str] = None
     retrieved_schema: Optional[Dict[str, Any]] = None
@@ -159,6 +162,14 @@ class AgentState:
             context_parts.append(item_str)
 
         return "\n".join(context_parts)
+
+    def update_notes(self, new_info: str) -> None:
+        """Update agent's notes with new information."""
+        if self.agent_notes:
+            self.agent_notes += f"\n{new_info}"
+        else:
+            self.agent_notes = f"Agent Notes:\n{new_info}"
+        log.info("agent_notes_updated", notes_length=len(self.agent_notes))
 
     @property
     def should_continue(self) -> bool:

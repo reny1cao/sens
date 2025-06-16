@@ -54,6 +54,7 @@ class ReasoningEngine:
         context: str,
         iteration: int,
         discovered_mappings: Dict[str, str],
+        agent_notes: str = "",
     ) -> Dict[str, Any]:
         """Analyze the current situation and suggest next action.
 
@@ -72,6 +73,7 @@ class ReasoningEngine:
             context,
             iteration,
             discovered_mappings,
+            agent_notes,
         )
 
         # Use LLM to reason
@@ -86,6 +88,7 @@ class ReasoningEngine:
         context: str,
         iteration: int,
         discovered_mappings: Dict[str, str],
+        agent_notes: str = "",
     ) -> str:
         """Build prompt for reasoning about next action."""
         return f"""You are an intelligent PostgreSQL database agent helping to answer user queries.
@@ -95,6 +98,9 @@ DATA DOMAIN: Financial/Stock Market Data
 
 User Query: {user_query}
 Current Iteration: {iteration}/5
+
+Agent Notes (what I've discovered so far):
+{agent_notes if agent_notes else "No notes yet."}
 
 Recent Context:
 {context}
@@ -136,27 +142,32 @@ DECISION RULES:
 
 Respond in this format:
 THOUGHT: <Your reasoning about current situation and next action>
+NOTES_UPDATE: <Any new information to add to your notes, or "None" if nothing new to note>
 CONFIDENCE: <0.0 to 1.0>
 ACTION: <One of: EXPLORE_DATABASE, GENERATE_SQL, EXECUTE_SQL>
 PARAMETERS: <JSON parameters for the action>
 
 PostgreSQL Examples:
 THOUGHT: I need to understand the PostgreSQL database structure first. Let me find what tables exist.
+NOTES_UPDATE: None
 CONFIDENCE: 0.9
 ACTION: EXPLORE_DATABASE
 PARAMETERS: {{"query": "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"}}
 
 THOUGHT: I found a securities table. Let me check if Apple is stored as "Apple" or "AAPL" using PostgreSQL ILIKE.
+NOTES_UPDATE: Found tables: securities, daily_prices, and other financial tables. Need to check securities table for company-to-symbol mappings.
 CONFIDENCE: 0.8
 ACTION: EXPLORE_DATABASE
 PARAMETERS: {{"query": "SELECT symbol, company_name FROM securities WHERE company_name ILIKE '%apple%' OR symbol ILIKE '%aapl%' LIMIT 10"}}
 
 THOUGHT: I need to see the structure of the daily_prices table using PostgreSQL information_schema.
+NOTES_UPDATE: Apple Inc. maps to symbol 'AAPL' in the securities table.
 CONFIDENCE: 0.8
 ACTION: EXPLORE_DATABASE
 PARAMETERS: {{"query": "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'daily_prices' AND table_schema = 'public' ORDER BY ordinal_position"}}
 
 THOUGHT: Now I know Apple is "AAPL" and I found the daily_prices table structure. I can generate PostgreSQL-specific SQL for the user's request.
+NOTES_UPDATE: daily_prices table has columns: symbol, trade_date, open_price, high_price, low_price, close_price, volume, and others.
 CONFIDENCE: 0.9
 ACTION: GENERATE_SQL
 PARAMETERS: {{}}
@@ -199,6 +210,7 @@ IMPORTANT Instructions:
         """Parse the LLM reasoning response."""
         result = {
             "thought": "",
+            "notes_update": None,
             "confidence": 1.0,
             "suggested_action": None,
         }
@@ -208,6 +220,10 @@ IMPORTANT Instructions:
         for line in lines:
             if line.startswith("THOUGHT:"):
                 result["thought"] = line.replace("THOUGHT:", "").strip()
+            elif line.startswith("NOTES_UPDATE:"):
+                notes = line.replace("NOTES_UPDATE:", "").strip()
+                if notes.lower() != "none":
+                    result["notes_update"] = notes
             elif line.startswith("CONFIDENCE:"):
                 try:
                     result["confidence"] = float(

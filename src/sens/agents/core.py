@@ -123,7 +123,12 @@ class SENSAgent(BaseAgent):
             context=context,
             iteration=state.iteration,
             discovered_mappings=state.discovered_mappings,
+            agent_notes=state.agent_notes,
         )
+
+        # Update notes if the agent has new information
+        if reasoning.get("notes_update"):
+            state.update_notes(reasoning["notes_update"])
 
         # Create thought
         thought = state.add_thought(
@@ -335,7 +340,6 @@ class SENSAgent(BaseAgent):
         self, state: AgentState, exploration_data: Dict[str, Any]
     ) -> None:
         """Update exploration results from database exploration."""
-
         # Initialize exploration results structure if needed
         if not state.exploration_results:
             state.exploration_results = {
@@ -402,7 +406,16 @@ class SENSAgent(BaseAgent):
             if action.action_type == ActionType.EXPLORE_DATABASE:
                 query = action.parameters.get("query", "").lower()
 
-                # Extract table name from SQL query
+                # First check for WHERE table_name = 'xxx' pattern (for schema queries)
+                import re
+
+                table_match = re.search(
+                    r"where\s+table_name\s*=\s*['\"]([^'\"]+)['\"]", query
+                )
+                if table_match:
+                    return table_match.group(1)
+
+                # Extract table name from FROM clause
                 if "from " in query:
                     parts = query.split("from ")
                     if len(parts) > 1:
@@ -490,6 +503,7 @@ class SENSAgent(BaseAgent):
                         query=state.user_query,
                         exploration_results=state.exploration_results,
                         mappings=state.discovered_mappings,
+                        agent_notes=state.agent_notes,
                     )
 
                 state.current_sql = result
@@ -527,9 +541,19 @@ class SENSAgent(BaseAgent):
                 }
 
             # Create observation
+            # Check if the result indicates success or failure
+            success = True
+            if isinstance(result, dict):
+                # For execute_sql, check the success flag
+                if "success" in result:
+                    success = result["success"]
+                # For other actions, check for errors
+                elif "error" in result and result["error"]:
+                    success = False
+
             observation = state.add_observation(
                 content=result,
-                success=True,
+                success=success,
                 action_type=action.action_type.value,
             )
 

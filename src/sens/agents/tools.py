@@ -8,6 +8,7 @@ from sqlglot import exp, parse_one
 
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.execution.executor import SQLExecutor
+from sens.execution.safe_executor import SafeSQLExecutor
 from sens.retrieval.embedding.search import EmbeddingSearch
 from sens.schema.graph import SchemaGraph
 from sens.settings import get_settings
@@ -21,7 +22,8 @@ class AgentTools:
     def __init__(self):
         """Initialize agent tools."""
         self.settings = get_settings()
-        self.executor = SQLExecutor(self.settings.db_url)
+        # Use SafeSQLExecutor for better transaction handling
+        self.executor = SafeSQLExecutor(self.settings.db_url)
         self.schema_graph = SchemaGraph.get_instance()
         self.embedding_search = EmbeddingSearch()
         self.chat_orchestrator = None  # Lazy init to avoid circular imports
@@ -86,6 +88,7 @@ class AgentTools:
         query: str,
         exploration_results: Dict[str, Any],
         mappings: Optional[Dict[str, str]] = None,
+        agent_notes: str = "",
     ) -> str:
         """Generate SQL using only what we discovered through database exploration."""
         log.info("tool_generate_sql_exploration", query=query, mappings=mappings)
@@ -111,7 +114,7 @@ class AgentTools:
         # Generate SQL using direct LLM call with exploration context
         try:
             sql = await self._generate_sql_from_exploration(
-                modified_query, schema_context
+                modified_query, schema_context, agent_notes
             )
             return sql
         except Exception as e:
@@ -128,12 +131,23 @@ class AgentTools:
         try:
             result = self.executor.execute(sql)
 
+            # Check if the query actually failed
+            if result.error:
+                log.info("sql_execution_error", error=result.error)
+                return {
+                    "success": False,
+                    "row_count": 0,
+                    "columns": [],
+                    "rows": [],
+                    "error": result.error,
+                }
+
             return {
                 "success": True,
                 "row_count": result.row_count,
                 "columns": result.columns,
                 "rows": result.rows[:100],  # Limit for agent processing
-                "error": result.error,
+                "error": None,
             }
 
         except Exception as e:
@@ -316,7 +330,13 @@ class AgentTools:
             # Prioritize schema info for key tables
             for table in ["daily_prices", "securities", "trades"]:
                 if table in exploration_results["table_schemas"]:
-                    columns = exploration_results["table_schemas"][table]
+                    table_info = exploration_results["table_schemas"][table]
+                    # Handle both dict format and list format
+                    if isinstance(table_info, dict) and "columns" in table_info:
+                        columns = table_info["columns"]
+                    else:
+                        columns = table_info if isinstance(table_info, list) else []
+
                     if columns:
                         # Group columns by type for better understanding
                         key_cols = [
@@ -397,7 +417,7 @@ class AgentTools:
         )
 
     async def _generate_sql_from_exploration(
-        self, query: str, schema_context: str
+        self, query: str, schema_context: str, agent_notes: str = ""
     ) -> str:
         """Generate SQL using direct LLM call with exploration context."""
         # Initialize OpenAI client if needed
@@ -419,6 +439,9 @@ class AgentTools:
 DATABASE: PostgreSQL (use PostgreSQL-specific syntax and functions)
 
 User Request: {query}
+
+Agent's Discovery Notes:
+{agent_notes if agent_notes else "No notes available."}
 
 Database Schema (discovered through exploration):
 {schema_context}

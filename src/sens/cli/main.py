@@ -106,12 +106,29 @@ async def handle_nl2sql(
         # Check Redis availability if session ID is provided
         check_redis_availability(args.session_id)
 
-        # Initialize enhanced pipeline with options
-        pipeline = EnhancedNL2SQLPipeline(
-            session_id=args.session_id,
-            metrics_enabled=args.metrics,
-            debug_mode=args.debug,
-        )
+        # Choose pipeline based on agent flag
+        if args.agent:
+            # Use agent-based pipeline
+            from sens.cli.agent_pipeline import AgentNL2SQLPipeline
+
+            pipeline = AgentNL2SQLPipeline(
+                session_id=args.session_id,
+                metrics_enabled=args.metrics,
+                debug_mode=args.debug,
+                max_iterations=(
+                    args.max_iterations if hasattr(args, "max_iterations") else 10
+                ),
+            )
+            print(
+                f"🤖 Using Agent mode with up to {pipeline.max_iterations} iterations"
+            )
+        else:
+            # Use regular pipeline
+            pipeline = EnhancedNL2SQLPipeline(
+                session_id=args.session_id,
+                metrics_enabled=args.metrics,
+                debug_mode=args.debug,
+            )
 
         # Print session ID at start
         if args.session_id:
@@ -535,6 +552,17 @@ def main() -> None:
         "--session-id",
         help="Session ID for conversation continuity. If not provided, a new session will be created.",
     )
+    nl2sql_parser.add_argument(
+        "--agent",
+        action="store_true",
+        help="Use agent-based reasoning for complex queries (experimental)",
+    )
+    nl2sql_parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=10,
+        help="Maximum iterations for agent reasoning (only used with --agent)",
+    )
 
     # Schema extraction command
     extract_parser = subparsers.add_parser(
@@ -700,18 +728,19 @@ def main() -> None:
     )
 
     # Financial data management command (handled by click)
-    financial_parser = subparsers.add_parser("financial", help="Financial data management", add_help=False)
+    subparsers.add_parser("financial", help="Financial data management", add_help=False)
     # Note: Financial subcommands are handled by click, not argparse
 
     # Handle financial command specially to pass through to click
-    if len(sys.argv) > 1 and sys.argv[1] == 'financial':
+    if len(sys.argv) > 1 and sys.argv[1] == "financial":
         # Import and run financial commands using click directly
         from sens.cli.commands.financial import financial
+
         # Remove 'sens' from argv and call financial with remaining args
-        sys.argv = ['financial'] + sys.argv[2:]
+        sys.argv = ["financial"] + sys.argv[2:]
         financial()
         return
-    
+
     args = parser.parse_args()
 
     # Configure logging first, before any other operations

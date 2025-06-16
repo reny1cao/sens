@@ -45,6 +45,55 @@ def format_metrics(metrics: Dict[str, Any], indent: int = 0) -> str:
     return "\n".join(lines)
 
 
+def format_agent_trace(metadata: Dict[str, Any], indent: int = 0) -> str:
+    """Format agent reasoning trace for display.
+
+    Args:
+        metadata: Metadata containing agent trace
+        indent: Number of spaces to indent
+
+    Returns:
+        Formatted agent trace string
+    """
+    if not metadata or "agent_trace" not in metadata:
+        return ""
+
+    trace = metadata["agent_trace"]
+    lines = []
+    pad = " " * indent
+
+    # Format iterations
+    iterations = metadata.get("iterations", 0)
+    lines.append(f"{pad}Agent completed in {iterations} iteration(s)")
+
+    # Format thoughts
+    if trace.get("thoughts"):
+        lines.append(f"\n{pad}Reasoning Steps:")
+        for i, thought in enumerate(trace["thoughts"], 1):
+            lines.append(f"{pad}  {i}. {thought['content']}")
+
+    # Format actions
+    if trace.get("actions"):
+        lines.append(f"\n{pad}Actions Taken:")
+        for action in trace["actions"]:
+            action_type = action["type"]
+            params = action.get("parameters", {})
+            if params:
+                param_str = ", ".join(f"{k}={v}" for k, v in params.items() if v)
+                lines.append(f"{pad}  - {action_type}({param_str})")
+            else:
+                lines.append(f"{pad}  - {action_type}")
+
+    # Format discovered mappings
+    if trace.get("key_discoveries", {}).get("value_mappings"):
+        mappings = trace["key_discoveries"]["value_mappings"]
+        lines.append(f"\n{pad}Discovered Mappings:")
+        for user_term, db_value in mappings.items():
+            lines.append(f"{pad}  - '{user_term}' → '{db_value}'")
+
+    return "\n".join(lines)
+
+
 def format_debug_info(debug: Dict[str, Any], indent: int = 0) -> str:
     """Format debug information into a readable string.
 
@@ -121,20 +170,28 @@ def _format_table_response(
         lines.append("")
 
     # Add preview if enabled and present
-    if show_preview and "result" in result and "preview" in result["result"]:
-        preview = result["result"]["preview"]
+    if show_preview and (
+        "table_preview" in result
+        or ("result" in result and "preview" in result["result"])
+    ):
+        # Handle both new format (table_preview) and old format (result.preview)
+        preview = result.get("table_preview") or result.get("result", {}).get(
+            "preview", []
+        )
+        headers = result.get("columns") or result.get("result", {}).get("columns", [])
+        row_count = result.get("row_count") or result.get("result", {}).get(
+            "row_count", 0
+        )
+
         if preview:
             lines.append("Preview:")
-            headers = result["result"].get("columns", [])
             table = tabulate(
                 preview[:max_rows],
                 headers=headers,
                 tablefmt="grid",
             )
             lines.append(table)
-            lines.append(
-                f"\nShowing {len(preview[:max_rows])} of {result['result'].get('row_count', 0)} rows"
-            )
+            lines.append(f"\nShowing {len(preview[:max_rows])} of {row_count} rows")
             lines.append("")
 
     # Add metrics if enabled
@@ -150,6 +207,12 @@ def _format_table_response(
     # Add debug info if enabled
     if show_debug and "metadata" in result and "debug" in result["metadata"]:
         lines.append(format_debug_info(result["metadata"]["debug"], indent=2))
+        lines.append("")
+
+    # Add agent trace if present
+    if "metadata" in result and "agent_trace" in result["metadata"]:
+        lines.append("Agent Reasoning:")
+        lines.append(format_agent_trace(result["metadata"], indent=2))
         lines.append("")
 
     return "\n".join(lines)
@@ -180,6 +243,20 @@ def _format_summary_response(
     if show_debug and "metadata" in result and "debug" in result["metadata"]:
         lines.append("")
         lines.append(format_debug_info(result["metadata"]["debug"], indent=2))
+
+    # Add agent trace if present (compact version for summary)
+    if "metadata" in result and "agent_trace" in result["metadata"]:
+        iterations = result["metadata"].get("iterations", 0)
+        mappings = (
+            result["metadata"]
+            .get("agent_trace", {})
+            .get("key_discoveries", {})
+            .get("value_mappings", {})
+        )
+        if iterations > 0:
+            lines.append(f"\n(Agent used {iterations} reasoning steps)")
+        if mappings:
+            lines.append(f"(Discovered {len(mappings)} value mapping(s))")
 
     return "\n".join(lines)
 
