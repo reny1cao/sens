@@ -8,6 +8,7 @@ import structlog
 
 from sens.agents.base import AgentAction, AgentObservation, AgentThought
 from sens.agents.core import SENSAgent
+from sens.agents.reflection import ReflectionEngine
 
 log = structlog.get_logger()
 
@@ -16,6 +17,7 @@ class EventEmittingAgent(SENSAgent):
     """Agent that emits events for real-time monitoring."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the event-emitting agent."""
         super().__init__(*args, **kwargs)
         self.event_handlers: List[Callable] = []
         self.event_queue: asyncio.Queue = asyncio.Queue()
@@ -45,7 +47,7 @@ class EventEmittingAgent(SENSAgent):
             except Exception as e:
                 log.error("event_handler_error", error=str(e), event_type=event_type)
 
-    async def reason(self, state) -> AgentThought:
+    async def reason(self, state) -> Dict[str, Any]:
         """Override to emit reasoning events."""
         # Emit that we're starting to think
         await self.emit_event(
@@ -53,38 +55,38 @@ class EventEmittingAgent(SENSAgent):
         )
 
         # Call parent method
-        thought = await super().reason(state)
+        reasoning_result = await super().reason(state)
 
-        # Emit the thought
+        # Emit the reasoning result
         await self.emit_event(
-            "thought",
+            "reasoning",
             {
                 "iteration": state.iteration,
-                "content": thought.content,
-                "confidence": thought.confidence,
-                "metadata": thought.metadata,
+                "action_type": reasoning_result.get("action_type"),
+                "reasoning": reasoning_result.get("reasoning"),
+                "notes": reasoning_result.get("notes"),
             },
         )
 
-        return thought
+        return reasoning_result
 
-    async def act(self, state, thought) -> AgentAction:
+    async def act(self, state, reasoning_result) -> AgentObservation:
         """Override to emit action events."""
-        # Call parent method
-        action = await super().act(state, thought)
-
-        # Emit the action
+        # Emit the action about to be taken
         await self.emit_event(
             "action",
             {
                 "iteration": state.iteration,
-                "action_type": action.action_type.value,
-                "parameters": action.parameters,
-                "reasoning": action.reasoning,
+                "action_type": reasoning_result.get("action_type"),
+                "parameters": reasoning_result.get("parameters"),
+                "reasoning": reasoning_result.get("reasoning"),
             },
         )
 
-        return action
+        # Call parent method
+        observation = await super().act(state, reasoning_result)
+
+        return observation
 
     async def observe(self, state, action) -> AgentObservation:
         """Override to emit observation events."""

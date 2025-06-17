@@ -210,7 +210,7 @@ class AgentTools:
         except Exception:
             return False
 
-    async def explore_database(self, query: str) -> Dict[str, Any]:
+    async def explore_database(self, query: str = None) -> Dict[str, Any]:
         """Execute exploratory SQL queries to understand the PostgreSQL database.
 
         This tool allows direct SQL execution for exploration purposes:
@@ -229,6 +229,14 @@ class AgentTools:
         Returns:
             Dict with query results and metadata
         """
+        # Validate required parameter
+        if not query:
+            return {
+                "success": False,
+                "error": "Missing required parameter: query",
+                "hint": "Provide a SQL query to explore the database. Example: SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
+            }
+
         log.info("tool_explore_database_postgresql", query=query)
 
         try:

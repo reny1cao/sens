@@ -15,6 +15,7 @@ from sens.agents.base import (
 )
 from sens.agents.memory import AgentMemory
 from sens.agents.reasoning import ReasoningEngine
+from sens.agents.reflection import ReflectionEngine
 from sens.agents.tools import AgentTools
 from sens.exceptions import AgentError
 
@@ -29,6 +30,7 @@ class SENSAgent(BaseAgent):
         tools: Optional[AgentTools] = None,
         memory: Optional[AgentMemory] = None,
         reasoning_engine: Optional[ReasoningEngine] = None,
+        reflection_engine: Optional[ReflectionEngine] = None,
         max_iterations: int = 5,
     ):
         """Initialize the SENS agent.
@@ -37,11 +39,13 @@ class SENSAgent(BaseAgent):
             tools: Agent tools for database operations
             memory: Agent memory for learning
             reasoning_engine: Engine for LLM-based reasoning
+            reflection_engine: Engine for interpreting observations
             max_iterations: Maximum number of reasoning iterations
         """
         self.tools = tools or AgentTools()
         self.memory = memory or AgentMemory()
         self.reasoning_engine = reasoning_engine or ReasoningEngine()
+        self.reflection_engine = reflection_engine or ReflectionEngine()
         self.max_iterations = max_iterations
 
         log.info("sens_agent_initialized", max_iterations=max_iterations)
@@ -72,26 +76,44 @@ class SENSAgent(BaseAgent):
         )
 
         try:
-            # Main ReAct loop
+            # Simple loop: reason and act
             while state.should_continue:
                 state.iteration += 1
 
-                # THINK: Reason about what to do next
-                thought = await self.reason(state)
+                log.info(
+                    "🔄 agent_iteration_start",
+                    iteration=f"{state.iteration}/{state.max_iterations}",
+                    query=(
+                        user_query[:100] + "..."
+                        if len(user_query) > 100
+                        else user_query
+                    ),
+                )
 
-                # ACT: Choose and execute an action
-                action = await self.act(state, thought)
+                # REASON: Analyze everything and decide what to do
+                reasoning_result = await self.reason(state)
 
-                # OBSERVE: Get the result
-                observation = await self.observe(state, action)
-
-                # REFLECT: Update state based on observation
-                await self.reflect(state, observation)
+                # ACT: Execute the action
+                observation = await self.act(state, reasoning_result)
 
                 # Check for success
-                if observation.success and action.action_type == ActionType.EXECUTE_SQL:
+                if (
+                    observation.success
+                    and observation.metadata.get("action_type")
+                    == ActionType.EXECUTE_SQL.value
+                ):
                     state.success = True
                     state.final_result = observation.content
+
+                    log.info(
+                        "✅ agent_success",
+                        iteration=state.iteration,
+                        row_count=(
+                            observation.content.get("row_count", 0)
+                            if isinstance(observation.content, dict)
+                            else "N/A"
+                        ),
+                    )
 
                     # Store successful patterns
                     await self.memory.store_successful_query(
@@ -112,229 +134,158 @@ class SENSAgent(BaseAgent):
             )
             return self._build_error_response(state, e)
 
-    async def reason(self, state: AgentState) -> AgentThought:
-        """Analyze the current state and decide what to do next."""
-        # Get recent context
-        context = state.get_recent_context()
+    async def reason(self, state: AgentState) -> Dict[str, Any]:
+        """Analyze everything and decide what action to take."""
+        log.info("🤔 agent_reasoning_start", iteration=state.iteration)
 
-        # Use reasoning engine to analyze situation
-        reasoning = await self.reasoning_engine.analyze_situation(
-            user_query=state.user_query,
-            context=context,
+        # Build complete context
+        context = self._build_full_context(state)
+
+        # Log context summary
+        log.debug(
+            "agent_context_summary",
             iteration=state.iteration,
-            discovered_mappings=state.discovered_mappings,
-            agent_notes=state.agent_notes,
+            discovered_tables=len(
+                state.exploration_results.get("discovered_tables", [])
+            ),
+            has_sql=bool(state.current_sql),
+            notes_length=len(state.agent_notes),
+            previous_actions=len(state.actions),
         )
 
-        # Update notes if the agent has new information
-        if reasoning.get("notes_update"):
-            state.update_notes(reasoning["notes_update"])
-
-        # Create thought
-        thought = state.add_thought(
-            content=reasoning["thought"],
-            confidence=reasoning.get("confidence", 1.0),
-            next_action=reasoning.get("suggested_action"),
+        # Ask LLM to reason and decide
+        reasoning = await self.reasoning_engine.decide_action(
+            user_query=state.user_query,
+            full_context=context,
+            iteration=state.iteration,
         )
 
-        return thought
+        # Log reasoning result
+        log.info(
+            "💡 agent_reasoning_decision",
+            iteration=state.iteration,
+            action=reasoning.get("action_type"),
+            reason=(
+                reasoning.get("reasoning")[:200] + "..."
+                if len(reasoning.get("reasoning", "")) > 200
+                else reasoning.get("reasoning")
+            ),
+        )
 
-    async def act(self, state: AgentState, thought: AgentThought) -> AgentAction:
-        """Choose an action based on the current thought."""
-        # Determine action type from thought
-        suggested_action = thought.metadata.get("next_action")
+        # Update notes if provided
+        if reasoning.get("notes"):
+            state.update_notes(reasoning["notes"])
+            log.info(
+                "📝 agent_notes_added",
+                iteration=state.iteration,
+                new_note=reasoning["notes"],
+            )
 
-        if not suggested_action:
-            # MINIMAL MODE: Only generate_sql -> execute_sql flow
-            if not state.current_sql:
-                action_type = ActionType.GENERATE_SQL
-                parameters = {}  # Will be filled by tool
-            else:
-                action_type = ActionType.EXECUTE_SQL
-                parameters = {"sql": state.current_sql}
-        else:
-            # Use suggested action from reasoning - but only allow EXPLORE_DATABASE, GENERATE_SQL and EXECUTE_SQL
-            suggested_type = suggested_action["type"]
+        return reasoning
 
-            if suggested_type not in [
-                "EXPLORE_DATABASE",
-                "GENERATE_SQL",
-                "EXECUTE_SQL",
-            ]:
-                # Force fallback to allowed actions - start with exploration if no schema
-                if not state.retrieved_schema and not state.current_sql:
-                    action_type = ActionType.EXPLORE_DATABASE
-                    parameters = {
-                        "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-                    }
-                elif not state.current_sql:
-                    action_type = ActionType.GENERATE_SQL
-                    parameters = {}
-                else:
-                    action_type = ActionType.EXECUTE_SQL
-                    parameters = {"sql": state.current_sql}
-                log.info(
-                    "forced_action_fallback",
-                    original=suggested_type,
-                    forced=action_type.value,
+    def _build_full_context(self, state: AgentState) -> str:
+        """Build complete context for reasoning."""
+        context_parts = []
+
+        # Add iteration info
+        context_parts.append(
+            f"=== ITERATION {state.iteration}/{state.max_iterations} ==="
+        )
+
+        # Add all previous actions and observations
+        for i, (action, obs) in enumerate(zip(state.actions, state.observations)):
+            context_parts.append(f"\n--- Action {i+1} ---")
+            context_parts.append(f"Type: {action.action_type.value}")
+            context_parts.append(f"Parameters: {action.parameters}")
+            context_parts.append(f"Result: {'Success' if obs.success else 'Failed'}")
+            if obs.content:
+                context_parts.append(f"Content: {str(obs.content)[:500]}...")
+            if obs.error:
+                context_parts.append(f"Error: {obs.error}")
+
+        # Add discovered information
+        if state.exploration_results:
+            context_parts.append("\n=== DISCOVERED INFORMATION ===")
+            if state.exploration_results.get("discovered_tables"):
+                tables = state.exploration_results["discovered_tables"]
+                context_parts.append(f"Tables: {', '.join(tables)}")
+            if state.exploration_results.get("table_schemas"):
+                context_parts.append(
+                    f"Explored schemas: {list(state.exploration_results['table_schemas'].keys())}"
                 )
-            else:
-                action_type = ActionType[suggested_type]
-                parameters = suggested_action.get("parameters", {})
 
-            # Validate and add required parameters for allowed actions only
-            if action_type in [
-                ActionType.EXPLORE_DATABASE,
-                ActionType.GENERATE_SQL,
-                ActionType.EXECUTE_SQL,
-            ]:
-                parameters = self._validate_action_parameters(
-                    action_type, parameters, state
-                )
+        # Add current SQL if any
+        if state.current_sql:
+            context_parts.append("\n=== CURRENT SQL ===")
+            context_parts.append(state.current_sql)
 
-        # Create action with reasoning
+        # Add notes
+        if state.agent_notes:
+            context_parts.append("\n=== AGENT NOTES ===")
+            context_parts.append(state.agent_notes)
+
+        return "\n".join(context_parts)
+
+    async def act(
+        self, state: AgentState, reasoning_result: Dict[str, Any]
+    ) -> AgentObservation:
+        """Execute the action decided by reasoning."""
+        action_type = reasoning_result.get("action_type")
+        parameters = reasoning_result.get("parameters", {})
+
+        # Log action execution
+        log.info(
+            "🎯 agent_action_execute",
+            iteration=state.iteration,
+            action=action_type,
+            has_params=bool(parameters),
+        )
+
+        # Create action record
         action = state.add_action(
-            action_type=action_type,
+            action_type=ActionType[action_type],
             parameters=parameters,
-            reasoning=thought.content,
+            reasoning=reasoning_result.get("reasoning", ""),
         )
 
-        return action
+        # Execute the action
+        observation = await self.observe(state, action)
 
-    def _validate_action_parameters(
-        self, action_type: ActionType, parameters: Dict[str, Any], state: AgentState
-    ) -> Dict[str, Any]:
-        """Validate and fill in missing required parameters for actions."""
-        # Make a copy to avoid modifying the original
-        validated_params = parameters.copy()
+        # Log observation result
+        if observation.success:
+            log.info(
+                "✓ agent_action_success",
+                iteration=state.iteration,
+                action=action_type,
+                result_type=(
+                    type(observation.content).__name__
+                    if observation.content
+                    else "None"
+                ),
+                result_size=self._get_result_size(observation.content),
+            )
+        else:
+            log.warning(
+                "✗ agent_action_failed",
+                iteration=state.iteration,
+                action=action_type,
+                error=observation.error,
+            )
 
-        if action_type == ActionType.SEARCH_SCHEMA:
-            if "query" not in validated_params:
-                validated_params["query"] = state.user_query
-                log.info("added_missing_query_parameter", query=state.user_query)
+        return observation
 
-        elif action_type == ActionType.SEARCH_VALUES:
-            # Ensure required parameters exist
-            if "table" not in validated_params:
-                # Try to extract from schema or use a default
-                if state.retrieved_schema and "tables" in state.retrieved_schema:
-                    tables = state.retrieved_schema["tables"]
-                    if tables:
-                        validated_params["table"] = tables[0].get("name", "unknown")
-                        log.info(
-                            "inferred_table_parameter", table=validated_params["table"]
-                        )
-
-            if "column" not in validated_params:
-                validated_params["column"] = "symbol"  # Common financial column
-                log.info("defaulted_column_parameter", column="symbol")
-
-        elif action_type == ActionType.FIND_SIMILAR_VALUES:
-            # Ensure user_term exists
-            if "user_term" not in validated_params:
-                # Extract potential terms from user query
-                query_words = state.user_query.split()
-                # Look for capitalized words (likely entities), excluding common words
-                common_words = {
-                    "Show",
-                    "Give",
-                    "Get",
-                    "Find",
-                    "List",
-                    "What",
-                    "How",
-                    "When",
-                    "Where",
-                }
-                candidates = [
-                    word
-                    for word in query_words
-                    if word[0].isupper() and word not in common_words
-                ]
-                if candidates:
-                    validated_params["user_term"] = candidates[0]
-                    log.info("inferred_user_term", term=candidates[0])
-                else:
-                    # Fallback: use the most important noun-like word
-                    validated_params["user_term"] = (
-                        "Apple"  # Reasonable default for stock queries
-                    )
-                    log.info("defaulted_user_term", term="Apple")
-
-            # Ensure table and column exist
-            if "table" not in validated_params:
-                if state.retrieved_schema and "tables" in state.retrieved_schema:
-                    tables = state.retrieved_schema["tables"]
-                    if tables:
-                        # Get the actual table name from the schema
-                        table_name = tables[0].get("table_name") or tables[0].get(
-                            "name", "daily_prices_2024_01"
-                        )
-                        validated_params["table"] = table_name
-                        log.info(
-                            "inferred_table_for_similar_values",
-                            table=validated_params["table"],
-                        )
-                else:
-                    validated_params["table"] = (
-                        "daily_prices"  # Default financial table
-                    )
-                    log.info("defaulted_table_for_similar_values", table="daily_prices")
-
-            if "column" not in validated_params:
-                validated_params["column"] = "symbol"  # Default to symbol column
-                log.info("defaulted_column_for_similar_values", column="symbol")
-
-        elif action_type == ActionType.GENERATE_SQL:
-            if "query" not in validated_params:
-                validated_params["query"] = state.user_query
-            if "schema" not in validated_params:
-                validated_params["schema"] = state.retrieved_schema or {}
-
-        elif action_type == ActionType.EXECUTE_SQL:
-            if "sql" not in validated_params:
-                validated_params["sql"] = state.current_sql
-
-        elif action_type == ActionType.EXPLORE_DATABASE:
-            # Ensure query parameter exists
-            if "query" not in validated_params:
-                # Smart inference based on what we've already discovered
-                if not state.exploration_results.get("discovered_tables"):
-                    # First exploration - find tables
-                    validated_params["query"] = (
-                        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-                    )
-                elif "daily_prices" in state.exploration_results.get(
-                    "discovered_tables", []
-                ):
-                    # We know about daily_prices but haven't explored its structure
-                    if "daily_prices" not in state.exploration_results.get(
-                        "table_schemas", {}
-                    ):
-                        validated_params["query"] = "SELECT * FROM daily_prices LIMIT 5"
-                    else:
-                        # Try a different table or different aspect
-                        validated_params["query"] = (
-                            "SELECT column_name FROM information_schema.columns WHERE table_name = 'daily_prices'"
-                        )
-                elif "securities" in state.exploration_results.get(
-                    "discovered_tables", []
-                ):
-                    # We know about securities but haven't explored it
-                    if "securities" not in state.exploration_results.get(
-                        "table_schemas", {}
-                    ):
-                        validated_params["query"] = "SELECT * FROM securities LIMIT 5"
-                    else:
-                        validated_params["query"] = "SELECT * FROM daily_prices LIMIT 5"
-                else:
-                    # Fallback
-                    validated_params["query"] = (
-                        "SELECT table_name FROM information_schema.tables LIMIT 10"
-                    )
-                log.info("inferred_exploration_query", query=validated_params["query"])
-
-        return validated_params
+    def _get_result_size(self, content: Any) -> str:
+        """Get a human-readable size description of the result."""
+        if isinstance(content, dict):
+            if "row_count" in content:
+                return f"{content['row_count']} rows"
+            elif "data" in content and isinstance(content["data"], list):
+                return f"{len(content['data'])} items"
+        elif isinstance(content, str):
+            return f"{len(content)} chars"
+        elif isinstance(content, list):
+            return f"{len(content)} items"
+        return "unknown"
 
     def _update_exploration_results(
         self, state: AgentState, exploration_data: Dict[str, Any]
@@ -489,6 +440,8 @@ class SENSAgent(BaseAgent):
         try:
             # MINIMAL MODE: Only handle GENERATE_SQL and EXECUTE_SQL
             if action.action_type == ActionType.GENERATE_SQL:
+                log.debug("🔨 generating_sql", iteration=state.iteration)
+
                 # Check memory for similar queries first
                 cached_sql = await self.memory.recall_similar_query(
                     state.user_query,
@@ -497,7 +450,7 @@ class SENSAgent(BaseAgent):
 
                 if cached_sql:
                     result = cached_sql
-                    log.info("using_cached_sql", sql=cached_sql)
+                    log.info("💾 using_cached_sql", sql=cached_sql[:100] + "...")
                 else:
                     result = await self.tools.generate_sql(
                         query=state.user_query,
@@ -505,14 +458,52 @@ class SENSAgent(BaseAgent):
                         mappings=state.discovered_mappings,
                         agent_notes=state.agent_notes,
                     )
+                    log.info(
+                        "📝 sql_generated",
+                        iteration=state.iteration,
+                        sql_preview=(
+                            result[:100] + "..." if len(result) > 100 else result
+                        ),
+                    )
 
                 state.current_sql = result
 
             elif action.action_type == ActionType.EXECUTE_SQL:
+                log.debug("🚀 executing_sql", iteration=state.iteration)
                 result = await self.tools.execute_sql(**action.parameters)
 
+                if result.get("success"):
+                    log.info(
+                        "📊 sql_execution_complete",
+                        iteration=state.iteration,
+                        rows=result.get("row_count", 0),
+                        columns=len(result.get("columns", [])),
+                    )
+
             elif action.action_type == ActionType.EXPLORE_DATABASE:
+                query_preview = action.parameters.get("query", "")[:100]
+                log.debug(
+                    "🔍 exploring_database",
+                    iteration=state.iteration,
+                    query=query_preview,
+                )
+
                 result = await self.tools.explore_database(**action.parameters)
+
+                # Update exploration results if successful
+                if result.get("success") and result.get("data"):
+                    self._update_exploration_results(state, result)
+                    log.info(
+                        "💎 exploration_discovered",
+                        iteration=state.iteration,
+                        rows_found=result.get("row_count", 0),
+                        tables_discovered=len(
+                            state.exploration_results.get("discovered_tables", [])
+                        ),
+                        schemas_mapped=len(
+                            state.exploration_results.get("table_schemas", {})
+                        ),
+                    )
 
             # All other actions are disabled in minimal mode
             elif action.action_type == ActionType.SEARCH_SCHEMA:
@@ -557,6 +548,23 @@ class SENSAgent(BaseAgent):
                 action_type=action.action_type.value,
             )
 
+            # Log the full observation for debugging
+            log.info(
+                "agent_observation_detail",
+                iteration=state.iteration,
+                action_type=action.action_type.value,
+                success=success,
+                content_type=type(result).__name__,
+                content_preview=(
+                    str(result)[:500] + "..." if len(str(result)) > 500 else str(result)
+                ),
+                full_content=(
+                    result
+                    if isinstance(result, dict) and len(str(result)) < 1000
+                    else "Content too large - see content_preview"
+                ),
+            )
+
         except Exception as e:
             log.error("action_failed", action=action.action_type.value, error=str(e))
             observation = state.add_observation(
@@ -569,8 +577,99 @@ class SENSAgent(BaseAgent):
         return observation
 
     async def reflect(self, state: AgentState, observation: AgentObservation) -> None:
-        """Reflect on the observation and update state."""
-        # Handle different types of observations
+        """Reflect on the observation and update state.
+
+        This is the LEARN phase of ReAct where we:
+        1. Create full context from the observation
+        2. Let the reasoning engine reflect on it
+        3. Update agent notes with discoveries
+        """
+        # Get the action that led to this observation
+        last_action = state.get_last_action()
+        if not last_action:
+            return
+
+        # Create reflection context with full observation
+        reflection_context = self.reflection_engine.create_reflection_context(
+            state=state, action=last_action, observation=observation
+        )
+
+        # Log the reflection context
+        log.info(
+            "agent_reflection_context",
+            iteration=state.iteration,
+            context_preview=(
+                reflection_context[:500] + "..."
+                if len(reflection_context) > 500
+                else reflection_context
+            ),
+        )
+
+        # Ask reasoning engine to reflect on this context
+        reflection_prompt = f"""
+Based on the following action and observation, what did we learn?
+What should we note for future iterations?
+
+{reflection_context}
+
+Respond with:
+LEARNINGS: <What we discovered from this observation>
+NOTES_UPDATE: <Specific notes to add about what we found or didn't find>
+NEXT_DIRECTION: <What we should explore next based on this>
+"""
+
+        try:
+            # Use reasoning engine to reflect
+            reflection_response = await self.reasoning_engine._call_llm(
+                reflection_prompt
+            )
+
+            # Parse reflection response
+            lines = reflection_response.strip().split("\n")
+            learnings = ""
+            notes_update = ""
+            next_direction = ""
+
+            for line in lines:
+                if line.startswith("LEARNINGS:"):
+                    learnings = line.replace("LEARNINGS:", "").strip()
+                elif line.startswith("NOTES_UPDATE:"):
+                    notes_update = line.replace("NOTES_UPDATE:", "").strip()
+                elif line.startswith("NEXT_DIRECTION:"):
+                    next_direction = line.replace("NEXT_DIRECTION:", "").strip()
+
+            # Update notes if we have them
+            if notes_update and notes_update.lower() != "none":
+                state.update_notes(notes_update)
+                log.info(
+                    "reflection_notes_update",
+                    iteration=state.iteration,
+                    notes_update=notes_update,
+                    full_notes=state.agent_notes,
+                )
+
+            # Add learnings as a thought
+            if learnings:
+                state.add_thought(f"Reflection: {learnings}", confidence=0.9)
+
+            # Log the reflection results
+            log.info(
+                "agent_reflection_complete",
+                iteration=state.iteration,
+                learnings=learnings,
+                notes_update=notes_update,
+                next_direction=next_direction,
+            )
+
+        except Exception as e:
+            log.error("reflection_failed", error=str(e))
+            # Fall back to simple reflection
+            state.add_thought(
+                f"Observed: {observation.success}. Need to analyze results and plan next step.",
+                confidence=0.7,
+            )
+
+        # Original reflection logic for specific cases
         if not observation.success:
             # Analyze the error
             if "does not exist" in str(observation.error):
@@ -591,10 +690,7 @@ class SENSAgent(BaseAgent):
                 # Update exploration results from database exploration
                 if observation.content and observation.content.get("success"):
                     self._update_exploration_results(state, observation.content)
-                    state.add_thought(
-                        f"Explored database and discovered: {observation.content.get('row_count', 0)} rows. "
-                        f"This adds to my understanding of the database structure."
-                    )
+                    # Don't add generic thought - reflection engine handles this
 
             elif action_type == ActionType.SEARCH_SCHEMA.value:
                 # Count how many times we've searched schema
@@ -638,18 +734,11 @@ class SENSAgent(BaseAgent):
         return {
             "success": state.success,
             "result": state.final_result,
-            "reasoning_trace": [
-                {
-                    "type": "thought",
-                    "content": thought.content,
-                    "timestamp": thought.timestamp.isoformat(),
-                }
-                for thought in state.thoughts
-            ],
             "actions_taken": [
                 {
                     "type": action.action_type.value,
                     "parameters": action.parameters,
+                    "reasoning": action.reasoning,
                     "timestamp": action.timestamp.isoformat(),
                 }
                 for action in state.actions

@@ -48,39 +48,106 @@ class ReasoningEngine:
 
         log.info("reasoning_engine_initialized", models=self.models)
 
-    async def analyze_situation(
+    async def decide_action(
         self,
         user_query: str,
-        context: str,
+        full_context: str,
         iteration: int,
-        discovered_mappings: Dict[str, str],
-        agent_notes: str = "",
     ) -> Dict[str, Any]:
-        """Analyze the current situation and suggest next action.
+        """Decide what action to take based on full context.
 
         Args:
             user_query: Original user query
-            context: Recent thoughts, actions, and observations
+            full_context: Complete context including all history
             iteration: Current iteration number
-            discovered_mappings: Value mappings discovered so far
 
         Returns:
-            Dict with thought and suggested action
+            Dict with action_type, parameters, reasoning, and notes
         """
-        # Build prompt for reasoning
-        prompt = self._build_reasoning_prompt(
-            user_query,
-            context,
-            iteration,
-            discovered_mappings,
-            agent_notes,
-        )
+        prompt = f"""You are an intelligent database agent. Analyze the context and decide what to do next.
 
-        # Use LLM to reason
+User Query: {user_query}
+
+Current Context:
+{full_context}
+
+Available Actions:
+1. EXPLORE_DATABASE - Execute a SQL query to explore the database
+2. GENERATE_SQL - Generate SQL to answer the user's query
+3. EXECUTE_SQL - Execute the generated SQL
+
+Based on the context, decide which action to take and provide the necessary parameters.
+
+Respond in this JSON format:
+{{
+    "action_type": "EXPLORE_DATABASE|GENERATE_SQL|EXECUTE_SQL",
+    "parameters": {{...}},
+    "reasoning": "Why you chose this action",
+    "notes": "Any important discoveries to remember (optional)"
+}}
+
+For EXPLORE_DATABASE, parameters should be: {{"query": "SELECT ..."}}
+For GENERATE_SQL, parameters can be empty: {{}}
+For EXECUTE_SQL, parameters can be empty: {{}}
+"""
+
+        # Use LLM to decide
         response = await self._call_llm(prompt)
 
-        # Parse response
-        return self._parse_reasoning_response(response)
+        # Parse JSON response
+        return self._parse_json_response(response)
+
+    def _parse_json_response(self, response: str) -> Dict[str, Any]:
+        """Parse JSON response from LLM."""
+        try:
+            # Try to extract JSON from the response
+            import json
+            import re
+
+            # Look for JSON block
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                result = json.loads(json_str)
+
+                # Ensure required fields
+                if "action_type" not in result:
+                    log.error(
+                        "missing_action_type_in_response", response=response[:200]
+                    )
+                    result["action_type"] = "EXPLORE_DATABASE"
+                    result["parameters"] = {
+                        "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                    }
+
+                if "parameters" not in result:
+                    result["parameters"] = {}
+
+                if "reasoning" not in result:
+                    result["reasoning"] = "Proceeding with exploration"
+
+                return result
+            else:
+                log.error("no_json_in_response", response=response[:200])
+                # Fallback
+                return {
+                    "action_type": "EXPLORE_DATABASE",
+                    "parameters": {
+                        "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                    },
+                    "reasoning": "Starting with database exploration",
+                }
+
+        except Exception as e:
+            log.error("json_parse_error", error=str(e), response=response[:200])
+            # Fallback
+            return {
+                "action_type": "EXPLORE_DATABASE",
+                "parameters": {
+                    "query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                },
+                "reasoning": "Starting with database exploration",
+            }
 
     def _build_reasoning_prompt(
         self,
@@ -99,8 +166,11 @@ DATA DOMAIN: Financial/Stock Market Data
 User Query: {user_query}
 Current Iteration: {iteration}/5
 
-Agent Notes (what I've discovered so far):
-{agent_notes if agent_notes else "No notes yet."}
+========================================
+AGENT NOTES (IMPORTANT - What I've learned so far):
+========================================
+{agent_notes if agent_notes else "No notes yet. This is my first iteration."}
+========================================
 
 Recent Context:
 {context}
@@ -110,10 +180,11 @@ Discovered Value Mappings:
 
 Based on the above context, reason about what to do next. Consider:
 1. Have we successfully retrieved schema? If not, we should search for it.
-2. Have we generated SQL? If not and we have schema, generate it.
-3. Did the SQL execution fail or return empty results? Diagnose why.
-4. Are there value mismatches? Search for correct database values.
-5. Should we try a different approach?
+2. Check discovered tables - is there an 'economic_indicators' table for Federal Funds Rate?
+3. Have we generated SQL? If not and we have schema, generate it.
+4. Did the SQL execution fail or return empty results? Diagnose why.
+5. Are there value mismatches? Search for correct database values.
+6. Should we try a different approach?
 
 IMPORTANT: If you've already searched for schema multiple times successfully, move on to generating SQL. Don't get stuck repeating the same action.
 
@@ -136,9 +207,11 @@ Strategy:
 DECISION RULES:
 - If you have NO schema knowledge: use EXPLORE_DATABASE to find tables
 - If you found tables but need column info: use EXPLORE_DATABASE to examine table structure
+- If you need data that's not in current table: EXPLORE_DATABASE to find other tables
+- If looking for sector/market_cap but only found price data: search for company/securities table
 - If you found company mappings (e.g., Apple→AAPL): you have enough info to GENERATE_SQL
 - If you have SQL but haven't executed it: use EXECUTE_SQL
-- If you've explored 3+ times: move to GENERATE_SQL even with limited info
+- If stuck exploring same table 3+ times: try exploring DIFFERENT tables or patterns
 
 Respond in this format:
 THOUGHT: <Your reasoning about current situation and next action>
@@ -172,10 +245,30 @@ CONFIDENCE: 0.9
 ACTION: GENERATE_SQL
 PARAMETERS: {{}}
 
+THOUGHT: I found daily_prices table but it lacks sector and market_cap data. I need to find another table that contains company information.
+NOTES_UPDATE: daily_prices has price data but NO sector or market_cap columns. Need to find company/securities table.
+CONFIDENCE: 0.8
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND (table_name LIKE '%company%' OR table_name LIKE '%securit%' OR table_name LIKE '%stock%' OR table_name LIKE '%fundamental%')"}}
+
+THOUGHT: I've been exploring daily_prices repeatedly but it doesn't have the Federal Funds Rate data I need. Let me search for economic indicator tables.
+NOTES_UPDATE: daily_prices only contains stock price data. Need to find economic/macro data tables for Federal Funds Rate.
+CONFIDENCE: 0.9
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND (table_name ILIKE '%economic%' OR table_name ILIKE '%indicator%' OR table_name ILIKE '%federal%' OR table_name ILIKE '%interest%' OR table_name ILIKE '%macro%')"}}
+
+THOUGHT: I'm stuck exploring the same table. Let me list ALL tables to see what else is available.
+NOTES_UPDATE: Need to see all available tables to find the right data source.
+CONFIDENCE: 0.9
+ACTION: EXPLORE_DATABASE
+PARAMETERS: {{"query": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"}}
+
 IMPORTANT Instructions:
-- EXPLORE_DATABASE: Use {{"query": "SELECT ..."}} with your SQL exploration query
+- EXPLORE_DATABASE: ALWAYS provide {{"query": "SELECT ..."}} with your SQL exploration query
 - GENERATE_SQL: Use empty {{}} - parameters will be filled automatically
 - EXECUTE_SQL: Use empty {{}} - SQL will be taken from state
+- If stuck exploring the same table repeatedly, list ALL tables to discover new ones
+- Check your notes before exploring - don't repeat queries that didn't help
 """
 
     async def _call_llm(self, prompt: str) -> str:

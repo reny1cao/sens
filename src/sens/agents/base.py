@@ -120,7 +120,6 @@ class AgentState:
         """Add a thought to the reasoning trace."""
         thought = AgentThought(content, confidence=confidence, metadata=metadata)
         self.thoughts.append(thought)
-        log.info("agent_thought", thought=content, confidence=confidence)
         return thought
 
     def add_action(
@@ -129,7 +128,6 @@ class AgentState:
         """Record an action."""
         action = AgentAction(action_type, parameters, reasoning)
         self.actions.append(action)
-        log.info("agent_action", action=action_type.value, parameters=parameters)
         return action
 
     def add_observation(
@@ -138,7 +136,6 @@ class AgentState:
         """Record an observation."""
         observation = AgentObservation(content, success, error, metadata=metadata)
         self.observations.append(observation)
-        log.info("agent_observation", success=success, error=error)
         return observation
 
     def get_recent_context(self, n: int = 3) -> str:
@@ -163,13 +160,32 @@ class AgentState:
 
         return "\n".join(context_parts)
 
+    def get_last_action(self) -> Optional[AgentAction]:
+        """Get the most recent action."""
+        return self.actions[-1] if self.actions else None
+
+    def get_last_observation(self) -> Optional[AgentObservation]:
+        """Get the most recent observation."""
+        return self.observations[-1] if self.observations else None
+
     def update_notes(self, new_info: str) -> None:
         """Update agent's notes with new information."""
         if self.agent_notes:
             self.agent_notes += f"\n{new_info}"
         else:
             self.agent_notes = f"Agent Notes:\n{new_info}"
-        log.info("agent_notes_updated", notes_length=len(self.agent_notes))
+
+        # Log the update with more detail
+        log.info(
+            "agent_notes_updated",
+            notes_length=len(self.agent_notes),
+            new_info=new_info,
+            notes_preview=(
+                self.agent_notes[-300:]
+                if len(self.agent_notes) > 300
+                else self.agent_notes
+            ),
+        )
 
     @property
     def should_continue(self) -> bool:
