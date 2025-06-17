@@ -157,7 +157,14 @@ export function useAgentQuery(): UseAgentQueryResult {
 
           if (response.ok) {
             const resultData = await response.json();
-            console.log('[useAgentQuery] Result data:', resultData);
+            console.log('[useAgentQuery] Full result response:', resultData);
+            console.log('[useAgentQuery] Result data structure:', {
+              status: resultData.status,
+              hasResult: !!resultData.result,
+              resultKeys: resultData.result ? Object.keys(resultData.result) : null,
+              resultsInResult: resultData.result?.results,
+              dataInResults: resultData.result?.results?.data,
+            });
             setResult(resultData.result);
           } else {
             const errorText = await response.text();

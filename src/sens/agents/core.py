@@ -470,7 +470,14 @@ class SENSAgent(BaseAgent):
 
             elif action.action_type == ActionType.EXECUTE_SQL:
                 log.debug("🚀 executing_sql", iteration=state.iteration)
-                result = await self.tools.execute_sql(**action.parameters)
+                # Execute SQL needs the current SQL from state
+                if not state.current_sql:
+                    result = {
+                        "success": False,
+                        "error": "No SQL query available to execute",
+                    }
+                else:
+                    result = await self.tools.execute_sql(sql=state.current_sql)
 
                 if result.get("success"):
                     log.info(
@@ -478,6 +485,10 @@ class SENSAgent(BaseAgent):
                         iteration=state.iteration,
                         rows=result.get("row_count", 0),
                         columns=len(result.get("columns", [])),
+                        has_data=bool(result.get("rows")),
+                        first_row=(
+                            result.get("rows", [[]])[0] if result.get("rows") else None
+                        ),
                     )
 
             elif action.action_type == ActionType.EXPLORE_DATABASE:

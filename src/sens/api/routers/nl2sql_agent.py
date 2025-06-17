@@ -27,6 +27,17 @@ log = structlog.get_logger()
 
 def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
     """Transform agent result to match frontend QueryResponse format."""
+    log.info(
+        "transform_agent_result_start",
+        success=agent_result.get("success"),
+        has_result=bool(agent_result.get("result")),
+        result_keys=(
+            list(agent_result.get("result", {}).keys())
+            if isinstance(agent_result.get("result"), dict)
+            else None
+        ),
+    )
+
     if not agent_result.get("success"):
         return {
             "error": {
@@ -42,6 +53,14 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
     rows = result_data.get("rows", [])
     columns = result_data.get("columns", [])
 
+    log.info(
+        "transform_data_extraction",
+        has_rows=bool(rows),
+        row_count=len(rows),
+        columns=columns,
+        first_row=rows[0] if rows else None,
+    )
+
     # Convert rows (list of lists) to data (list of dicts)
     data = []
     for row in rows:
@@ -50,7 +69,13 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
         elif isinstance(row, dict):
             data.append(row)
 
-    return {
+    log.info(
+        "transform_data_conversion",
+        data_count=len(data),
+        first_data_item=data[0] if data else None,
+    )
+
+    transformed_result = {
         "sql": agent_result.get("sql", ""),
         "results": {
             "columns": columns,
@@ -66,6 +91,16 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
         },
         "summary": f"Found {result_data.get('row_count', 0)} results",
     }
+
+    log.info(
+        "transform_result_complete",
+        has_sql=bool(transformed_result.get("sql")),
+        result_columns=transformed_result.get("results", {}).get("columns"),
+        result_data_count=len(transformed_result.get("results", {}).get("data", [])),
+        result_row_count=transformed_result.get("results", {}).get("row_count"),
+    )
+
+    return transformed_result
 
 
 # Initialize router
@@ -303,16 +338,36 @@ async def stream_agent_events(query_id: str, request: Request):
 @router.get("/result/{query_id}")
 async def get_agent_result(query_id: str):
     """Get the final result of an agent query."""
+    log.info("get_agent_result_called", query_id=query_id)
+
     if query_id not in query_results:
         if query_id in active_queries:
+            log.info(
+                "query_still_processing",
+                query_id=query_id,
+                status=active_queries[query_id]["status"],
+            )
             return {
                 "status": active_queries[query_id]["status"],
                 "message": "Query still processing",
             }
         else:
+            log.warning("query_not_found", query_id=query_id)
             raise HTTPException(status_code=404, detail="Query not found")
 
     result = query_results[query_id]
+
+    log.info(
+        "returning_query_result",
+        query_id=query_id,
+        status=result.get("status"),
+        has_result=bool(result.get("result")),
+        result_keys=(
+            list(result.get("result", {}).keys())
+            if isinstance(result.get("result"), dict)
+            else None
+        ),
+    )
 
     # Clean up old data (in production, use TTL in Redis)
     if result.get("completed_at", 0) < time.time() - 3600:  # 1 hour
