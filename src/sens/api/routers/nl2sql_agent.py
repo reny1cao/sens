@@ -42,26 +42,13 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
         ),
     )
 
-    # Check if we have a result even if success is not explicitly True
-    # This handles cases where the agent executed successfully but didn't set success flag
-    has_valid_result = (
-        agent_result.get("result")
-        and isinstance(agent_result.get("result"), dict)
-        and agent_result.get("result").get("success") is True
-        and agent_result.get("result").get("rows") is not None
-    )
-
-    if not agent_result.get("success") and not has_valid_result:
+    # If there's no result at all, return error
+    if not agent_result.get("result"):
         log.warning(
-            "transform_agent_not_successful",
+            "transform_agent_no_result",
+            success=agent_result.get("success"),
             error=agent_result.get("error"),
-            has_result=bool(agent_result.get("result")),
             iterations=agent_result.get("iterations"),
-            result_success=(
-                agent_result.get("result", {}).get("success")
-                if isinstance(agent_result.get("result"), dict)
-                else None
-            ),
         )
         return {
             "error": {

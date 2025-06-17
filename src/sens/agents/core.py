@@ -94,37 +94,10 @@ class SENSAgent(BaseAgent):
                 reasoning_result = await self.reason(state)
 
                 # ACT: Execute the action
-                observation = await self.act(state, reasoning_result)
+                await self.act(state, reasoning_result)
 
-                # Check for success
-                log.info(
-                    "agent_checking_success",
-                    iteration=state.iteration,
-                    observation_success=observation.success,
-                    action_type_in_metadata=observation.metadata.get("action_type"),
-                    expected_action_type=ActionType.EXECUTE_SQL.value,
-                    metadata_keys=list(observation.metadata.keys()),
-                    full_metadata=observation.metadata,
-                )
-
-                if (
-                    observation.success
-                    and observation.metadata.get("action_type")
-                    == ActionType.EXECUTE_SQL.value
-                ):
-                    state.success = True
-                    state.final_result = observation.content
-
-                    log.info(
-                        "✅ agent_success",
-                        iteration=state.iteration,
-                        row_count=(
-                            observation.content.get("row_count", 0)
-                            if isinstance(observation.content, dict)
-                            else "N/A"
-                        ),
-                    )
-
+                # If we successfully executed SQL, we're done
+                if state.success and state.current_sql:
                     # Store successful patterns
                     await self.memory.store_successful_query(
                         user_query=user_query,
@@ -501,6 +474,11 @@ class SENSAgent(BaseAgent):
                         ),
                     )
 
+                    # SQL executed successfully - mark agent as successful and store result
+                    state.success = True
+                    state.final_result = result
+                    log.info("✅ SQL executed successfully, agent marked as successful")
+
             elif action.action_type == ActionType.EXPLORE_DATABASE:
                 query_preview = action.parameters.get("query", "")[:100]
                 log.debug(
@@ -785,14 +763,18 @@ NEXT_DIRECTION: <What we should explore next based on this>
         }
 
         log.info(
-            "agent_build_response",
+            "agent_final_response",
             success=response["success"],
             has_result=bool(response["result"]),
             result_type=(
                 type(response["result"]).__name__ if response["result"] else None
             ),
-            result_keys=(
-                list(response["result"].keys())
+            result_sample=(
+                {
+                    "row_count": response["result"].get("row_count"),
+                    "columns": response["result"].get("columns"),
+                    "has_rows": bool(response["result"].get("rows")),
+                }
                 if isinstance(response["result"], dict)
                 else None
             ),
