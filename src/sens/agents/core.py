@@ -97,6 +97,16 @@ class SENSAgent(BaseAgent):
                 observation = await self.act(state, reasoning_result)
 
                 # Check for success
+                log.info(
+                    "agent_checking_success",
+                    iteration=state.iteration,
+                    observation_success=observation.success,
+                    action_type_in_metadata=observation.metadata.get("action_type"),
+                    expected_action_type=ActionType.EXECUTE_SQL.value,
+                    metadata_keys=list(observation.metadata.keys()),
+                    full_metadata=observation.metadata,
+                )
+
                 if (
                     observation.success
                     and observation.metadata.get("action_type")
@@ -742,7 +752,22 @@ NEXT_DIRECTION: <What we should explore next based on this>
 
     def _build_response(self, state: AgentState) -> Dict[str, Any]:
         """Build the final response from the agent state."""
-        return {
+        log.info(
+            "agent_build_response",
+            state_success=state.success,
+            has_final_result=bool(state.final_result),
+            final_result_type=(
+                type(state.final_result).__name__ if state.final_result else None
+            ),
+            final_result_keys=(
+                list(state.final_result.keys())
+                if isinstance(state.final_result, dict)
+                else None
+            ),
+            iterations=state.iteration,
+        )
+
+        response = {
             "success": state.success,
             "result": state.final_result,
             "actions_taken": [
@@ -758,6 +783,29 @@ NEXT_DIRECTION: <What we should explore next based on this>
             "iterations": state.iteration,
             "sql": state.current_sql,
         }
+
+        log.info(
+            "agent_build_response",
+            success=response["success"],
+            has_result=bool(response["result"]),
+            result_type=(
+                type(response["result"]).__name__ if response["result"] else None
+            ),
+            result_keys=(
+                list(response["result"].keys())
+                if isinstance(response["result"], dict)
+                else None
+            ),
+            sql_preview=(
+                response["sql"][:100] + "..."
+                if response["sql"] and len(response["sql"]) > 100
+                else response["sql"]
+            ),
+            iterations=response["iterations"],
+            action_count=len(response["actions_taken"]),
+        )
+
+        return response
 
     def _build_error_response(
         self, state: AgentState, error: Exception
