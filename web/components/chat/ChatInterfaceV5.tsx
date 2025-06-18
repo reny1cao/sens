@@ -57,18 +57,30 @@ export function ChatInterfaceV5() {
 
     const messageId = `agent-${agentQuery.queryId}`;
 
-    // Transform steps to show actions as just the ACTION_TYPE
-    const transformedSteps = agentQuery.steps.map(step => {
-      if (step.type === "action") {
-        // Extract action type from content (e.g., "EXPLORE_DATABASE: ..." -> "EXPLORE_DATABASE")
-        const actionType = step.content.split(":")[0].trim();
-        return {
-          ...step,
-          content: actionType
-        };
-      }
-      return step;
-    });
+    // Transform steps to show actions as just the ACTION_TYPE and filter duplicate "Analyzing query..."
+    const transformedSteps = agentQuery.steps
+      .filter((step, index) => {
+        // Remove "Analyzing query..." except for the first occurrence
+        if (step.type === "thought" && step.content === "Analyzing query...") {
+          // Keep only if it's the first "Analyzing query..." in the entire list
+          const firstAnalyzingIndex = agentQuery.steps.findIndex(
+            s => s.type === "thought" && s.content === "Analyzing query..."
+          );
+          return index === firstAnalyzingIndex;
+        }
+        return true;
+      })
+      .map(step => {
+        if (step.type === "action") {
+          // Extract action type from content (e.g., "EXPLORE_DATABASE: ..." -> "EXPLORE_DATABASE")
+          const actionType = step.content.split(":")[0].trim();
+          return {
+            ...step,
+            content: actionType
+          };
+        }
+        return step;
+      });
 
     // Determine current status
     let status: Message["status"] = "streaming";
