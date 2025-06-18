@@ -148,9 +148,9 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
                           {formatStepContent(step)}
                         </span>
                         {/* Show SQL for action steps */}
-                        {step.type === "action" && step.metadata?.parameters?.query && (
+                        {step.type === "action" && (step.metadata?.sql || step.metadata?.parameters?.query) && (
                           <div className="mt-1 bg-gray-900 text-gray-100 rounded p-2 font-mono text-xs overflow-x-auto">
-                            <code>{step.metadata.parameters.query}</code>
+                            <code>{step.metadata.sql || step.metadata.parameters.query}</code>
                           </div>
                         )}
                       </div>
@@ -210,24 +210,8 @@ function getStepIcon(step: AgentStep) {
 }
 
 function formatStepContent(step: AgentStep): string {
-  if (step.type === "action") {
-    // Extract just the action type for cleaner display
-    const actionType = step.content.match(/^(\w+):/)?.[1];
-    if (actionType === "EXPLORE_DATABASE") {
-      return "Exploring database...";
-    } else if (actionType === "GENERATE_SQL") {
-      return "Generating SQL query...";
-    }
-  } else if (step.type === "observation") {
-    // Simplify observation messages
-    if (step.content.includes("Success")) {
-      return "✓ Query executed successfully";
-    } else if (step.content.includes("Failed")) {
-      return "✗ Query failed";
-    }
-  }
-
-  // For thoughts and other types, truncate if too long
+  // The backend now sends user-friendly messages, so just return them
+  // Truncate if too long for the collapsed view
   return step.content.length > 150
     ? step.content.substring(0, 150) + "..."
     : step.content;
