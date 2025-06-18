@@ -142,6 +142,11 @@ export function useQuery() {
     mutation.mutate({ question });
   }, [mutation]);
 
+  const reset = useCallback(() => {
+    mutation.reset();
+    resetSteps();
+  }, [mutation, resetSteps]);
+
   return {
     executeQuery,
     isLoading: mutation.isPending || isPolling,
@@ -149,5 +154,6 @@ export function useQuery() {
     error: mutation.error,
     steps,
     resetSteps,
+    reset,
   };
 }

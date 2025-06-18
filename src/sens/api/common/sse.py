@@ -16,6 +16,7 @@ class SSEMessage:
         id: Optional[str] = None,
         retry: Optional[int] = None,
     ):
+        """Initialize SSE message."""
         self.data = data
         self.event = event
         self.id = id
@@ -50,6 +51,7 @@ class AgentEventType:
     THOUGHT = "thought"
     ACTION = "action"
     OBSERVATION = "observation"
+    ANSWER = "answer"
     COMPLETE = "complete"
     ERROR = "error"
     HEARTBEAT = "heartbeat"

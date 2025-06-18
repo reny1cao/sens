@@ -115,6 +115,7 @@ class AgentState:
     # Results
     final_result: Optional[Any] = None
     success: bool = False
+    natural_language_answer: Optional[str] = None
 
     def add_thought(self, content: str, confidence: float = 1.0, **metadata):
         """Add a thought to the reasoning trace."""

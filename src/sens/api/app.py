@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sens.settings import get_settings  # Updated to use new settings module
 
 from .common.logging import RequestLoggingMiddleware, configure_logging
+from .routers.agent_stream import router as agent_stream_router  # Clean SSE streaming
 from .routers.column_search.router import router as column_search_router
 from .routers.datasource import router as datasource_router
 from .routers.intent.router import router as intent_router
@@ -142,6 +143,7 @@ app.include_router(nl2sql_agent_router, prefix="/api", tags=["nl2sql-agent"])
 app.include_router(
     nl2sql_simple_agent_router, prefix="/api", tags=["nl2sql-simple-agent"]
 )
+app.include_router(agent_stream_router, prefix="/api", tags=["agent-stream"])
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(

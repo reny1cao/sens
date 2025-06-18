@@ -149,6 +149,39 @@ class EventEmittingAgent(SENSAgent):
         try:
             result = await super().process_query(user_query, conversation_id)
 
+            # Generate natural language answer if we have results
+            if result.get("success") and result.get("result"):
+                await self.emit_event(
+                    "generating_answer",
+                    {
+                        "iteration": result.get("iterations", 0),
+                        "content": "Generating natural language response...",
+                    },
+                )
+
+                # Import AnswerGenerator here to avoid circular imports
+                from sens.agents.answer_generator import AnswerGenerator
+
+                answer_gen = AnswerGenerator()
+                answer = await answer_gen.generate_answer(
+                    user_query=user_query,
+                    query_results=result.get("result", {}),
+                    sql_query=result.get("sql"),
+                    discovered_mappings=result.get("discovered_mappings"),
+                )
+
+                # Add answer to result
+                result["answer"] = answer
+
+                # Emit answer event
+                await self.emit_event(
+                    "answer_generated",
+                    {
+                        "iteration": result.get("iterations", 0),
+                        "content": answer,
+                    },
+                )
+
             await self.emit_event(
                 "query_complete",
                 {
@@ -160,6 +193,7 @@ class EventEmittingAgent(SENSAgent):
                         if result.get("result")
                         else 0
                     ),
+                    "answer": result.get("answer"),
                 },
             )
 

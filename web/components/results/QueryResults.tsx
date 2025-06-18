@@ -60,7 +60,7 @@ export function QueryResults({ response }: QueryResultsProps) {
     );
   }
 
-  const { sql, results, metadata, summary } = response;
+  const { sql, results, metadata, summary, answer } = response as QueryResponse & { answer?: string };
   const isSingleValue = results?.row_count === 1 && results?.columns?.length === 1;
 
   const exportCSV = () => {
@@ -96,11 +96,11 @@ export function QueryResults({ response }: QueryResultsProps) {
       {/* SQL Display */}
       <SQLDisplay sql={sql} execution_time_ms={metadata?.execution_time_ms} />
 
-      {/* Summary (if available) */}
-      {summary && (
+      {/* Answer or Summary (if available) */}
+      {(answer || summary) && (
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="pt-6">
-            <p className="text-blue-900">{summary}</p>
+            <p className="text-blue-900">{answer || summary}</p>
           </CardContent>
         </Card>
       )}

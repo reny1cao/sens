@@ -20,6 +20,7 @@ from sens.api.common.sse import (
     create_agent_event,
     heartbeat_generator,
 )
+from sens.exceptions import AgentError
 from sens.settings import get_settings
 
 log = structlog.get_logger()
@@ -50,10 +51,17 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
             error=agent_result.get("error"),
             iterations=agent_result.get("iterations"),
         )
+        # Provide more context about why the query failed
+        error_message = agent_result.get("error", "")
+        if not error_message and agent_result.get("iterations") >= 10:
+            error_message = "Unable to find the requested data after exploring the database. The table or data you're looking for may not exist."
+        elif not error_message:
+            error_message = "Agent failed to process query"
+
         return {
             "error": {
                 "code": "AGENT_ERROR",
-                "message": agent_result.get("error", "Agent failed to process query"),
+                "message": error_message,
             }
         }
 
@@ -101,6 +109,7 @@ def transform_agent_result_to_api_format(agent_result: Dict) -> Dict:
             "confidence_score": 0.9 if agent_result.get("success") else 0.3,
         },
         "summary": f"Found {result_data.get('row_count', 0)} results",
+        "answer": agent_result.get("answer"),  # Include natural language answer
     }
 
     log.info(
@@ -180,17 +189,28 @@ async def process_agent_query(query_id: str, question: str, max_iterations: int)
         memory = AgentMemory()
         reasoning_engine = ReasoningEngine()
 
-        agent = EventEmittingAgent(
-            tools=tools,
-            memory=memory,
-            reasoning_engine=reasoning_engine,
-            max_iterations=max_iterations,
-        )
+        try:
+            agent = EventEmittingAgent(
+                tools=tools,
+                memory=memory,
+                reasoning_engine=reasoning_engine,
+                max_iterations=max_iterations,
+            )
+            log.info("agent_created_successfully", query_id=query_id)
+        except TypeError as e:
+            log.error("agent_construction_failed", query_id=query_id, error=str(e))
+            raise AgentError(f"Failed to create agent: {e}")
 
         # Add event handler to store events
         def store_event(event):
             if query_id in active_queries:
                 active_queries[query_id]["events"].append(event)
+                log.debug(
+                    "event_stored",
+                    query_id=query_id,
+                    event_type=event.get("type"),
+                    total_events=len(active_queries[query_id]["events"]),
+                )
 
         agent.add_event_handler(store_event)
 
@@ -267,7 +287,18 @@ async def stream_agent_events(query_id: str, request: Request):
 
                 # Map internal events to SSE events
                 event_type = event["type"]
-                if event_type == "thought":
+                if event_type in ("reasoning", "reasoning_start"):
+                    # Map reasoning events to thought for frontend
+                    sse_event = create_agent_event(
+                        event_type=AgentEventType.THOUGHT,
+                        iteration=event["data"]["iteration"],
+                        content=event["data"].get("reasoning")
+                        or event["data"].get("content", "")
+                        or "Analyzing query...",
+                        metadata=event["data"],
+                        event_id=f"{query_id}_{last_event_idx}",
+                    )
+                elif event_type == "thought":
                     sse_event = create_agent_event(
                         event_type=AgentEventType.THOUGHT,
                         iteration=event["data"]["iteration"],
@@ -291,6 +322,31 @@ async def stream_agent_events(query_id: str, request: Request):
                         event_type=AgentEventType.OBSERVATION,
                         iteration=event["data"]["iteration"],
                         content=f"Result: {'Success' if event['data']['success'] else 'Failed'}",
+                        metadata=event["data"],
+                        event_id=f"{query_id}_{last_event_idx}",
+                    )
+                elif event_type == "generating_answer":
+                    sse_event = create_agent_event(
+                        event_type=AgentEventType.THOUGHT,
+                        iteration=event["data"]["iteration"],
+                        content=event["data"]["content"],
+                        metadata=event["data"],
+                        event_id=f"{query_id}_{last_event_idx}",
+                    )
+                elif event_type == "query_start":
+                    # Map query start to thought for frontend
+                    sse_event = create_agent_event(
+                        event_type=AgentEventType.THOUGHT,
+                        iteration=0,
+                        content="Starting query processing...",
+                        metadata=event["data"],
+                        event_id=f"{query_id}_{last_event_idx}",
+                    )
+                elif event_type == "answer_generated":
+                    sse_event = create_agent_event(
+                        event_type=AgentEventType.ANSWER,
+                        iteration=event["data"]["iteration"],
+                        content=event["data"]["content"],
                         metadata=event["data"],
                         event_id=f"{query_id}_{last_event_idx}",
                     )
@@ -320,10 +376,19 @@ async def stream_agent_events(query_id: str, request: Request):
 
             # Check if processing is complete
             if query_info["status"] in ["completed", "error"]:
+                log.info(
+                    "query_completion_detected",
+                    query_id=query_id,
+                    status=query_info["status"],
+                    total_events=len(events),
+                    last_event_idx=last_event_idx,
+                )
+
                 # Send final event if not already sent
                 if query_info["status"] == "completed" and last_event_idx == len(
                     events
                 ):
+                    log.info("sending_final_completion_event", query_id=query_id)
                     yield create_agent_event(
                         event_type=AgentEventType.COMPLETE,
                         iteration=0,

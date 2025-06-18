@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useDataSource } from '@/contexts/DataSourceContext';
 
 export interface AgentEvent {
-  type: 'thought' | 'action' | 'observation' | 'complete' | 'error' | 'connection';
+  type: 'thought' | 'action' | 'observation' | 'answer' | 'complete' | 'error' | 'connection';
   timestamp: string;
   iteration: number;
   content: string;
@@ -100,7 +100,7 @@ export function useAgentQuery(): UseAgentQueryResult {
     eventSource.addEventListener('thought', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
       addStep({
-        id: `thought-${data.iteration}-${Date.now()}`,
+        id: '', // Will be set by addStep
         type: 'thought',
         iteration: data.iteration,
         content: data.content,
@@ -113,7 +113,7 @@ export function useAgentQuery(): UseAgentQueryResult {
     eventSource.addEventListener('action', (event: MessageEvent) => {
       const data: AgentEvent = JSON.parse(event.data);
       addStep({
-        id: `action-${data.iteration}-${Date.now()}`,
+        id: '', // Will be set by addStep
         type: 'action',
         iteration: data.iteration,
         content: data.content,
@@ -134,13 +134,28 @@ export function useAgentQuery(): UseAgentQueryResult {
       ));
 
       addStep({
-        id: `observation-${data.iteration}-${Date.now()}`,
+        id: '', // Will be set by addStep
         type: 'observation',
         iteration: data.iteration,
         content: data.content,
         timestamp: new Date(data.timestamp).getTime(),
         metadata: data.metadata,
         status: data.metadata?.success ? 'completed' : 'error',
+      });
+    });
+
+    eventSource.addEventListener('answer', (event: MessageEvent) => {
+      const data: AgentEvent = JSON.parse(event.data);
+      console.log('[useAgentQuery] Answer event received:', data);
+
+      addStep({
+        id: '', // Will be set by addStep
+        type: 'answer',
+        iteration: data.iteration,
+        content: data.content,
+        timestamp: new Date(data.timestamp).getTime(),
+        metadata: data.metadata,
+        status: 'completed',
       });
     });
 
@@ -199,9 +214,13 @@ export function useAgentQuery(): UseAgentQueryResult {
     };
   }, [cleanup]);
 
-  // Add a step to the list
+  // Add a step to the list with unique ID generation
   const addStep = useCallback((step: AgentStep) => {
-    setSteps(prev => [...prev, step]);
+    setSteps(prev => {
+      // Generate truly unique ID using counter
+      const uniqueId = `${step.type}-${step.iteration}-${prev.length}-${Date.now()}`;
+      return [...prev, { ...step, id: uniqueId }];
+    });
   }, []);
 
   // Execute query

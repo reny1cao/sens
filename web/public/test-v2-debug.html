@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2 Debug Test</title>
+</head>
+<body>
+    <h1>V2 SSE Debug Test</h1>
+    <button onclick="startQuery()">Start Test Query</button>
+    <button onclick="clearLog()">Clear Log</button>
+    <div id="log" style="font-family: monospace; white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; margin-top: 10px; height: 400px; overflow-y: auto;"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        let eventSource = null;
+        let eventCount = {};
+
+        function addLog(message, color = 'black') {
+            const timestamp = new Date().toISOString().substr(11, 8);
+            const entry = document.createElement('div');
+            entry.style.color = color;
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            log.innerHTML = '';
+            eventCount = {};
+        }
+
+        async function startQuery() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            clearLog();
+            addLog('Starting query...', 'blue');
+
+            try {
+                // Start query
+                const response = await fetch('/api/nl2sql/agent/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: 'How many users do we have?',
+                        max_iterations: 10
+                    }),
+                });
+
+                const data = await response.json();
+                addLog(`Query started: ${data.query_id}`, 'green');
+
+                // Connect to SSE
+                eventSource = new EventSource(`/api/nl2sql/agent/stream/${data.query_id}`);
+
+                eventSource.onopen = () => {
+                    addLog('SSE connection opened', 'green');
+                };
+
+                eventSource.onerror = (e) => {
+                    addLog(`SSE error: ${e.type}`, 'red');
+                };
+
+                // Track all event types
+                const eventTypes = ['connection', 'thought', 'action', 'observation', 'answer', 'complete', 'error'];
+
+                eventTypes.forEach(eventType => {
+                    eventSource.addEventListener(eventType, (event) => {
+                        eventCount[eventType] = (eventCount[eventType] || 0) + 1;
+
+                        try {
+                            const data = JSON.parse(event.data);
+                            addLog(`[${eventType} #${eventCount[eventType]}] ${JSON.stringify(data, null, 2)}`,
+                                   eventType === 'error' ? 'red' :
+                                   eventType === 'complete' ? 'green' :
+                                   eventType === 'thought' ? 'purple' :
+                                   eventType === 'action' ? 'blue' :
+                                   eventType === 'observation' ? 'orange' :
+                                   eventType === 'answer' ? 'darkgreen' : 'black');
+                        } catch (e) {
+                            addLog(`[${eventType}] Parse error: ${e.message}`, 'red');
+                        }
+                    });
+                });
+
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'red');
+            }
+        }
+    </script>
+</body>
+</html>

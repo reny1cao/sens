@@ -4,7 +4,7 @@ import { QueryProvider } from '@/components/providers/QueryProvider';
 import { DataSourceProvider } from '@/contexts/DataSourceContext';
 import { QueryInterfaceWithAgent } from '@/components/query/QueryInterfaceWithAgent';
 import { DataSourceSelector } from '@/components/datasource/DataSourceSelector';
-import { Database } from 'lucide-react';
+import { Database, MessageSquare } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -24,9 +24,16 @@ export default function Home() {
                   <nav className="flex items-center gap-4">
                     <a
                       href="/"
-                      className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                      className="text-sm font-medium text-blue-600"
                     >
-                      Query
+                      Classic
+                    </a>
+                    <a
+                      href="/chat"
+                      className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Chat
                     </a>
                     <a
                       href="/schema"
