@@ -149,7 +149,10 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
                   <div key={step.id} className="flex gap-3">
                     {getStepIcon(step)}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-700 leading-relaxed">
+                      <div className={cn(
+                        "text-sm leading-relaxed",
+                        step.type === "action" ? "font-medium text-gray-900" : "text-gray-700"
+                      )}>
                         {step.content}
                       </div>
                       {/* Show SQL for action steps */}

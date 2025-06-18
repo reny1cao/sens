@@ -57,14 +57,14 @@ export function ChatInterfaceV5() {
 
     const messageId = `agent-${agentQuery.queryId}`;
 
-    // Transform steps to show actions as Task: ACTION_TYPE
+    // Transform steps to show actions as just the ACTION_TYPE
     const transformedSteps = agentQuery.steps.map(step => {
       if (step.type === "action") {
         // Extract action type from content (e.g., "EXPLORE_DATABASE: ..." -> "EXPLORE_DATABASE")
         const actionType = step.content.split(":")[0].trim();
         return {
           ...step,
-          content: `Task: ${actionType}`
+          content: actionType
         };
       }
       return step;
