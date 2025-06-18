@@ -57,6 +57,32 @@ export function ChatInterfaceV5() {
 
     const messageId = `agent-${agentQuery.queryId}`;
 
+    // Filter out duplicate reasoning steps that are followed by actions with the same content
+    const filteredSteps = agentQuery.steps.filter((step, index) => {
+      // Keep all non-thought steps
+      if (step.type !== "thought") return true;
+
+      // Check if the next step is an action with similar content
+      const nextStep = agentQuery.steps[index + 1];
+      if (nextStep && nextStep.type === "action") {
+        // Extract the reasoning part from the action content (after the colon)
+        const actionReasoning = nextStep.content.split(": ")[1]?.trim();
+        const thoughtContent = step.content.trim();
+
+        // Skip this thought if it matches the action reasoning
+        if (actionReasoning && thoughtContent === actionReasoning) {
+          return false;
+        }
+      }
+
+      // Keep generic "Analyzing query..." only if it's the first step
+      if (step.content === "Analyzing query..." && index > 0) {
+        return false;
+      }
+
+      return true;
+    });
+
     // Determine current status
     let status: Message["status"] = "streaming";
     let answer: string | undefined;
@@ -83,7 +109,7 @@ export function ChatInterfaceV5() {
         timestamp: existingIndex >= 0 ? prev[existingIndex].timestamp : new Date(),
         status,
         answer,
-        steps: agentQuery.steps,
+        steps: filteredSteps,
         data: agentQuery.result,
         error,
       };
