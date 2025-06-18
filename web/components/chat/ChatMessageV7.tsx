@@ -297,46 +297,108 @@ function formatCellValue(value: any): string {
 
 // SQL Syntax Highlighting Component
 function SQLHighlight({ sql }: { sql: string }) {
-  // SQL keywords
-  const keywords = [
+  // SQL keywords - comprehensive list
+  const keywords = new Set([
     'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER',
-    'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL',
-    'AS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE',
+    'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL',
+    'AS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'ILIKE',
     'IS', 'NULL', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'DISTINCT',
     'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'WITH', 'OVER', 'PARTITION',
     'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'TABLE',
-    'DESC', 'ASC', 'CAST', 'COALESCE', 'EXTRACT', 'DATE_TRUNC'
-  ];
+    'DESC', 'ASC', 'CAST', 'COALESCE', 'EXTRACT', 'DATE_TRUNC',
+    'PERCENTILE_CONT', 'WITHIN', 'VALUES', 'INTO'
+  ]);
 
-  const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'gi');
+  // Tokenize SQL for proper highlighting
+  const tokenize = (text: string) => {
+    const tokens: Array<{ type: 'keyword' | 'string' | 'number' | 'text', value: string }> = [];
+    let current = '';
+    let inString = false;
+    let stringChar = '';
 
-  // Split SQL by lines for better formatting
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      // Handle strings
+      if ((char === "'" || char === '"') && !inString) {
+        // Flush current token
+        if (current) {
+          tokens.push(...parseNonString(current));
+          current = '';
+        }
+        inString = true;
+        stringChar = char;
+        current = char;
+      } else if (char === stringChar && inString) {
+        current += char;
+        tokens.push({ type: 'string', value: current });
+        current = '';
+        inString = false;
+        stringChar = '';
+      } else if (inString) {
+        current += char;
+      } else {
+        current += char;
+      }
+    }
+
+    // Flush remaining
+    if (current) {
+      if (inString) {
+        tokens.push({ type: 'string', value: current });
+      } else {
+        tokens.push(...parseNonString(current));
+      }
+    }
+
+    return tokens;
+  };
+
+  // Parse non-string content for keywords and numbers
+  const parseNonString = (text: string) => {
+    const tokens: Array<{ type: 'keyword' | 'number' | 'text', value: string }> = [];
+    const words = text.split(/\b/);
+
+    for (const word of words) {
+      if (!word) continue;
+
+      if (keywords.has(word.toUpperCase())) {
+        tokens.push({ type: 'keyword', value: word });
+      } else if (/^\d+(\.\d+)?$/.test(word)) {
+        tokens.push({ type: 'number', value: word });
+      } else {
+        tokens.push({ type: 'text', value: word });
+      }
+    }
+
+    return tokens;
+  };
+
+  // Render tokens with appropriate styling
+  const renderToken = (token: { type: string, value: string }, index: number) => {
+    switch (token.type) {
+      case 'keyword':
+        return <span key={index} className="text-blue-400 font-semibold">{token.value.toUpperCase()}</span>;
+      case 'string':
+        return <span key={index} className="text-green-400">{token.value}</span>;
+      case 'number':
+        return <span key={index} className="text-purple-400">{token.value}</span>;
+      default:
+        return <span key={index}>{token.value}</span>;
+    }
+  };
+
   const lines = sql.split('\n');
 
   return (
     <>
-      {lines.map((line, i) => {
-        // Replace keywords with styled spans
-        const highlightedLine = line.replace(keywordRegex, (match) =>
-          `<span class="text-blue-400 font-semibold">${match}</span>`
-        );
-
-        // Highlight strings (single quotes)
-        const withStrings = highlightedLine.replace(
-          /'([^']*)'/g,
-          '<span class="text-green-400">\'$1\'</span>'
-        );
-
-        // Highlight numbers
-        const withNumbers = withStrings.replace(
-          /\b(\d+(\.\d+)?)\b/g,
-          '<span class="text-purple-400">$1</span>'
-        );
-
-        return (
-          <div key={i} dangerouslySetInnerHTML={{ __html: withNumbers }} />
-        );
-      })}
+      {lines.map((line, lineIndex) => (
+        <div key={lineIndex}>
+          {tokenize(line).map((token, tokenIndex) =>
+            renderToken(token, `${lineIndex}-${tokenIndex}`)
+          )}
+        </div>
+      ))}
     </>
   );
 }
