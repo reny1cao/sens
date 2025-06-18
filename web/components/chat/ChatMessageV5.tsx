@@ -210,8 +210,26 @@ function getStepIcon(step: AgentStep) {
 }
 
 function formatStepContent(step: AgentStep): string {
-  // The backend now sends user-friendly messages, so just return them
-  // Truncate if too long for the collapsed view
+  if (step.type === "action") {
+    // Extract just the action type for cleaner display
+    const actionType = step.content.match(/^(\w+):/)?.[1];
+    if (actionType === "EXPLORE_DATABASE") {
+      return "Exploring database...";
+    } else if (actionType === "GENERATE_SQL") {
+      return "Generating SQL query...";
+    } else if (actionType === "EXECUTE_SQL") {
+      return "Executing SQL query...";
+    }
+  } else if (step.type === "observation") {
+    // Simplify observation messages
+    if (step.content.includes("Success")) {
+      return "✓ Query executed successfully";
+    } else if (step.content.includes("Failed")) {
+      return "✗ Query failed";
+    }
+  }
+
+  // For thoughts and other types, truncate if too long
   return step.content.length > 150
     ? step.content.substring(0, 150) + "..."
     : step.content;

@@ -14,7 +14,6 @@ from sens.agents.event_emitter import EventEmittingAgent
 from sens.agents.memory import AgentMemory
 from sens.agents.reasoning import ReasoningEngine
 from sens.agents.tools import AgentTools
-from sens.api.common.message_formatter import AgentMessageFormatter
 from sens.api.common.sse import (
     AgentEventType,
     SSEMessage,
@@ -289,14 +288,13 @@ async def stream_agent_events(query_id: str, request: Request):
                 # Map internal events to SSE events
                 event_type = event["type"]
                 if event_type in ("reasoning", "reasoning_start"):
-                    # Format reasoning message for user
-                    formatted_content = AgentMessageFormatter.format_reasoning(
-                        event["data"]
-                    )
+                    # Map reasoning events to thought for frontend
                     sse_event = create_agent_event(
                         event_type=AgentEventType.THOUGHT,
                         iteration=event["data"]["iteration"],
-                        content=formatted_content,
+                        content=event["data"].get("reasoning")
+                        or event["data"].get("content", "")
+                        or "Analyzing query...",
                         metadata=event["data"],
                         event_id=f"{query_id}_{last_event_idx}",
                     )
@@ -309,42 +307,21 @@ async def stream_agent_events(query_id: str, request: Request):
                         event_id=f"{query_id}_{last_event_idx}",
                     )
                 elif event_type == "action":
-                    # Format action message for user
-                    formatted_content = AgentMessageFormatter.format_action(
-                        event["data"]
-                    )
-
-                    # Include SQL in metadata if it's a generate or execute action
-                    metadata = {
-                        "action_type": event["data"]["action_type"],
-                        "parameters": event["data"]["parameters"],
-                    }
-
-                    # Add formatted SQL for display
-                    if event["data"]["action_type"] in ["GENERATE_SQL", "EXECUTE_SQL"]:
-                        if "query" in event["data"].get("parameters", {}):
-                            metadata["sql"] = (
-                                AgentMessageFormatter.format_sql_for_display(
-                                    event["data"]["parameters"]["query"]
-                                )
-                            )
-
                     sse_event = create_agent_event(
                         event_type=AgentEventType.ACTION,
                         iteration=event["data"]["iteration"],
-                        content=formatted_content,
-                        metadata=metadata,
+                        content=f"{event['data']['action_type']}: {event['data'].get('reasoning', '')}",
+                        metadata={
+                            "action_type": event["data"]["action_type"],
+                            "parameters": event["data"]["parameters"],
+                        },
                         event_id=f"{query_id}_{last_event_idx}",
                     )
                 elif event_type == "observation":
-                    # Format observation message for user
-                    formatted_content = AgentMessageFormatter.format_observation(
-                        event["data"]
-                    )
                     sse_event = create_agent_event(
                         event_type=AgentEventType.OBSERVATION,
                         iteration=event["data"]["iteration"],
-                        content=formatted_content,
+                        content=f"Result: {'Success' if event['data']['success'] else 'Failed'}",
                         metadata=event["data"],
                         event_id=f"{query_id}_{last_event_idx}",
                     )
