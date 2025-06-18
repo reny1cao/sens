@@ -7,11 +7,12 @@ import {
   Database,
   AlertCircle,
   ChevronDown,
+  ChevronRight,
   Loader2,
-  Brain,
-  Search,
-  CheckCircle,
-  Lightbulb,
+  Sparkles,
+  Zap,
+  CheckCircle2,
+  MessageSquare,
   Code,
 } from "lucide-react";
 import * as Avatar from "@radix-ui/react-avatar";
@@ -127,10 +128,10 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
                   )}
                 </div>
                 {!isStreaming && (
-                  <ChevronDown
+                  <ChevronRight
                     className={cn(
                       "w-3.5 h-3.5 text-gray-400 transition-transform duration-200",
-                      isExpanded && "rotate-180"
+                      isExpanded && "rotate-90"
                     )}
                   />
                 )}
@@ -138,22 +139,23 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
             </Collapsible.Trigger>
 
             <Collapsible.Content className="mt-2">
-              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <div className="bg-gray-50/50 rounded-lg p-4 space-y-4">
+                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-widest mb-3">
+                  Analysis Steps
+                </div>
                 {message.steps.map((step) => (
-                  <div key={step.id} className="text-xs">
-                    <div className="flex items-start gap-2">
-                      <div className="mt-0.5">{getStepIcon(step)}</div>
-                      <div className="flex-1">
-                        <span className="text-gray-600 leading-relaxed">
-                          {formatStepContent(step)}
-                        </span>
-                        {/* Show SQL for action steps */}
-                        {step.type === "action" && (step.metadata?.sql || step.metadata?.parameters?.query) && (
-                          <div className="mt-1 bg-gray-900 text-gray-100 rounded p-2 font-mono text-xs overflow-x-auto">
-                            <code>{step.metadata.sql || step.metadata.parameters.query}</code>
-                          </div>
-                        )}
+                  <div key={step.id} className="flex gap-3">
+                    {getStepIcon(step)}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-700 leading-relaxed">
+                        {step.content}
                       </div>
+                      {/* Show SQL for action steps */}
+                      {step.type === "action" && (step.metadata?.sql || step.metadata?.parameters?.query) && (
+                        <div className="mt-2 bg-white border border-gray-200 rounded-lg p-3 font-mono text-[11px] text-gray-700 overflow-x-auto">
+                          <code className="whitespace-pre">{step.metadata.sql || step.metadata.parameters.query}</code>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -194,43 +196,33 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
 }
 
 function getStepIcon(step: AgentStep) {
-  const iconClass = "w-3.5 h-3.5";
+  const iconClass = "w-3 h-3";
   switch (step.type) {
     case "thought":
-      return <Brain className={cn(iconClass, "text-purple-500")} />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center">
+          <Sparkles className={cn(iconClass, "text-purple-600")} />
+        </div>
+      );
     case "action":
-      return <Search className={cn(iconClass, "text-blue-500")} />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+          <Zap className={cn(iconClass, "text-blue-600")} />
+        </div>
+      );
     case "observation":
-      return <CheckCircle className={cn(iconClass, "text-green-500")} />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
+          <CheckCircle2 className={cn(iconClass, "text-green-600")} />
+        </div>
+      );
     case "answer":
-      return <Lightbulb className={cn(iconClass, "text-amber-500")} />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center">
+          <MessageSquare className={cn(iconClass, "text-amber-600")} />
+        </div>
+      );
     default:
-      return <div className="w-3.5 h-3.5 rounded-full bg-gray-300" />;
+      return <div className="w-5 h-5 rounded-full bg-gray-100" />;
   }
-}
-
-function formatStepContent(step: AgentStep): string {
-  if (step.type === "action") {
-    // Extract just the action type for cleaner display
-    const actionType = step.content.match(/^(\w+):/)?.[1];
-    if (actionType === "EXPLORE_DATABASE") {
-      return "Exploring database...";
-    } else if (actionType === "GENERATE_SQL") {
-      return "Generating SQL query...";
-    } else if (actionType === "EXECUTE_SQL") {
-      return "Executing SQL query...";
-    }
-  } else if (step.type === "observation") {
-    // Simplify observation messages
-    if (step.content.includes("Success")) {
-      return "✓ Query executed successfully";
-    } else if (step.content.includes("Failed")) {
-      return "✗ Query failed";
-    }
-  }
-
-  // For thoughts and other types, truncate if too long
-  return step.content.length > 150
-    ? step.content.substring(0, 150) + "..."
-    : step.content;
 }
