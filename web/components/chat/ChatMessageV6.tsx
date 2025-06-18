@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Bot,
   User,
@@ -47,8 +47,16 @@ interface ChatMessageV6Props {
 }
 
 export function ChatMessageV6({ message, index }: ChatMessageV6Props) {
-  const [isAnalysisExpanded, setIsAnalysisExpanded] = useState(false);
+  // Keep analysis open until answer appears
+  const [isAnalysisExpanded, setIsAnalysisExpanded] = useState(!message.answer);
   const [isSQLExpanded, setIsSQLExpanded] = useState(false);
+
+  // Auto-close analysis when answer appears
+  useEffect(() => {
+    if (message.answer) {
+      setIsAnalysisExpanded(false);
+    }
+  }, [message.answer]);
 
   const isStreaming = message.status === "processing";
   const hasSteps = message.steps && message.steps.length > 0;
@@ -80,6 +88,61 @@ export function ChatMessageV6({ message, index }: ChatMessageV6Props) {
       </Avatar.Root>
 
       <div className="flex-1 min-w-0 space-y-3">
+        {/* Analysis Steps - Show first and keep open until answer */}
+        {hasSteps && (
+          <Collapsible.Root open={isAnalysisExpanded} onOpenChange={setIsAnalysisExpanded}>
+            <Collapsible.Trigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 -ml-2"
+              >
+                {isStreaming && !message.answer ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    <span>Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    <span>Analysis process</span>
+                  </>
+                )}
+                <span className="text-gray-400 ml-1">({message.steps.length} steps)</span>
+                <ChevronRight
+                  className={cn(
+                    "w-3 h-3 ml-1 transition-transform duration-200",
+                    isAnalysisExpanded && "rotate-90"
+                  )}
+                />
+              </Button>
+            </Collapsible.Trigger>
+
+            <Collapsible.Content className="mt-2">
+              <div className="bg-gray-50/50 rounded-lg p-4 space-y-3">
+                {message.steps.map((step) => (
+                  <div key={step.id} className="flex gap-3">
+                    {getStepIcon(step)}
+                    <div className="flex-1 min-w-0">
+                      <div className={cn(
+                        "text-xs leading-relaxed",
+                        step.type === "action" ? "font-medium text-gray-900" : "text-gray-600"
+                      )}>
+                        {step.content}
+                      </div>
+                      {step.type === "action" && step.metadata?.parameters?.query && (
+                        <div className="mt-1.5 bg-gray-900 text-gray-100 rounded p-2 font-mono text-[10px] overflow-x-auto">
+                          <SQLHighlight sql={step.metadata.parameters.query} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Collapsible.Content>
+          </Collapsible.Root>
+        )}
+
         {/* Primary Answer Section */}
         {message.answer && (
           <div className="space-y-2">
@@ -108,8 +171,8 @@ export function ChatMessageV6({ message, index }: ChatMessageV6Props) {
                 </Collapsible.Trigger>
 
                 <Collapsible.Content className="mt-2">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-xs text-gray-700 overflow-x-auto">
-                    <code className="whitespace-pre">{message.data.sql}</code>
+                  <div className="bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-xs overflow-x-auto">
+                    <SQLHighlight sql={message.data.sql} />
                   </div>
                 </Collapsible.Content>
               </Collapsible.Root>
@@ -168,65 +231,11 @@ export function ChatMessageV6({ message, index }: ChatMessageV6Props) {
           </div>
         )}
 
-        {/* Analysis Steps - Subtle Toggle */}
-        {hasSteps && (
-          <Collapsible.Root open={isAnalysisExpanded} onOpenChange={setIsAnalysisExpanded}>
-            <Collapsible.Trigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 -ml-2"
-              >
-                <Sparkles className="w-3 h-3 mr-1" />
-                <span>Analysis process</span>
-                <span className="text-gray-400 ml-1">({message.steps.length} steps)</span>
-                <ChevronRight
-                  className={cn(
-                    "w-3 h-3 ml-1 transition-transform duration-200",
-                    isAnalysisExpanded && "rotate-90"
-                  )}
-                />
-              </Button>
-            </Collapsible.Trigger>
-
-            <Collapsible.Content className="mt-2">
-              <div className="bg-gray-50/50 rounded-lg p-4 space-y-3">
-                {message.steps.map((step) => (
-                  <div key={step.id} className="flex gap-3">
-                    {getStepIcon(step)}
-                    <div className="flex-1 min-w-0">
-                      <div className={cn(
-                        "text-xs leading-relaxed",
-                        step.type === "action" ? "font-medium text-gray-900" : "text-gray-600"
-                      )}>
-                        {step.content}
-                      </div>
-                      {step.type === "action" && step.metadata?.parameters?.query && (
-                        <div className="mt-1.5 bg-white border border-gray-200 rounded p-2 font-mono text-[10px] text-gray-600 overflow-x-auto">
-                          <code className="whitespace-pre">{step.metadata.parameters.query}</code>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Collapsible.Content>
-          </Collapsible.Root>
-        )}
-
         {/* Error State */}
         {message.error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>{message.error}</span>
-          </div>
-        )}
-
-        {/* Processing State */}
-        {isStreaming && !message.answer && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>Processing your query...</span>
           </div>
         )}
       </div>
@@ -276,4 +285,50 @@ function formatCellValue(value: any): string {
     return format(value, "MMM d, yyyy");
   }
   return String(value);
+}
+
+// SQL Syntax Highlighting Component
+function SQLHighlight({ sql }: { sql: string }) {
+  // SQL keywords
+  const keywords = [
+    'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER',
+    'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL',
+    'AS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE',
+    'IS', 'NULL', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'DISTINCT',
+    'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'WITH', 'OVER', 'PARTITION',
+    'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'TABLE',
+    'DESC', 'ASC', 'CAST', 'COALESCE', 'EXTRACT', 'DATE_TRUNC'
+  ];
+
+  const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'gi');
+
+  // Split SQL by lines for better formatting
+  const lines = sql.split('\n');
+
+  return (
+    <>
+      {lines.map((line, i) => {
+        // Replace keywords with styled spans
+        const highlightedLine = line.replace(keywordRegex, (match) =>
+          `<span class="text-blue-400 font-semibold">${match}</span>`
+        );
+
+        // Highlight strings (single quotes)
+        const withStrings = highlightedLine.replace(
+          /'([^']*)'/g,
+          '<span class="text-green-400">\'$1\'</span>'
+        );
+
+        // Highlight numbers
+        const withNumbers = withStrings.replace(
+          /\b(\d+(\.\d+)?)\b/g,
+          '<span class="text-purple-400">$1</span>'
+        );
+
+        return (
+          <div key={i} dangerouslySetInnerHTML={{ __html: withNumbers }} />
+        );
+      })}
+    </>
+  );
 }
