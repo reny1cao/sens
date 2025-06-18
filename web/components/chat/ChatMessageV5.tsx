@@ -121,7 +121,9 @@ export function ChatMessageV5({ message, index }: ChatMessageV5Props) {
                     </>
                   ) : (
                     <>
-                      <Brain className="w-3.5 h-3.5 text-gray-500" />
+                      <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center">
+                        <Sparkles className="w-2.5 h-2.5 text-gray-600" />
+                      </div>
                       <span className="text-sm text-gray-700">View analysis steps</span>
                       <span className="text-xs text-gray-400">({message.steps.length})</span>
                     </>
