@@ -149,38 +149,75 @@ class EventEmittingAgent(SENSAgent):
         try:
             result = await super().process_query(user_query, conversation_id)
 
-            # Generate natural language answer if we have results
-            if result.get("success") and result.get("result"):
-                await self.emit_event(
-                    "generating_answer",
-                    {
-                        "iteration": result.get("iterations", 0),
-                        "content": "Generating natural language response...",
-                    },
-                )
+            # Check for conversational responses first
+            final_result = result.get("result", {})
 
-                # Import AnswerGenerator here to avoid circular imports
-                from sens.agents.answer_generator import AnswerGenerator
+            if isinstance(final_result, dict):
+                # Handle conversational actions
+                if final_result.get("clarification_needed"):
+                    # Clarification response - no SQL answer needed
+                    result["answer"] = None  # Frontend will handle display
+                    await self.emit_event(
+                        "clarification_requested",
+                        {
+                            "iteration": result.get("iterations", 0),
+                            "message": final_result.get("message", ""),
+                            "options": final_result.get("options", []),
+                        },
+                    )
+                elif final_result.get("direct_answer"):
+                    # Direct answer without SQL
+                    result["answer"] = final_result.get("answer", "")
+                    await self.emit_event(
+                        "direct_answer_provided",
+                        {
+                            "iteration": result.get("iterations", 0),
+                            "content": final_result.get("answer", ""),
+                        },
+                    )
+                elif final_result.get("suggestions"):
+                    # Suggestions provided
+                    result["answer"] = None  # Frontend will handle display
+                    await self.emit_event(
+                        "suggestions_provided",
+                        {
+                            "iteration": result.get("iterations", 0),
+                            "suggestions": final_result.get("suggestions", []),
+                            "context": final_result.get("context", ""),
+                        },
+                    )
+                elif result.get("success") and result.get("result"):
+                    # Standard SQL execution - generate natural language answer
+                    await self.emit_event(
+                        "generating_answer",
+                        {
+                            "iteration": result.get("iterations", 0),
+                            "content": "Generating natural language response...",
+                        },
+                    )
 
-                answer_gen = AnswerGenerator()
-                answer = await answer_gen.generate_answer(
-                    user_query=user_query,
-                    query_results=result.get("result", {}),
-                    sql_query=result.get("sql"),
-                    discovered_mappings=result.get("discovered_mappings"),
-                )
+                    # Import AnswerGenerator here to avoid circular imports
+                    from sens.agents.answer_generator import AnswerGenerator
 
-                # Add answer to result
-                result["answer"] = answer
+                    answer_gen = AnswerGenerator()
+                    answer = await answer_gen.generate_answer(
+                        user_query=user_query,
+                        query_results=result.get("result", {}),
+                        sql_query=result.get("sql"),
+                        discovered_mappings=result.get("discovered_mappings"),
+                    )
 
-                # Emit answer event
-                await self.emit_event(
-                    "answer_generated",
-                    {
-                        "iteration": result.get("iterations", 0),
-                        "content": answer,
-                    },
-                )
+                    # Add answer to result
+                    result["answer"] = answer
+
+                    # Emit answer event
+                    await self.emit_event(
+                        "answer_generated",
+                        {
+                            "iteration": result.get("iterations", 0),
+                            "content": answer,
+                        },
+                    )
 
             await self.emit_event(
                 "query_complete",

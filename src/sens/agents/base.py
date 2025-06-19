@@ -42,6 +42,11 @@ class ActionType(Enum):
     RECALL_MAPPING = "recall_mapping"
     STORE_PATTERN = "store_pattern"
 
+    # Conversational actions
+    CLARIFY_QUERY = "clarify_query"  # Ask user for clarification
+    PROVIDE_ANSWER = "provide_answer"  # Answer without SQL
+    SUGGEST_OPTIONS = "suggest_options"  # Offer choices to user
+
 
 @dataclass
 class AgentThought:
@@ -191,10 +196,12 @@ class AgentState:
     @property
     def should_continue(self) -> bool:
         """Check if the agent should continue iterating."""
+        # Continue if not successful and haven't given up
+        # Remove max_iterations check to allow longer searches
         return (
             not self.success
-            and self.iteration < self.max_iterations
             and self.final_result is None
+            and self.iteration < 50  # Hard limit to prevent infinite loops
         )
 
 

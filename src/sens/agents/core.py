@@ -504,6 +504,59 @@ class SENSAgent(BaseAgent):
                         ),
                     )
 
+            # Conversational actions
+            elif action.action_type == ActionType.CLARIFY_QUERY:
+                log.debug("🤔 asking_for_clarification", iteration=state.iteration)
+                clarification_text = action.parameters.get("clarification_message", "")
+                options = action.parameters.get("options", [])
+
+                result = {
+                    "success": True,
+                    "clarification_needed": True,
+                    "message": clarification_text,
+                    "options": options,
+                    "action_type": "clarify_query",
+                }
+
+                # Mark agent as successful since we're providing value to user
+                state.success = True
+                state.final_result = result
+                log.info("💬 Clarification requested from user")
+
+            elif action.action_type == ActionType.PROVIDE_ANSWER:
+                log.debug("📝 providing_direct_answer", iteration=state.iteration)
+                answer_text = action.parameters.get("answer", "")
+
+                result = {
+                    "success": True,
+                    "direct_answer": True,
+                    "answer": answer_text,
+                    "action_type": "provide_answer",
+                }
+
+                # Mark agent as successful
+                state.success = True
+                state.final_result = result
+                state.natural_language_answer = answer_text
+                log.info("✅ Direct answer provided without SQL")
+
+            elif action.action_type == ActionType.SUGGEST_OPTIONS:
+                log.debug("💡 suggesting_options", iteration=state.iteration)
+                suggestions = action.parameters.get("suggestions", [])
+                context = action.parameters.get("context", "")
+
+                result = {
+                    "success": True,
+                    "suggestions": suggestions,
+                    "context": context,
+                    "action_type": "suggest_options",
+                }
+
+                # Mark agent as successful
+                state.success = True
+                state.final_result = result
+                log.info("💡 Options suggested to user")
+
             # All other actions are disabled in minimal mode
             elif action.action_type == ActionType.SEARCH_SCHEMA:
                 result = {

@@ -23,7 +23,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  status?: "sending" | "processing" | "complete" | "error";
+  status?: "sending" | "processing" | "complete" | "error" | "failed";
   answer?: string;
   steps?: any[];
   data?: any;
@@ -77,12 +77,24 @@ export function ChatInterfaceV6() {
     // Determine current status
     let status: Message["status"] = "processing";
     let error: string | undefined;
+    let answer: string | undefined = agentQuery.result?.answer;
 
     if (agentQuery.status === "error" && agentQuery.error) {
       status = "error";
       error = agentQuery.error;
     } else if (agentQuery.status === "complete") {
-      status = "complete";
+      // Check for failed states
+      if (!agentQuery.result ||
+          (!agentQuery.result.answer && !agentQuery.result.results) ||
+          (agentQuery.result.results && agentQuery.result.results.row_count === 0)) {
+        status = "failed";
+        // Clear answer if it was just a generic failed message
+        if (answer && (answer.includes("I couldn't find") || answer.includes("No results"))) {
+          answer = undefined;
+        }
+      } else {
+        status = "complete";
+      }
     }
 
     setMessages(prev => {
@@ -94,7 +106,7 @@ export function ChatInterfaceV6() {
         content: "Processing your query...",
         timestamp: existingIndex >= 0 ? prev[existingIndex].timestamp : new Date(),
         status,
-        answer: agentQuery.result?.answer,
+        answer,
         steps: transformedSteps,
         data: agentQuery.result,
         error,
@@ -192,6 +204,25 @@ export function ChatInterfaceV6() {
     textareaRef.current?.focus();
   }, []);
 
+  const handleOptionClick = useCallback((option: string) => {
+    // Add user message with the selected option
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: option,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    // Execute query with the selected option
+    if (useAgent) {
+      agentQuery.execute(option);
+    } else {
+      standardQuery.executeQuery(option);
+    }
+  }, [useAgent, agentQuery, standardQuery]);
+
   const isSubmitting = agentQuery.isStreaming || standardQuery.isLoading;
 
   return (
@@ -243,6 +274,7 @@ export function ChatInterfaceV6() {
               key={message.id}
               message={message}
               index={index}
+              onOptionClick={handleOptionClick}
             />
           ))}
 

@@ -75,20 +75,33 @@ Available Actions:
 1. EXPLORE_DATABASE - Execute a SQL query to explore the database
 2. GENERATE_SQL - Generate SQL to answer the user's query
 3. EXECUTE_SQL - Execute the generated SQL
+4. CLARIFY_QUERY - Ask the user for clarification when the query is ambiguous
+5. PROVIDE_ANSWER - Directly answer the user without SQL if you already have the information
+6. SUGGEST_OPTIONS - Offer choices or exploration paths to the user
+
+IMPORTANT: Not all questions require SQL execution! Consider these scenarios:
+- If the user asks about available data, schema, or capabilities → PROVIDE_ANSWER
+- If the query is ambiguous (e.g., "recent", "Apple" vs "AAPL", unclear timeframe) → CLARIFY_QUERY
+- If you need user guidance on multiple valid interpretations → SUGGEST_OPTIONS
+- Only proceed with SQL if the query is clear and requires data retrieval
 
 Based on the context, decide which action to take and provide the necessary parameters.
 
 Respond in this JSON format:
 {{
-    "action_type": "EXPLORE_DATABASE|GENERATE_SQL|EXECUTE_SQL",
+    "action_type": "EXPLORE_DATABASE|GENERATE_SQL|EXECUTE_SQL|CLARIFY_QUERY|PROVIDE_ANSWER|SUGGEST_OPTIONS",
     "parameters": {{...}},
     "reasoning": "Why you chose this action",
     "notes": "Any important discoveries to remember (optional)"
 }}
 
-For EXPLORE_DATABASE, parameters should be: {{"query": "SELECT ..."}}
-For GENERATE_SQL, parameters can be empty: {{}}
-For EXECUTE_SQL, parameters can be empty: {{}}
+Parameter examples:
+For EXPLORE_DATABASE: {{"query": "SELECT ..."}}
+For GENERATE_SQL: {{}}
+For EXECUTE_SQL: {{}}
+For CLARIFY_QUERY: {{"clarification_message": "I need clarification about...", "options": ["Option 1", "Option 2"]}}
+For PROVIDE_ANSWER: {{"answer": "Here's the information you requested..."}}
+For SUGGEST_OPTIONS: {{"suggestions": ["Try this query...", "Or explore this..."], "context": "Based on available data..."}}
 """
 
         # Use LLM to decide
