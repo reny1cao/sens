@@ -68,9 +68,10 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
   const hasSteps = message.steps && message.steps.length > 0;
   const hasData = message.data?.results?.data?.length > 0;
   const hasSql = message.data?.sql;
+  const hasResults = message.data?.results !== undefined;
 
-  // Check if query failed (no results but completed)
-  const isQueryFailed = message.status === "complete" && !hasData && !message.error;
+  // Check if query failed (no results object at all, not just empty results)
+  const isQueryFailed = message.status === "complete" && !hasResults && !message.error && !message.answer;
 
   // Check for conversational responses
   const isClarification = message.data?.clarification_needed;
@@ -307,6 +308,16 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
                 </Collapsible.Content>
               </Collapsible.Root>
             )}
+          </div>
+        )}
+
+        {/* Empty Results - Show when query succeeded but returned 0 rows */}
+        {hasResults && !hasData && message.data?.results?.row_count === 0 && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Table2 className="w-4 h-4" />
+              <span>Query executed successfully - 0 results found</span>
+            </div>
           </div>
         )}
 

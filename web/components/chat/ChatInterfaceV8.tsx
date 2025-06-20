@@ -85,8 +85,7 @@ export function ChatInterfaceV8() {
     } else if (agentQuery.isComplete) {
       // Check for failed states
       if (!agentQuery.result ||
-          (!agentQuery.result.answer && !agentQuery.result.results) ||
-          (agentQuery.result.results && agentQuery.result.results.row_count === 0)) {
+          (!agentQuery.result.answer && !agentQuery.result.results)) {
         status = "failed";
         // Clear answer if it was just a generic failed message
         if (answer && answer.includes("I couldn't find") || answer && answer.includes("No results")) {
