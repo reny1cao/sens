@@ -56,33 +56,15 @@ export function Markdown({ children, className }: MarkdownProps) {
             {children}
           </ol>
         ),
-        li: ({ children, ...props }) => {
-          // Check if parent is ordered list
-          const isOrdered = props.ordered;
-
-          if (isOrdered) {
-            return (
-              <li className={cn(
-                "leading-relaxed",
-                isSmallText ? "text-xs" : "text-sm",
-                "text-inherit"
-              )} {...props}>
-                {children}
-              </li>
-            );
-          }
-
-          return (
-            <li className={cn(
-              "leading-relaxed flex",
-              isSmallText ? "text-xs" : "text-sm",
-              "text-inherit"
-            )} {...props}>
-              <span className="inline-block mr-2 text-gray-400 select-none">•</span>
-              <span className="flex-1">{children}</span>
-            </li>
-          );
-        },
+        li: ({ children, ...props }) => (
+          <li className={cn(
+            "leading-relaxed",
+            isSmallText ? "text-xs" : "text-sm",
+            "text-inherit"
+          )} {...props}>
+            {children}
+          </li>
+        ),
 
         // Code - subtle background
         code: ({ children, ...props }) => {

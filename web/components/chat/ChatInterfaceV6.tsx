@@ -79,10 +79,10 @@ export function ChatInterfaceV6() {
     let error: string | undefined;
     let answer: string | undefined = agentQuery.result?.answer;
 
-    if (agentQuery.status === "error" && agentQuery.error) {
+    if (agentQuery.error) {
       status = "error";
       error = agentQuery.error;
-    } else if (agentQuery.status === "complete") {
+    } else if (agentQuery.isComplete) {
       // Check for failed states
       if (!agentQuery.result ||
           (!agentQuery.result.answer && !agentQuery.result.results) ||
@@ -121,7 +121,7 @@ export function ChatInterfaceV6() {
         return [...prev, updatedMessage];
       }
     });
-  }, [agentQuery.queryId, agentQuery.steps, agentQuery.status, agentQuery.result, agentQuery.error]);
+  }, [agentQuery.queryId, agentQuery.steps, agentQuery.isComplete, agentQuery.isStreaming, agentQuery.result, agentQuery.error]);
 
   // Handle standard query results
   useEffect(() => {

@@ -78,10 +78,10 @@ export function ChatInterfaceV7() {
     let status: Message["status"] = "processing";
     let error: string | undefined;
 
-    if (agentQuery.status === "error" && agentQuery.error) {
+    if (agentQuery.error) {
       status = "error";
       error = agentQuery.error;
-    } else if (agentQuery.status === "complete") {
+    } else if (agentQuery.isComplete) {
       status = "complete";
     }
 
@@ -109,7 +109,7 @@ export function ChatInterfaceV7() {
         return [...prev, updatedMessage];
       }
     });
-  }, [agentQuery.queryId, agentQuery.steps, agentQuery.status, agentQuery.result, agentQuery.error]);
+  }, [agentQuery.queryId, agentQuery.steps, agentQuery.isComplete, agentQuery.isStreaming, agentQuery.result, agentQuery.error]);
 
   // Handle standard query results
   useEffect(() => {

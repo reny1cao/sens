@@ -541,7 +541,7 @@ function SQLHighlight({ sql }: { sql: string }) {
       {lines.map((line, lineIndex) => (
         <div key={lineIndex}>
           {tokenize(line).map((token, tokenIndex) =>
-            renderToken(token, `${lineIndex}-${tokenIndex}`)
+            renderToken(token, lineIndex * 1000 + tokenIndex)
           )}
         </div>
       ))}
