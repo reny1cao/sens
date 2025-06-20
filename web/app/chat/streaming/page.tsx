@@ -1,5 +1,7 @@
 import { StreamingChatInterface } from '@/components/chat/StreamingChatInterface';
 
+export const dynamic = 'force-dynamic';
+
 export default function StreamingChatPage() {
   return (
     <div className="h-screen bg-gray-50">
