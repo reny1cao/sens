@@ -147,10 +147,11 @@ class SQLGeneratorConfig(ModelConfig):
     """SQL Generator component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-4o", description="Primary model for SQL generation"
+        default="google/gemini-2.0-flash-001",
+        description="Primary model for SQL generation",
     )
     fallback_model: Optional[str] = Field(
-        default="deepseek/deepseek-chat-v3-0324",
+        default="google/gemini-1.5-flash",
         description="Fallback model for SQL generation",
     )
     max_tokens: int = Field(
@@ -168,11 +169,11 @@ class IntentExtractorConfig(ModelConfig):
     """Intent Extractor component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-4o",
+        default="google/gemini-2.0-flash-001",
         description="Primary model for intent extraction",
     )
     fallback_model: Optional[str] = Field(
-        default="deepseek/deepseek-chat-v3-0324",
+        default="google/gemini-1.5-flash",
         description="Fallback model for intent extraction",
     )
     confidence_threshold: float = Field(
@@ -219,11 +220,11 @@ class ResponseBuilderConfig(ModelConfig):
     """Response builder component configuration."""
 
     primary_model: str = Field(
-        default="openai/gpt-4o",
+        default="google/gemini-2.0-flash-001",
         description="Primary model for response generation",
     )
     fallback_model: Optional[str] = Field(
-        default="deepseek/deepseek-chat-v3-0324",
+        default="google/gemini-1.5-flash",
         description="Fallback model for response generation",
     )
     max_tokens: int = Field(
@@ -248,7 +249,7 @@ class AgentReasoningConfig(ModelConfig):
         description="Primary model for agent reasoning",
     )
     fallback_model: Optional[str] = Field(
-        default="openai/gpt-4o-mini",
+        default="google/gemini-1.5-flash",
         description="Fallback model for agent reasoning",
     )
     max_tokens: int = Field(
@@ -268,8 +269,8 @@ class AgentReasoningConfig(ModelConfig):
 class CacheConfig(BaseModel):
     """Cache configuration."""
 
-    backend: Literal["redis", "memory"] = Field(
-        default="memory",
+    backend: Literal["redis", "memory", "file"] = Field(
+        default="file",
         description="Cache backend to use",
         validation_alias="SENS_CACHE_BACKEND",
     )
@@ -316,10 +317,15 @@ class CacheConfig(BaseModel):
         validation_alias="SENS_CACHE_LLM_TTL_HOURS",
     )
     schema_ttl_hours: int = Field(
-        default=1,
+        default=24,
         description="TTL for schema cache in hours",
         gt=0,
         validation_alias="SENS_CACHE_SCHEMA_TTL_HOURS",
+    )
+    file_cache_dir: Optional[str] = Field(
+        default="/tmp/sens_cache",
+        description="Directory for file-based cache",
+        validation_alias="SENS_CACHE_FILE_DIR",
     )
 
 

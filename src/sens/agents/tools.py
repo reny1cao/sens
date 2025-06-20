@@ -477,7 +477,7 @@ SQL Query:"""
 
         try:
             response = await self._llm_client.chat.completions.create(
-                model="openai/gpt-4",
+                model="google/gemini-2.0-flash-001",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=500,

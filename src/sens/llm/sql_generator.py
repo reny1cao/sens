@@ -88,7 +88,9 @@ class SQLGenerator:
 
         # Get SQL generator specific settings
         sql_config = llm_config["sql_generator"]
-        self.primary_model = sql_config.get("primary_model", "openai/gpt-4")
+        self.primary_model = sql_config.get(
+            "primary_model", "google/gemini-2.0-flash-001"
+        )
         self.fallback_model = sql_config.get("fallback_model")
 
         # Initialize OpenRouter client with configuration from settings
@@ -346,7 +348,7 @@ class SQLGenerator:
 
         # Convert LLMSchemaContext to ValidatorSchemaContext
         validator_schema = schema.to_validator_schema()
-        
+
         # For session-based schemas (uploaded files), use the same schema as both full and prompted
         # since there's no larger database context
         full_schema = validator_schema

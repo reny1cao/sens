@@ -67,56 +67,81 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting up Sens API...")
 
-    # Initialize default database schema at startup
-    try:
-        from sens.datasource.manager import DataSourceManager
-        from sens.schema.graph import SchemaGraph
+    # Check startup mode
+    fast_startup = settings.fast_startup if hasattr(settings, "fast_startup") else False
 
-        logger.info("Initializing default database schema...")
+    if fast_startup:
+        logger.info("Fast startup mode enabled - deferring schema extraction")
 
-        # Extract schema from default PostgreSQL database
-        datasource_manager = DataSourceManager()
-        await datasource_manager.ensure_default_schema_extracted()
+        # Optional: Schedule background schema loading
+        if settings.preload_schema_background:
+            import asyncio
 
-        # Verify schema is loaded correctly
-        schema_graph = SchemaGraph.get_instance()
-        table_count = len(schema_graph._all_tables)
-        logger.info(f"Schema initialized with {table_count} tables")
+            from sens.datasource.manager import DataSourceManager
 
-        if table_count < 10:
-            logger.warning(
-                f"Schema only has {table_count} tables - might be using demo schema instead of real database"
-            )
-        else:
-            # Pre-create the orchestrator with the correct schema loaded
-            logger.info(
-                "Pre-initializing ChatOrchestrator with financial database schema..."
-            )
-            from sens.api.routers.nl2sql import get_orchestrator
+            async def background_schema_load():
+                try:
+                    logger.info("Starting background schema extraction...")
+                    datasource_manager = DataSourceManager()
+                    await datasource_manager.ensure_default_schema_extracted()
+                    logger.info("Background schema extraction completed")
+                except Exception as e:
+                    logger.error("Background schema extraction failed", error=str(e))
 
-            _ = get_orchestrator()  # Pre-initialize orchestrator
-            logger.info("ChatOrchestrator pre-initialized successfully")
-
-        # Try to build embedding index
+            # Start background task
+            asyncio.create_task(background_schema_load())
+    else:
+        # Original startup behavior
+        # Initialize default database schema at startup
         try:
-            from sens.retrieval.embedding.search import EmbeddingSearch
+            from sens.datasource.manager import DataSourceManager
+            from sens.schema.graph import SchemaGraph
 
-            index_dir = settings.index_dir
-            index_file = index_dir / "columns.index"
+            logger.info("Initializing default database schema...")
 
-            if not index_file.exists():
-                logger.info("Embedding index not found, will build on first query")
-                # Don't build at startup due to _ctypes issue
-                # Will be built on demand with proper error handling
+            # Extract schema from default PostgreSQL database
+            datasource_manager = DataSourceManager()
+            await datasource_manager.ensure_default_schema_extracted()
+
+            # Verify schema is loaded correctly
+            schema_graph = SchemaGraph.get_instance()
+            table_count = len(schema_graph._all_tables)
+            logger.info(f"Schema initialized with {table_count} tables")
+
+            if table_count < 10:
+                logger.warning(
+                    f"Schema only has {table_count} tables - might be using demo schema instead of real database"
+                )
             else:
-                logger.info(f"Embedding index found at {index_file}")
+                # Pre-create the orchestrator with the correct schema loaded
+                logger.info(
+                    "Pre-initializing ChatOrchestrator with financial database schema..."
+                )
+                from sens.api.routers.nl2sql import get_orchestrator
+
+                _ = get_orchestrator()  # Pre-initialize orchestrator
+                logger.info("ChatOrchestrator pre-initialized successfully")
+
+            # Try to build embedding index
+            try:
+                from sens.retrieval.embedding.search import EmbeddingSearch
+
+                index_dir = settings.index_dir
+                index_file = index_dir / "columns.index"
+
+                if not index_file.exists():
+                    logger.info("Embedding index not found, will build on first query")
+                    # Don't build at startup due to _ctypes issue
+                    # Will be built on demand with proper error handling
+                else:
+                    logger.info(f"Embedding index found at {index_file}")
+
+            except Exception as e:
+                logger.warning(f"Embedding index check failed: {e}")
 
         except Exception as e:
-            logger.warning(f"Embedding index check failed: {e}")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize schema at startup: {e}")
-        # Don't fail startup - schema can be loaded on demand
+            logger.error(f"Failed to initialize schema at startup: {e}")
+            # Don't fail startup - schema can be loaded on demand
 
     # Keep original schema validation for backward compatibility
     schema_path = settings.schema_path

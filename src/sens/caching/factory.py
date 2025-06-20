@@ -6,6 +6,7 @@ import structlog
 
 from ..settings.core import get_settings
 from .base import CacheBackend
+from .file_backend import FileBackend
 from .manager import CacheManager
 from .memory_backend import MemoryBackend
 from .redis_backend import RedisBackend
@@ -36,6 +37,12 @@ def create_cache_backend() -> CacheBackend:
             db=cache_config.redis_db,
             password=cache_config.redis_password,
         )
+    elif cache_config.backend == "file":
+        log.info(
+            "Creating file-based cache backend",
+            cache_dir=cache_config.file_cache_dir,
+        )
+        return FileBackend(cache_dir=cache_config.file_cache_dir or "/tmp/sens_cache")
     else:
         log.info("Creating in-memory cache backend")
         return MemoryBackend()

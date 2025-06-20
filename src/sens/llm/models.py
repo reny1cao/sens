@@ -214,7 +214,7 @@ class GeneratedSQL(BaseModel):
                     "completion_tokens": 50,
                     "total_tokens": 200,
                 },
-                "model_used": "gpt-4",
+                "model_used": "gemini-2.0-flash-001",
                 "generation_ms": 2500,
             }
         }

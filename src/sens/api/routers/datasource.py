@@ -2,10 +2,10 @@
 
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, File, UploadFile, Header, HTTPException, Depends
-from fastapi.responses import JSONResponse
 
 import structlog
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from sens.datasource import DataSourceManager, DataSourceType
 from sens.datasource.models import DataSourceResponse, TableInfo
@@ -33,49 +33,51 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     source_name: Optional[str] = None,
     session_id: Optional[str] = Header(None, alias="X-Session-Id"),
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ) -> DataSourceResponse:
     """Upload CSV/Excel files and create a new data source."""
-    
+
     # Generate session ID if not provided
     if not session_id:
         session_id = str(uuid.uuid4())
-    
-    logger.info("uploading_files", 
-                session_id=session_id, 
-                file_count=len(files),
-                files=[f.filename for f in files])
-    
+
+    logger.info(
+        "uploading_files",
+        session_id=session_id,
+        file_count=len(files),
+        files=[f.filename for f in files],
+    )
+
     try:
         # Validate files
-        allowed_extensions = {'.csv', '.xlsx', '.xls'}
+        allowed_extensions = {".csv", ".xlsx", ".xls"}
         for file in files:
-            if not any(file.filename.lower().endswith(ext) for ext in allowed_extensions):
+            if not any(
+                file.filename.lower().endswith(ext) for ext in allowed_extensions
+            ):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"File {file.filename} has unsupported extension. Allowed: {allowed_extensions}"
+                    detail=f"File {file.filename} has unsupported extension. Allowed: {allowed_extensions}",
                 )
-            
+
             # Check file size (100MB limit)
             if file.size and file.size > 100 * 1024 * 1024:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"File {file.filename} exceeds 100MB size limit"
+                    detail=f"File {file.filename} exceeds 100MB size limit",
                 )
-        
+
         # Create data source from files
         source = await datasource_manager.create_file_source(
-            session_id=session_id,
-            files=files,
-            source_name=source_name
+            session_id=session_id, files=files, source_name=source_name
         )
-        
+
         # Get table information
         tables = await datasource_manager.get_table_info(source)
-        
+
         # Calculate total rows
         total_rows = sum(table.row_count for table in tables)
-        
+
         return DataSourceResponse(
             session_id=session_id,
             source_id=source.id,
@@ -83,37 +85,35 @@ async def upload_files(
             name=source.name,
             tables=tables,
             total_rows=total_rows,
-            message=f"Successfully uploaded {len(files)} file(s) with {len(tables)} table(s)"
+            message=f"Successfully uploaded {len(files)} file(s) with {len(tables)} table(s)",
         )
-        
+
     except Exception as e:
-        logger.error("file_upload_failed", 
-                    session_id=session_id, 
-                    error=str(e))
+        logger.error("file_upload_failed", session_id=session_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/session/{session_id}", response_model=DataSourceResponse)
 async def get_session_info(
     session_id: str,
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ) -> DataSourceResponse:
     """Get information about the data source for a session."""
-    
+
     source = datasource_manager.get_session_source(session_id)
     if not source:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     tables = await datasource_manager.get_table_info(source)
     total_rows = sum(table.row_count for table in tables)
-    
+
     return DataSourceResponse(
         session_id=session_id,
         source_id=source.id,
         type=source.type,
         name=source.name,
         tables=tables,
-        total_rows=total_rows
+        total_rows=total_rows,
     )
 
 
@@ -122,71 +122,78 @@ async def preview_table(
     table_name: str,
     session_id: str = Header(..., alias="X-Session-Id"),
     limit: int = 100,
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """Preview data from a specific table."""
-    
+
     source = datasource_manager.get_session_source(session_id)
     if not source:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     try:
         if source.type == DataSourceType.UPLOADED_FILE:
             conn = source.get_connection()
-            
+
             # Check if table exists
-            tables = conn.execute("""
-                SELECT table_name 
-                FROM information_schema.tables 
+            tables = conn.execute(
+                """
+                SELECT table_name
+                FROM information_schema.tables
                 WHERE table_schema = 'main' AND table_name = ?
-            """, [table_name]).fetchall()
-            
+            """,
+                [table_name],
+            ).fetchall()
+
             if not tables:
-                raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-            
+                raise HTTPException(
+                    status_code=404, detail=f"Table '{table_name}' not found"
+                )
+
             # Get preview data
             result = conn.execute(f'SELECT * FROM "{table_name}" LIMIT ?', [limit])
-            
+
             columns = [desc[0] for desc in result.description]
             rows = result.fetchall()
-            
+
             # Convert to list of dicts
             data = [dict(zip(columns, row)) for row in rows]
-            
+
             return {
                 "table_name": table_name,
                 "columns": columns,
                 "row_count": len(data),
-                "data": data
+                "data": data,
             }
         else:
-            raise HTTPException(status_code=400, detail="Preview only available for uploaded files")
-            
+            raise HTTPException(
+                status_code=400, detail="Preview only available for uploaded files"
+            )
+
     except Exception as e:
-        logger.error("table_preview_failed", 
-                    session_id=session_id,
-                    table=table_name,
-                    error=str(e))
+        logger.error(
+            "table_preview_failed",
+            session_id=session_id,
+            table=table_name,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/session/{session_id}")
 async def delete_session(
     session_id: str,
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """Delete a session and its associated data."""
-    
+
     if session_id not in datasource_manager.sessions:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     try:
         await datasource_manager._cleanup_session(session_id)
         return {"message": f"Session {session_id} deleted successfully"}
     except Exception as e:
-        logger.error("session_deletion_failed", 
-                    session_id=session_id,
-                    error=str(e))
+        logger.error("session_deletion_failed", session_id=session_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -194,124 +201,157 @@ async def delete_session(
 async def delete_table(
     session_id: str,
     table_name: str,
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """Delete a specific table from a session."""
-    
+
     source = datasource_manager.get_session_source(session_id)
     if not source:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     if source.type != DataSourceType.UPLOADED_FILE:
-        raise HTTPException(status_code=400, detail="Table deletion only available for uploaded files")
-    
+        raise HTTPException(
+            status_code=400, detail="Table deletion only available for uploaded files"
+        )
+
     try:
         conn = source.get_connection()
-        
+
         # Check if table exists
-        tables = conn.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
+        tables = conn.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
             WHERE table_schema = 'main' AND table_name = ?
-        """, [table_name]).fetchall()
-        
+        """,
+            [table_name],
+        ).fetchall()
+
         if not tables:
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Table '{table_name}' not found"
+            )
+
         # Drop the table
         conn.execute(f'DROP TABLE "{table_name}"')
-        
+
         # Update schema if already extracted
         if source.unified_schema:
             source.unified_schema.tables = [
-                t for t in source.unified_schema.tables 
-                if t.name != table_name
+                t for t in source.unified_schema.tables if t.name != table_name
             ]
-        
-        logger.info("table_deleted", 
-                   session_id=session_id,
-                   table=table_name)
-        
+
+        logger.info("table_deleted", session_id=session_id, table=table_name)
+
         # Get updated table info
         tables = await datasource_manager.get_table_info(source)
-        
+
         # If no tables left, clean up the session
         if not tables:
             await datasource_manager._cleanup_session(session_id)
-            return {"message": f"Table '{table_name}' deleted. Session cleaned up as no tables remain."}
-        
+            return {
+                "message": f"Table '{table_name}' deleted. Session cleaned up as no tables remain."
+            }
+
         return {
             "message": f"Table '{table_name}' deleted successfully",
-            "remaining_tables": [t.name for t in tables]
+            "remaining_tables": [t.name for t in tables],
         }
-        
+
     except Exception as e:
-        logger.error("table_deletion_failed", 
-                    session_id=session_id,
-                    table=table_name,
-                    error=str(e))
+        logger.error(
+            "table_deletion_failed",
+            session_id=session_id,
+            table=table_name,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/sources")
 async def list_sources(
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """List all available data sources."""
-    
+
     sources = []
     for source_id, source in datasource_manager.sources.items():
-        sources.append({
-            "id": source.id,
-            "name": source.name,
-            "type": source.type.value,
-            "created_at": source.created_at.isoformat(),
-            "schema_extracted": source.schema_extracted
-        })
-    
+        sources.append(
+            {
+                "id": source.id,
+                "name": source.name,
+                "type": source.type.value,
+                "created_at": source.created_at.isoformat(),
+                "schema_extracted": source.schema_extracted,
+            }
+        )
+
     return {"sources": sources}
 
 
 @router.get("/suggestions")
 async def get_query_suggestions(
     session_id: Optional[str] = Header(None, alias="X-Session-Id"),
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """Get contextual query suggestions based on the data source."""
-    
+
     # If no session ID, return suggestions for default database
     if not session_id:
+        logger.info("get_query_suggestions_default_start")
         # Ensure default database schema is extracted
         await datasource_manager.ensure_default_schema_extracted()
-        
+
         # Get the default source
         default_source = datasource_manager.get_source("default")
+        logger.info(
+            "default_source_check",
+            source_exists=bool(default_source),
+            schema_extracted=(
+                default_source.schema_extracted if default_source else False
+            ),
+            has_unified_schema=(
+                bool(default_source.unified_schema) if default_source else False
+            ),
+            table_count=(
+                len(default_source.unified_schema.tables)
+                if default_source and default_source.unified_schema
+                else 0
+            ),
+        )
+
         if default_source:
             try:
                 # Use LLM-powered suggestions for default database
-                suggestions = await datasource_manager.get_query_suggestions(default_source)
+                suggestions = await datasource_manager.get_query_suggestions(
+                    default_source
+                )
                 return {
                     "session_id": "default",
                     "source_name": default_source.name,
-                    "suggestions": suggestions
+                    "suggestions": suggestions,
                 }
             except Exception as e:
-                logger.warning("default_db_suggestions_failed", error=str(e))
-        
+                logger.warning(
+                    "default_db_suggestions_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
         # Fallback to generic suggestions
         default_suggestions = [
             "Show all tables in the database",
             "Count total number of records across all tables",
             "Show database schema information",
             "List all columns and their data types",
-            "Show sample data from each table"
+            "Show sample data from each table",
         ]
         return {
             "session_id": "default",
             "source_name": "Default Database",
-            "suggestions": default_suggestions
+            "suggestions": default_suggestions,
         }
-    
+
     source = datasource_manager.get_session_source(session_id)
     if not source:
         # Return default suggestions if session not found
@@ -321,21 +361,19 @@ async def get_query_suggestions(
             "suggestions": [
                 "Upload a CSV or Excel file to get started",
                 "Connect to a database for analysis",
-                "Try querying the default database"
-            ]
+                "Try querying the default database",
+            ],
         }
-    
+
     try:
         suggestions = await datasource_manager.get_query_suggestions(source)
         return {
             "session_id": session_id,
             "source_name": source.name,
-            "suggestions": suggestions
+            "suggestions": suggestions,
         }
     except Exception as e:
-        logger.error("query_suggestions_failed", 
-                    session_id=session_id,
-                    error=str(e))
+        logger.error("query_suggestions_failed", session_id=session_id, error=str(e))
         # Return generic suggestions on error
         return {
             "session_id": session_id,
@@ -343,18 +381,18 @@ async def get_query_suggestions(
             "suggestions": [
                 f"Show all data from {source.name}",
                 f"Count records in {source.name}",
-                f"Show summary statistics"
-            ]
+                f"Show summary statistics",
+            ],
         }
 
 
 @router.post("/suggestions/refresh")
 async def refresh_query_suggestions(
     session_id: Optional[str] = Header(None, alias="X-Session-Id"),
-    datasource_manager: DataSourceManager = Depends(get_datasource_manager)
+    datasource_manager: DataSourceManager = Depends(get_datasource_manager),
 ):
     """Force refresh query suggestions for a data source."""
-    
+
     # Determine which source to refresh
     if not session_id:
         # Refresh default database suggestions
@@ -362,34 +400,46 @@ async def refresh_query_suggestions(
         default_source = datasource_manager.get_source("default")
         if default_source:
             try:
-                suggestions = await datasource_manager.refresh_query_suggestions(default_source)
+                suggestions = await datasource_manager.refresh_query_suggestions(
+                    default_source
+                )
                 return {
                     "session_id": "default",
                     "source_name": default_source.name,
                     "suggestions": suggestions,
-                    "refreshed": True
+                    "refreshed": True,
                 }
             except Exception as e:
-                logger.error("default_suggestions_refresh_failed", error=str(e))
-                raise HTTPException(status_code=500, detail="Failed to refresh suggestions")
+                logger.error(
+                    "default_suggestions_refresh_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    has_schema=bool(default_source.unified_schema),
+                    table_count=(
+                        len(default_source.unified_schema.tables)
+                        if default_source.unified_schema
+                        else 0
+                    ),
+                )
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to refresh suggestions: {str(e)}"
+                )
         else:
             raise HTTPException(status_code=404, detail="Default database not found")
-    
+
     # Refresh session-specific source
     source = datasource_manager.get_session_source(session_id)
     if not source:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     try:
         suggestions = await datasource_manager.refresh_query_suggestions(source)
         return {
             "session_id": session_id,
             "source_name": source.name,
             "suggestions": suggestions,
-            "refreshed": True
+            "refreshed": True,
         }
     except Exception as e:
-        logger.error("suggestions_refresh_failed", 
-                    session_id=session_id,
-                    error=str(e))
+        logger.error("suggestions_refresh_failed", session_id=session_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to refresh suggestions")

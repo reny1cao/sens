@@ -193,7 +193,9 @@ async def handle_nl2sql(
         sys.exit(1)
 
 
-def handle_extract_schema(args: argparse.Namespace, log: structlog.BoundLogger) -> None:
+async def handle_extract_schema(
+    args: argparse.Namespace, log: structlog.BoundLogger
+) -> None:
     """Handle schema extraction command.
 
     Args:
@@ -201,27 +203,124 @@ def handle_extract_schema(args: argparse.Namespace, log: structlog.BoundLogger) 
         log: Logger instance
     """
     try:
-        # Import here to avoid loading dependencies unless needed
-        from sens.schema.schema_extractor import SchemaExtractor
+        # Use datasource manager for extraction with caching
+        import time
 
-        settings = get_settings()
-        schema_path = args.output or settings.schema_path
+        from sens.datasource.manager import DataSourceManager
+        from sens.schema.graph import SchemaGraph
 
-        # Ensure output directory exists
-        schema_path.parent.mkdir(parents=True, exist_ok=True)
+        start_time = time.time()
+        log.info("extracting_schema_with_cache_support")
 
-        extractor = SchemaExtractor()
-        schema = extractor.extract_and_save(config_dir=str(schema_path.parent))
+        # Force extraction if requested
+        if args.force:
+            log.info("force_flag_set_clearing_cache")
+            from sens.caching.factory import get_cache_manager
+            from sens.schema.cache_utils import SchemaCache
+
+            settings = get_settings()
+            db_config = {
+                "host": settings.db_host,
+                "port": settings.db_port,
+                "database": settings.db_name,
+                "user": settings.db_user,
+            }
+            cache_key = SchemaCache.get_cache_key("default", db_config)
+
+            cache_manager = get_cache_manager()
+            await cache_manager.delete(cache_key)
+            log.info("schema_cache_cleared")
+
+        # Extract schema using datasource manager
+        datasource_manager = DataSourceManager()
+        await datasource_manager.ensure_default_schema_extracted()
+
+        # Verify extraction
+        schema_graph = SchemaGraph.get_instance()
+        table_count = len(schema_graph._all_tables)
+
+        elapsed_time = time.time() - start_time
 
         log.info(
-            "schema_extracted",
-            output_path=str(schema_path),
-            table_count=len(schema.tables),
-            relationship_count=len(schema.relationships),
+            "schema_extracted_successfully",
+            table_count=table_count,
+            elapsed_seconds=f"{elapsed_time:.2f}",
+            cached=not args.force,
         )
+
+        print(f"\nSchema extraction completed:")
+        print(f"- Tables found: {table_count}")
+        print(f"- Time taken: {elapsed_time:.2f} seconds")
+        if not args.force:
+            print("- Using cached schema (use --force to re-extract)")
 
     except Exception as e:
         log.error("schema_extraction_failed", error=str(e))
+        sys.exit(1)
+
+
+async def handle_cache_status(
+    args: argparse.Namespace, log: structlog.BoundLogger
+) -> None:
+    """Handle cache status command.
+
+    Args:
+        args: Command line arguments
+        log: Logger instance
+    """
+    try:
+        from datetime import datetime
+
+        from sens.caching.factory import get_cache_manager
+        from sens.schema.cache_utils import SchemaCache
+
+        settings = get_settings()
+        cache_manager = get_cache_manager()
+
+        print("\nCache Configuration:")
+        print(f"- Backend: {settings.cache.backend}")
+        if settings.cache.backend == "file":
+            print(f"- Cache directory: {settings.cache.file_cache_dir}")
+        print(f"- Schema TTL: {settings.cache.schema_ttl_hours} hours")
+
+        # Check default schema cache
+        db_config = {
+            "host": settings.db_host,
+            "port": settings.db_port,
+            "database": settings.db_name,
+            "user": settings.db_user,
+        }
+        cache_key = SchemaCache.get_cache_key("default", db_config)
+
+        print("\nDefault Schema Cache:")
+        cached_schema = await cache_manager.get(cache_key)
+        if cached_schema:
+            print("- Status: CACHED")
+            print(f"- Tables: {len(cached_schema.tables)}")
+            if cached_schema.extracted_at:
+                age = datetime.utcnow() - cached_schema.extracted_at
+                print(f"- Age: {age.total_seconds() / 3600:.1f} hours")
+                print(f"- Extracted at: {cached_schema.extracted_at}")
+
+            # Check if needs refresh
+            needs_refresh = await SchemaCache.should_refresh_schema(
+                cached_schema, max_age_hours=settings.cache.schema_ttl_hours
+            )
+            print(f"- Needs refresh: {'Yes' if needs_refresh else 'No'}")
+        else:
+            print("- Status: NOT CACHED")
+
+        # Clear cache if requested
+        if args.clear:
+            if args.clear == "all":
+                await cache_manager.clear()
+                print("\nAll cache cleared.")
+            elif args.clear == "schema":
+                await cache_manager.delete(cache_key)
+                print("\nSchema cache cleared.")
+
+    except Exception as e:
+        log.error("cache_status_failed", error=str(e))
         sys.exit(1)
 
 
@@ -574,6 +673,12 @@ def main() -> None:
         type=Path,
         help="Output path for schema file",
     )
+    extract_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Force re-extraction (ignore cache)",
+    )
 
     # Index building command
     build_parser = subparsers.add_parser("build-index", help="Build embedding index")
@@ -731,6 +836,14 @@ def main() -> None:
     subparsers.add_parser("financial", help="Financial data management", add_help=False)
     # Note: Financial subcommands are handled by click, not argparse
 
+    # Cache management command
+    cache_parser = subparsers.add_parser("cache", help="Cache management")
+    cache_parser.add_argument(
+        "--clear",
+        choices=["all", "schema"],
+        help="Clear cache (all or just schema)",
+    )
+
     # Handle financial command specially to pass through to click
     if len(sys.argv) > 1 and sys.argv[1] == "financial":
         # Import and run financial commands using click directly
@@ -753,7 +866,7 @@ def main() -> None:
     if args.command == "nl2sql":
         asyncio.run(handle_nl2sql(args, parser, log))
     elif args.command == "extract-schema":
-        handle_extract_schema(args, log)
+        asyncio.run(handle_extract_schema(args, log))
     elif args.command == "build-index":
         handle_build_index(args, log)
     elif args.command == "build-schema-index":
@@ -766,6 +879,8 @@ def main() -> None:
         handle_performance(args, log)
     elif args.command == "config":
         handle_config_command(args, log)
+    elif args.command == "cache":
+        asyncio.run(handle_cache_status(args, log))
     # Financial command is handled above before argparse
 
 

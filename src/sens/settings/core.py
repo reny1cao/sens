@@ -197,6 +197,19 @@ class Settings(BaseSettings):
         pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$",
     )
 
+    # Startup Configuration
+    # -------------------
+    fast_startup: bool = Field(
+        default=True,
+        description="Enable fast startup mode (defer schema extraction)",
+        validation_alias="SENS_FAST_STARTUP",
+    )
+    preload_schema_background: bool = Field(
+        default=True,
+        description="Preload schema in background after startup",
+        validation_alias="SENS_PRELOAD_SCHEMA_BACKGROUND",
+    )
+
     model_config = SettingsConfigDict(
         env_prefix="SENS_",
         env_file=".env",

@@ -83,9 +83,14 @@ export function ExampleQueries({ onExampleClick }: ExampleQueriesProps) {
           // Take first 5 suggestions
           const newSuggestions = data.suggestions.slice(0, 5);
           console.log('[ExampleQueries] Setting new suggestions:', newSuggestions);
-          setSuggestions(newSuggestions);
+          setSuggestions(prevSuggestions => {
+            console.log('[ExampleQueries] Previous suggestions:', prevSuggestions);
+            console.log('[ExampleQueries] New suggestions to set:', newSuggestions);
+            return newSuggestions;
+          });
         } else {
           console.log('[ExampleQueries] No suggestions in response, keeping defaults');
+          console.log('[ExampleQueries] Response data:', data);
         }
       } else {
         // Use default suggestions if API fails

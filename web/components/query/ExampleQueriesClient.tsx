@@ -35,7 +35,7 @@ export function ExampleQueriesClient({ onExampleClick, compact = false }: Exampl
 
     console.log('[ExampleQueriesClient] Fetching suggestions...');
     fetchSuggestions();
-  }, [mounted, activeSource?.id, sessionId]);
+  }, [mounted]); // Only depend on mounted to avoid multiple fetches
 
   const fetchSuggestions = async (forceRefresh = false) => {
     setIsLoading(true);
