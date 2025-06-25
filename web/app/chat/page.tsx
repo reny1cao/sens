@@ -2,7 +2,7 @@
 
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { DataSourceProvider } from '@/contexts/DataSourceContext';
-import { ChatInterface } from '@/components/chat/ChatInterface';
+import { ChatInterfaceV6 } from '@/components/chat/ChatInterfaceV6';
 import { DataSourceSelector } from '@/components/datasource/DataSourceSelector';
 import { Database, MessageSquare } from 'lucide-react';
 
@@ -50,7 +50,7 @@ export default function ChatPage() {
 
           {/* Main Content */}
           <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-            <ChatInterface />
+            <ChatInterfaceV6 />
           </main>
         </div>
       </QueryProvider>

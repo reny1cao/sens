@@ -1,7 +1,8 @@
 import json
-import logging
 from pathlib import Path
 from typing import ClassVar, Dict, List, Optional, Set, Tuple
+
+import structlog
 
 from sens.settings import get_settings
 
@@ -14,7 +15,7 @@ from .schema_extractor import (
     TableInfo,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Get schema path from settings
 settings = get_settings()
@@ -31,17 +32,18 @@ class SchemaGraph:
         """Reset the singleton instance. Primarily used for testing."""
         cls._instance = None
         cls._initialized = False
-        logger.info("SchemaGraph singleton instance reset.")
+        logger.info("schema_graph_reset")
 
     @classmethod
     def get_instance(cls, schema_path: str = DEFAULT_SCHEMA_PATH) -> "SchemaGraph":
         """Gets the singleton instance, initializing it on first call."""
         if cls._instance is None:
-            logger.info("Creating new SchemaGraph singleton instance.")
+            logger.info("schema_graph_creating_singleton")
             cls._instance = cls(schema_path=schema_path)
         elif not cls._initialized:
             logger.warning(
-                "SchemaGraph instance exists but not initialized. Re-initializing."
+                "schema_graph_reinitializing",
+                reason="instance exists but not initialized",
             )
             cls._instance.__init__(schema_path=cls._instance.schema_path)
 
@@ -53,15 +55,16 @@ class SchemaGraph:
         Loads and processes schema data if not already initialized.
         """
         if SchemaGraph._initialized:
-            logger.debug("SchemaGraph already initialized, skipping re-initialization.")
+            logger.debug("schema_graph_already_initialized")
             if self.schema_path != schema_path:
                 logger.warning(
-                    f"SchemaGraph singleton already initialized with {self.schema_path}. "
-                    f"Ignoring request to re-initialize with {schema_path}."
+                    "schema_graph_path_mismatch",
+                    current_path=self.schema_path,
+                    requested_path=schema_path,
                 )
             return
 
-        logger.info(f"Initializing SchemaGraph singleton from {schema_path}")
+        logger.info("schema_graph_initializing", schema_path=schema_path)
         self.schema_path = schema_path
         self._pk_map: Dict[str, List[str]] = {}
         # Maps table -> list of (fk_cols_list, ref_table, ref_cols_list) tuples originating from table
@@ -78,15 +81,13 @@ class SchemaGraph:
 
         self._load_and_process_schema()
         SchemaGraph._initialized = True
-        logger.info(
-            f"SchemaGraph singleton initialized successfully with {len(self._all_tables)} tables."
-        )
+        logger.info("schema_graph_initialized", table_count=len(self._all_tables))
 
     def _load_and_process_schema(self):
         """Loads schema JSON using Pydantic models and builds internal maps."""
         schema_file = Path(self.schema_path)
         if not schema_file.is_file():
-            logger.error(f"Schema metadata file not found: {self.schema_path}")
+            logger.error("schema_file_not_found", schema_path=self.schema_path)
             SchemaGraph._initialized = False
             raise FileNotFoundError(f"Schema file not found: {self.schema_path}")
 
@@ -139,7 +140,9 @@ class SchemaGraph:
                     self._adjacency_list[to_table].add(from_table)
 
         except Exception as e:
-            logger.exception(f"Failed processing schema file {self.schema_path}: {e}")
+            logger.exception(
+                "schema_processing_failed", schema_path=self.schema_path, error=str(e)
+            )
             SchemaGraph._initialized = False
             raise
 

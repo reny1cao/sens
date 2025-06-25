@@ -65,34 +65,61 @@ export function ChatInterfaceV6() {
         }
         return true;
       })
-      .map(step => {
-        if (step.type === "action") {
-          // Show just the action type
-          const actionType = step.content.split(":")[0].trim();
-          return { ...step, content: actionType };
-        }
-        return step;
-      });
+      .map(step => step);
 
     // Determine current status
     let status: Message["status"] = "processing";
     let error: string | undefined;
+
+    // Extract answer from result or from answer step
     let answer: string | undefined = agentQuery.result?.answer;
+    if (!answer) {
+      // Look for answer in steps
+      const answerStep = transformedSteps.find(step => step.type === 'answer');
+      if (answerStep) {
+        answer = answerStep.content;
+      }
+    }
 
     if (agentQuery.error) {
       status = "error";
       error = agentQuery.error;
     } else if (agentQuery.isComplete) {
-      // Check for failed states
-      if (!agentQuery.result ||
-          (!agentQuery.result.answer && !agentQuery.result.results)) {
-        status = "failed";
-        // Clear answer if it was just a generic failed message
-        if (answer && (answer.includes("I couldn't find") || answer.includes("No results"))) {
-          answer = undefined;
+      console.log('[ChatV6] Query complete. Result:', agentQuery.result);
+      console.log('[ChatV6] agentQuery.error:', agentQuery.error);
+
+      // Only change status if we have a definitive result
+      if (agentQuery.result) {
+        if (agentQuery.result.success === false) {
+          console.log('[ChatV6] Result success=false, marking as failed');
+          status = "failed";
+          error = agentQuery.result.error || "Query processing failed";
+        } else if (agentQuery.result.answer || agentQuery.result.results || agentQuery.result.sql || agentQuery.result.success) {
+          // If we have any of these, consider it successful
+          console.log('[ChatV6] Has answer/results/sql/success, marking as complete');
+          console.log('[ChatV6] Result details:', {
+            hasAnswer: !!agentQuery.result.answer,
+            hasResults: !!agentQuery.result.results,
+            hasSql: !!agentQuery.result.sql,
+            success: agentQuery.result.success
+          });
+          status = "complete";
+          // Extract answer from result
+          answer = agentQuery.result.answer || answer;
+        } else {
+          // Keep as processing if we're still waiting for result
+          console.log('[ChatV6] Complete but no clear result yet, keeping as processing');
+          status = "processing";
         }
       } else {
-        status = "complete";
+        // If complete but no result yet, check if we have an answer from steps
+        if (answer) {
+          console.log('[ChatV6] Complete with answer from steps, marking as complete');
+          status = "complete";
+        } else {
+          console.log('[ChatV6] Complete but no result or answer yet, keeping as processing');
+          status = "processing";
+        }
       }
     }
 

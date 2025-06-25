@@ -209,6 +209,11 @@ class Settings(BaseSettings):
         description="Preload schema in background after startup",
         validation_alias="SENS_PRELOAD_SCHEMA_BACKGROUND",
     )
+    mock_mode: bool = Field(
+        default=False,
+        description="Enable mock mode for testing",
+        validation_alias="SENS_MOCK_MODE",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="SENS_",

@@ -70,8 +70,16 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
   const hasSql = message.data?.sql;
   const hasResults = message.data?.results !== undefined;
 
-  // Check if query failed (no results object at all, not just empty results)
-  const isQueryFailed = message.status === "complete" && !hasResults && !message.error && !message.answer;
+  // Debug logging
+  console.log('[ChatMessageV6] Message debug:', {
+    status: message.status,
+    hasAnswer: !!message.answer,
+    hasData,
+    hasResults,
+    dataSuccess: message.data?.success,
+    resultsRowCount: message.data?.results?.row_count,
+  });
+
 
   // Check for conversational responses
   const isClarification = message.data?.clarification_needed;
@@ -227,7 +235,7 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
         )}
 
         {/* Primary Answer Section - Success Case (SQL executed) */}
-        {message.answer && !isQueryFailed && !isClarification && !isDirectAnswer && (
+        {message.answer && !isClarification && !isDirectAnswer && (
           <div className="space-y-2">
             <Markdown className="text-sm text-gray-900">
               {message.answer}
@@ -263,53 +271,6 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
           </div>
         )}
 
-        {/* Failed Query State - No Results Found */}
-        {isQueryFailed && !isClarification && !isDirectAnswer && !hasSuggestions && (
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 text-sm text-amber-700 bg-amber-50 rounded-lg p-4">
-              <HelpCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-              <div className="space-y-1">
-                <div className="font-medium">No results found</div>
-                <div className="text-amber-600">
-                  I couldn't find any data matching your query. This could mean:
-                </div>
-                <ul className="list-disc list-inside text-amber-600 space-y-0.5 ml-2">
-                  <li>The data doesn't exist in the database</li>
-                  <li>The search criteria might be too specific</li>
-                  <li>There might be a mismatch in naming or values</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Still show SQL if generated */}
-            {hasSql && (
-              <Collapsible.Root open={isSQLExpanded} onOpenChange={setIsSQLExpanded}>
-                <Collapsible.Trigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 -ml-2"
-                  >
-                    <Code2 className="w-3 h-3 mr-1" />
-                    <span>View generated SQL</span>
-                    <ChevronRight
-                      className={cn(
-                        "w-3 h-3 ml-1 transition-transform duration-200",
-                        isSQLExpanded && "rotate-90"
-                      )}
-                    />
-                  </Button>
-                </Collapsible.Trigger>
-
-                <Collapsible.Content className="mt-2">
-                  <div className="bg-gray-900 text-gray-100 rounded-lg p-3 font-mono text-xs overflow-x-auto">
-                    <SQLHighlight sql={message.data.sql} />
-                  </div>
-                </Collapsible.Content>
-              </Collapsible.Root>
-            )}
-          </div>
-        )}
 
         {/* Empty Results - Show when query succeeded but returned 0 rows */}
         {hasResults && !hasData && message.data?.results?.row_count === 0 && (
@@ -317,6 +278,16 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Table2 className="w-4 h-4" />
               <span>Query executed successfully - 0 results found</span>
+            </div>
+          </div>
+        )}
+
+        {/* Data Loading State */}
+        {message.status === "complete" && !hasData && !hasResults && message.answer && !isClarification && !isDirectAnswer && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Loading data...</span>
             </div>
           </div>
         )}
@@ -380,18 +351,6 @@ export function ChatMessageV6({ message, index, onOptionClick }: ChatMessageV6Pr
           </div>
         )}
 
-        {/* Unable to Process State */}
-        {message.status === "failed" && !message.error && !isQueryFailed && (
-          <div className="flex items-start gap-3 text-sm text-gray-600 bg-gray-100 rounded-lg p-4">
-            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            <div className="space-y-1">
-              <div className="font-medium">Unable to process your query</div>
-              <div className="text-gray-500">
-                I wasn't able to understand how to answer your question. Try rephrasing it or breaking it down into simpler parts.
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -413,8 +372,9 @@ function getStepIcon(step: AgentStep) {
         </div>
       );
     case "observation":
-      // Check if it's a failed observation
-      const isFailed = step.content.includes("Failed") || step.content.includes("error");
+      // Check if it's a failed observation (case-insensitive)
+      const lowerContent = step.content.toLowerCase();
+      const isFailed = lowerContent.includes("failed") || lowerContent.includes("error") || lowerContent.includes("does not exist");
       return (
         <div className={cn(
           "w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0",
@@ -427,6 +387,12 @@ function getStepIcon(step: AgentStep) {
           ) : (
             <CheckCircle2 className={cn(iconClass, "text-green-600")} />
           )}
+        </div>
+      );
+    case "answer":
+      return (
+        <div className="w-4 h-4 rounded-full bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center flex-shrink-0">
+          <MessageSquare className={cn(iconClass, "text-indigo-600")} />
         </div>
       );
     default:
