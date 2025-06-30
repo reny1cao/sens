@@ -14,7 +14,6 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from sens.exceptions import ExecutionError
-from sens.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +23,26 @@ class BirdDatabaseSetup:
 
     def __init__(
         self,
-        settings=None,
+        db_host: str = "localhost",
+        db_port: int = 5432,
+        db_user: str = "postgres",
+        db_password: str = "",
         dumps_directory: str = "external/BIRD-CRITIC-1/evaluation/postgre_table_dumps",
     ):
         """
         Initialize database setup.
 
         Args:
-            settings: SENS settings configuration (optional, will use defaults)
+            db_host: PostgreSQL host
+            db_port: PostgreSQL port
+            db_user: PostgreSQL user
+            db_password: PostgreSQL password
             dumps_directory: Directory containing SQL dump files
         """
-        self.settings = settings or get_settings()
+        self.db_host = db_host
+        self.db_port = db_port
+        self.db_user = db_user
+        self.db_password = db_password
         self.dumps_dir = Path(dumps_directory)
         if not self.dumps_dir.exists():
             raise FileNotFoundError(f"Dumps directory not found: {dumps_directory}")
@@ -43,11 +51,11 @@ class BirdDatabaseSetup:
         """Get administrative connection to PostgreSQL."""
         try:
             conn = psycopg2.connect(
-                host=self.settings.db_host,
-                port=self.settings.db_port,
+                host=self.db_host,
+                port=self.db_port,
                 database="postgres",  # Connect to default database
-                user=self.settings.db_user,
-                password=self.settings.db_password,
+                user=self.db_user,
+                password=self.db_password,
             )
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             return conn
@@ -55,11 +63,13 @@ class BirdDatabaseSetup:
             raise ExecutionError(f"Failed to connect to PostgreSQL: {e}")
 
     def list_available_dumps(self) -> List[str]:
-        """List all available SQL dump files."""
+        """List all available database templates."""
         dumps = []
-        for dump_file in self.dumps_dir.glob("*.sql"):
-            db_id = dump_file.stem
-            dumps.append(db_id)
+        for template_dir in self.dumps_dir.iterdir():
+            if template_dir.is_dir() and template_dir.name.endswith("_template"):
+                # Remove the '_template' suffix to get the db_id
+                db_id = template_dir.name.replace("_template", "")
+                dumps.append(db_id)
         return sorted(dumps)
 
     def database_exists(self, db_name: str) -> bool:
@@ -107,18 +117,24 @@ class BirdDatabaseSetup:
 
     def restore_dump(self, db_id: str, database_prefix: str = "bird_") -> bool:
         """
-        Restore a database from SQL dump file.
+        Restore a database from SQL dump files in template directory.
 
         Args:
-            db_id: Database ID (corresponds to dump filename)
+            db_id: Database ID (corresponds to template directory)
             database_prefix: Prefix for the created database name
 
         Returns:
             True if successful, False otherwise
         """
-        dump_file = self.dumps_dir / f"{db_id}.sql"
-        if not dump_file.exists():
-            logger.error(f"Dump file not found: {dump_file}")
+        template_dir = self.dumps_dir / f"{db_id}_template"
+        if not template_dir.exists():
+            logger.error(f"Template directory not found: {template_dir}")
+            return False
+
+        # Get all SQL files in the template directory
+        sql_files = list(template_dir.glob("*.sql"))
+        if not sql_files:
+            logger.error(f"No SQL files found in template directory: {template_dir}")
             return False
 
         db_name = f"{database_prefix}{db_id}"
@@ -128,40 +144,40 @@ class BirdDatabaseSetup:
             logger.error(f"Failed to create database: {db_name}")
             return False
 
-        # Restore from dump using psql
+        # Restore from dump files using psql
         try:
-            cmd = [
-                "psql",
-                "-h",
-                self.settings.db_host,
-                "-p",
-                str(self.settings.db_port),
-                "-U",
-                self.settings.db_user,
-                "-d",
-                db_name,
-                "-f",
-                str(dump_file),
-                "-q",  # Quiet mode
-            ]
+            env = {"PGPASSWORD": self.db_password} if self.db_password else None
 
-            env = (
-                {"PGPASSWORD": self.settings.db_password}
-                if self.settings.db_password
-                else None
-            )
+            logger.info(f"Restoring {len(sql_files)} SQL files to database {db_name}")
 
-            logger.info(f"Restoring dump {dump_file} to database {db_name}")
-            result = subprocess.run(
-                cmd, env=env, capture_output=True, text=True, check=False
-            )
+            # Execute each SQL file
+            for sql_file in sorted(sql_files):
+                cmd = [
+                    "psql",
+                    "-h",
+                    self.db_host,
+                    "-p",
+                    str(self.db_port),
+                    "-U",
+                    self.db_user,
+                    "-d",
+                    db_name,
+                    "-f",
+                    str(sql_file),
+                    "-q",  # Quiet mode
+                ]
 
-            if result.returncode == 0:
-                logger.info(f"Successfully restored database {db_name}")
-                return True
-            else:
-                logger.error(f"Failed to restore database {db_name}: {result.stderr}")
-                return False
+                logger.debug(f"Executing SQL file: {sql_file.name}")
+                result = subprocess.run(
+                    cmd, env=env, capture_output=True, text=True, check=False
+                )
+
+                if result.returncode != 0:
+                    logger.error(f"Failed to execute {sql_file.name}: {result.stderr}")
+                    return False
+
+            logger.info(f"Successfully restored database {db_name}")
+            return True
 
         except Exception as e:
             logger.error(f"Error restoring database {db_name}: {e}")
@@ -246,6 +262,7 @@ class BirdDatabaseSetup:
 def main():
     """Main setup function."""
     import argparse
+    import os
 
     parser = argparse.ArgumentParser(description="Set up BIRD-CRITIC databases")
     parser.add_argument(
@@ -253,11 +270,25 @@ def main():
     )
     parser.add_argument("--limit", type=int, help="Limit number of databases to set up")
     parser.add_argument("--prefix", default="bird_", help="Database name prefix")
+    parser.add_argument("--db-host", default="localhost", help="PostgreSQL host")
+    parser.add_argument("--db-port", type=int, default=5432, help="PostgreSQL port")
+    parser.add_argument("--db-user", default="postgres", help="PostgreSQL user")
+    parser.add_argument("--db-password", default="", help="PostgreSQL password")
 
     args = parser.parse_args()
 
-    settings = get_settings()
-    setup = BirdDatabaseSetup(settings)
+    # Use environment variables if available, otherwise use command line args
+    db_host = os.getenv("SENS_DB_HOST", args.db_host)
+    db_port = int(os.getenv("SENS_DB_PORT", args.db_port))
+    db_user = os.getenv("SENS_DB_USER", args.db_user)
+    db_password = os.getenv("SENS_DB_PASSWORD", args.db_password)
+
+    setup = BirdDatabaseSetup(
+        db_host=db_host,
+        db_port=db_port,
+        db_user=db_user,
+        db_password=db_password,
+    )
 
     if args.cleanup:
         setup.cleanup_databases(args.prefix)

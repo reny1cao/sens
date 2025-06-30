@@ -21,14 +21,22 @@ The evaluation system requires the `datasets` package for Hugging Face integrati
 poetry add datasets
 ```
 
-### 2. Clone BIRD-CRITIC Repository
+### 2. Download BIRD-CRITIC Repository and Database Dumps
 
-The evaluation system automatically clones the BIRD-CRITIC repository to get schema files and database dumps:
+The evaluation system automatically clones the BIRD-CRITIC repository, but the database dumps need to be downloaded separately:
 
 ```bash
-# This is done automatically when you run the setup command
+# This will clone the repository and provide instructions for downloading dumps
 poetry run sens bird-critic setup-db
 ```
+
+**Important**: When you run the setup command for the first time, it will provide a Google Drive link to download the database dumps. You must:
+
+1. Visit the provided Google Drive link
+2. Download the complete database folder
+3. Extract it to `external/BIRD-CRITIC-1/evaluation/`
+4. Ensure you have a `postgre_table_dumps` folder with SQL dump files
+5. Run the setup command again
 
 ### 3. Set Up Databases
 

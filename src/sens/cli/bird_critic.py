@@ -1,12 +1,13 @@
 """CLI commands for BIRD-CRITIC evaluation."""
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import click
 
 from sens.evaluation import BirdCriticEvaluator, BirdDatabaseSetup
-from sens.settings import get_settings
 
 
 @click.group()
@@ -19,10 +20,79 @@ def bird_critic():
 @click.option("--cleanup", is_flag=True, help="Clean up existing databases")
 @click.option("--limit", type=int, help="Limit number of databases to set up")
 @click.option("--prefix", default="bird_", help="Database name prefix")
-def setup_db(cleanup: bool, limit: int, prefix: str):
+@click.option("--db-host", default="localhost", help="PostgreSQL host")
+@click.option("--db-port", type=int, default=5432, help="PostgreSQL port")
+@click.option("--db-user", default="postgres", help="PostgreSQL user")
+@click.option("--db-password", default="", help="PostgreSQL password")
+def setup_db(
+    cleanup: bool,
+    limit: int,
+    prefix: str,
+    db_host: str,
+    db_port: int,
+    db_user: str,
+    db_password: str,
+):
     """Set up BIRD-CRITIC databases from dump files."""
-    settings = get_settings()
-    setup = BirdDatabaseSetup(settings)
+    # Use environment variables if available, otherwise use command line args
+    db_host = os.getenv("SENS_DB_HOST", db_host)
+    db_port = int(os.getenv("SENS_DB_PORT", db_port))
+    db_user = os.getenv("SENS_DB_USER", db_user)
+    db_password = os.getenv("SENS_DB_PASSWORD", db_password)
+
+    # Check if BIRD-CRITIC repository exists, clone if not
+    bird_critic_dir = Path("external/BIRD-CRITIC-1")
+    if not bird_critic_dir.exists():
+        click.echo("BIRD-CRITIC repository not found. Cloning...")
+        try:
+            # Create external directory if it doesn't exist
+            Path("external").mkdir(exist_ok=True)
+
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "https://github.com/bird-bench/BIRD-CRITIC-1.git",
+                    str(bird_critic_dir),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            click.echo("Successfully cloned BIRD-CRITIC repository")
+        except subprocess.CalledProcessError as e:
+            click.echo(f"Error cloning repository: {e}")
+            click.echo(f"stderr: {e.stderr}")
+            return
+        except Exception as e:
+            click.echo(f"Unexpected error: {e}")
+            return
+
+    # Check if database dumps exist
+    dumps_dir = bird_critic_dir / "evaluation" / "postgre_table_dumps"
+    if not dumps_dir.exists():
+        click.echo("⚠️  PostgreSQL database dumps not found!")
+        click.echo()
+        click.echo("The BIRD-CRITIC database dumps need to be downloaded separately:")
+        click.echo(
+            "1. Visit: https://drive.google.com/drive/folders/1nJReLrvZVVrnfgBYwwNEgYvLroPGbcPD?usp=sharing"
+        )
+        click.echo("2. Download the complete database folder")
+        click.echo("3. Extract it to: external/BIRD-CRITIC-1/evaluation/")
+        click.echo(
+            "4. Make sure you have a 'postgre_table_dumps' folder with SQL dump files"
+        )
+        click.echo()
+        click.echo("After downloading, run this command again.")
+        return
+
+    setup = BirdDatabaseSetup(
+        db_host=db_host,
+        db_port=db_port,
+        db_user=db_user,
+        db_password=db_password,
+    )
 
     if cleanup:
         removed = setup.cleanup_databases(prefix)
@@ -57,7 +127,16 @@ def setup_db(cleanup: bool, limit: int, prefix: str):
 @click.option("--schema-file", help="Path to post_schema.jsonl file")
 def evaluate(limit: int, output: str, schema_file: str):
     """Run BIRD-CRITIC evaluation."""
-    settings = get_settings()
+    try:
+        from sens.settings import get_settings
+
+        settings = get_settings()
+    except Exception as e:
+        click.echo(f"Error: Could not load SENS settings: {e}")
+        click.echo(
+            "Make sure you have configured SENS_OPENROUTER_API_KEY and other required settings in your .env file"
+        )
+        return
 
     # Default schema file path
     if not schema_file:
