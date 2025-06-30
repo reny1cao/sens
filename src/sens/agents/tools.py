@@ -210,6 +210,139 @@ class AgentTools:
         except Exception:
             return False
 
+    async def discover_databases(self, prefix: str = "bird_") -> Dict[str, Any]:
+        """Discover available databases with given prefix.
+
+        Args:
+            prefix: Database name prefix to search for (default: "bird_")
+
+        Returns:
+            Dict with success status and list of discovered databases
+        """
+        log.info("tool_discover_databases", prefix=prefix)
+
+        try:
+            # Query to find databases with the specified prefix
+            sql = """
+            SELECT datname
+            FROM pg_database
+            WHERE datname LIKE %s
+            AND datistemplate = false
+            ORDER BY datname
+            """
+
+            # Use a parameterized query to prevent SQL injection
+            result = self.executor.execute_with_params(sql, (f"{prefix}%",))
+
+            if result.error:
+                return {"success": False, "error": result.error, "databases": []}
+
+            databases = [row[0] for row in result.rows]
+            log.info(
+                "discovered_databases", count=len(databases), databases=databases[:10]
+            )
+
+            return {
+                "success": True,
+                "databases": databases,
+                "count": len(databases),
+                "prefix": prefix,
+            }
+
+        except Exception as e:
+            log.error("database_discovery_failed", error=str(e))
+            return {"success": False, "error": str(e), "databases": []}
+
+    async def switch_database(self, db_name: str) -> Dict[str, Any]:
+        """Switch to a different database for subsequent operations.
+
+        Args:
+            db_name: Name of the database to switch to
+
+        Returns:
+            Dict with success status and connection information
+        """
+        log.info("tool_switch_database", db_name=db_name)
+
+        try:
+            # Create new database URL
+            settings = get_settings()
+            current_url = settings.db_url
+
+            # Parse current URL and replace database name
+            if current_url.endswith("/"):
+                current_url = current_url[:-1]
+
+            # Split URL to get base and current database
+            url_parts = current_url.rsplit("/", 1)
+            if len(url_parts) == 2:
+                base_url = url_parts[0]
+                new_db_url = f"{base_url}/{db_name}"
+            else:
+                # If no database in URL, append it
+                new_db_url = f"{current_url}/{db_name}"
+
+            # Test connection to new database
+            test_executor = SafeSQLExecutor(new_db_url)
+            test_result = test_executor.execute("SELECT current_database()")
+
+            if test_result.error:
+                return {
+                    "success": False,
+                    "error": f"Cannot connect to database {db_name}: {test_result.error}",
+                    "current_database": None,
+                }
+
+            # Close old connection and replace executor
+            self.executor.close()
+            self.executor = test_executor
+
+            # Refresh schema graph for new database
+            self.schema_graph = SchemaGraph.get_instance()
+
+            # Get actual database name from connection
+            actual_db = test_result.rows[0][0] if test_result.rows else db_name
+
+            log.info(
+                "database_switched_successfully",
+                new_database=actual_db,
+                target_database=db_name,
+            )
+
+            return {
+                "success": True,
+                "current_database": actual_db,
+                "target_database": db_name,
+                "message": f"Successfully switched to database: {actual_db}",
+            }
+
+        except Exception as e:
+            log.error("database_switch_failed", error=str(e), db_name=db_name)
+            return {"success": False, "error": str(e), "current_database": None}
+
+    async def get_current_database(self) -> Dict[str, Any]:
+        """Get the name of the currently connected database.
+
+        Returns:
+            Dict with current database name and connection status
+        """
+        try:
+            result = self.executor.execute("SELECT current_database()")
+            if result.error:
+                return {
+                    "success": False,
+                    "error": result.error,
+                    "current_database": None,
+                }
+
+            current_db = result.rows[0][0] if result.rows else "unknown"
+
+            return {"success": True, "current_database": current_db}
+
+        except Exception as e:
+            log.error("get_current_database_failed", error=str(e))
+            return {"success": False, "error": str(e), "current_database": None}
+
     async def explore_database(self, query: str = None) -> Dict[str, Any]:
         """Execute exploratory SQL queries to understand the PostgreSQL database.
 

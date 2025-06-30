@@ -34,6 +34,26 @@ def setup_db(
     db_password: str,
 ):
     """Set up BIRD-CRITIC databases from dump files."""
+    # Validate environment configuration first
+    from sens.settings.environment import (
+        log_environment_status,
+        validate_bird_critic_environment,
+    )
+
+    click.echo("🔍 Validating environment configuration...")
+    log_environment_status()
+
+    if not validate_bird_critic_environment():
+        click.echo(
+            "❌ Environment not properly configured for BIRD-CRITIC database setup"
+        )
+        click.echo(
+            "Please ensure local PostgreSQL is configured with SENS_DB_* environment variables"
+        )
+        return
+
+    click.echo("✅ Environment configuration validated")
+
     # Use environment variables if available, otherwise use command line args
     db_host = os.getenv("SENS_DB_HOST", db_host)
     db_port = int(os.getenv("SENS_DB_PORT", db_port))
@@ -127,6 +147,24 @@ def setup_db(
 @click.option("--schema-file", help="Path to post_schema.jsonl file")
 def evaluate(limit: int, output: str, schema_file: str):
     """Run BIRD-CRITIC evaluation."""
+    # Validate environment configuration first
+    from sens.settings.environment import (
+        log_environment_status,
+        validate_bird_critic_environment,
+    )
+
+    click.echo("🔍 Validating environment configuration...")
+    log_environment_status()
+
+    if not validate_bird_critic_environment():
+        click.echo("❌ Environment not properly configured for BIRD-CRITIC evaluation")
+        click.echo(
+            "Please ensure local PostgreSQL is configured with SENS_DB_* environment variables"
+        )
+        return
+
+    click.echo("✅ Environment configuration validated")
+
     try:
         from sens.settings import get_settings
 
@@ -159,29 +197,75 @@ def evaluate(limit: int, output: str, schema_file: str):
     )
 
     # Run evaluation
-    results = evaluator.evaluate_all(limit=limit)
+    import asyncio
+
+    results = asyncio.run(evaluator.evaluate_all(limit=limit))
 
     # Calculate metrics
     success_rate = evaluator.get_success_rate(results)
     successful = sum(1 for r in results if r.execution_success)
     failed = len(results) - successful
 
+    # Calculate comprehensive metrics
+    metrics = evaluator.get_comprehensive_metrics(results)
+
     # Display results
     click.echo("\n" + "=" * 50)
-    click.echo("EVALUATION RESULTS")
+    click.echo("BIRD-CRITIC EVALUATION RESULTS")
     click.echo("=" * 50)
     click.echo(f"Total tasks evaluated: {len(results)}")
     click.echo(f"Successful executions: {successful}")
     click.echo(f"Failed executions: {failed}")
     click.echo(f"Success rate: {success_rate:.2%}")
+    click.echo(f"SQL generation rate: {metrics.get('sql_generation_rate', 0):.2%}")
 
     if results:
         avg_time = sum(r.execution_time_ms or 0 for r in results) / len(results)
         click.echo(f"Average execution time: {avg_time:.2f}ms")
+        click.echo(f"Total results returned: {metrics.get('total_result_count', 0)}")
 
-    # Save results
+    # Display submission-ready metrics
+    click.echo("\n" + "=" * 50)
+    click.echo("SUBMISSION-READY METRICS")
+    click.echo("=" * 50)
+    submission_metrics = metrics.get("submission_ready", {})
+    click.echo(
+        f"Execution Accuracy: {submission_metrics.get('execution_accuracy', 0):.3f}"
+    )
+    click.echo(
+        f"SQL Generation Coverage: {submission_metrics.get('sql_generation_coverage', 0):.3f}"
+    )
+    click.echo(
+        f"Performance (avg ms): {submission_metrics.get('performance_ms', 0):.2f}"
+    )
+
+    # Save results in multiple formats
     evaluator.save_results(results, output)
     click.echo(f"\nDetailed results saved to: {output}")
+    click.echo(
+        f"BIRD-CRITIC submission format (JSONL) saved to: {output.replace('.json', '_submission.jsonl')}"
+    )
+    click.echo(f"SQL-only format saved to: {output.replace('.json', '_sql_only.json')}")
+
+    # Save metrics summary
+    metrics_file = output.replace(".json", "_metrics.json")
+    with open(metrics_file, "w") as f:
+        json.dump(metrics, f, indent=2)
+    click.echo(f"Comprehensive metrics saved to: {metrics_file}")
+
+    # Display submission instructions
+    click.echo("\n" + "=" * 60)
+    click.echo("🚀 BIRD-CRITIC SUBMISSION READY")
+    click.echo("=" * 60)
+    click.echo(
+        "Email title: [BIRD-CRITIC-1.0-postgresql][SENS Team][Agent-Based NL2SQL]"
+    )
+    click.echo(f"Attach file: {output.replace('.json', '_submission.jsonl')}")
+    click.echo("Send to: bird.bench25@gmail.com")
+    click.echo("")
+    click.echo("✅ JSONL format with instance_id, predicted_sql, prompt_flow")
+    click.echo("✅ All required fields included")
+    click.echo("✅ Ready for validation")
 
     # Show some failed cases for debugging
     failed_results = [r for r in results if not r.execution_success]

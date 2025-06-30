@@ -557,6 +557,48 @@ class SENSAgent(BaseAgent):
                 state.final_result = result
                 log.info("💡 Options suggested to user")
 
+            # Database management actions
+            elif action.action_type == ActionType.DISCOVER_DATABASES:
+                log.debug("🔍 discovering_databases", iteration=state.iteration)
+                result = await self.tools.discover_databases(**action.parameters)
+                state.action_output = result
+                if result.get("success"):
+                    databases = result.get("databases", [])
+                    log.info(
+                        f"🗄️ Found {len(databases)} databases", count=len(databases)
+                    )
+                else:
+                    log.warning(
+                        "❌ Database discovery failed", error=result.get("error")
+                    )
+
+            elif action.action_type == ActionType.SWITCH_DATABASE:
+                db_name = action.parameters.get("db_name", "unknown")
+                log.debug(
+                    "🔄 switching_database",
+                    iteration=state.iteration,
+                    target_db=db_name,
+                )
+                result = await self.tools.switch_database(**action.parameters)
+                state.action_output = result
+                if result.get("success"):
+                    current_db = result.get("current_database")
+                    log.info(f"🗄️ Switched to database: {current_db}")
+                else:
+                    log.warning("❌ Database switch failed", error=result.get("error"))
+
+            elif action.action_type == ActionType.GET_CURRENT_DATABASE:
+                log.debug("📍 getting_current_database", iteration=state.iteration)
+                result = await self.tools.get_current_database(**action.parameters)
+                state.action_output = result
+                if result.get("success"):
+                    current_db = result.get("current_database")
+                    log.info(f"📍 Current database: {current_db}")
+                else:
+                    log.warning(
+                        "❌ Failed to get current database", error=result.get("error")
+                    )
+
             # All other actions are disabled in minimal mode
             elif action.action_type == ActionType.SEARCH_SCHEMA:
                 result = {

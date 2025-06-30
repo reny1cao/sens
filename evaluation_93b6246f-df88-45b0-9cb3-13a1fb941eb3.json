@@ -1,0 +1,282 @@
+[
+  {
+    "task_id": "PostgreSQL_0",
+    "db_id": "financial",
+    "query": "I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at least two transactions where the difference between their highest and lowest transaction amounts exceeds 12000. I've tried writing a query to find this information, but I'm getting incorrect results. The issue seems to be with how I'm filtering the data or calculating the differences. Could someone help me fix the following issue SQL to properly identify accounts meeting these criteria?",
+    "generated_sql": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(DISTINCT trans_id) >= 2\n   AND MAX(amount) - MIN(amount) > 12000;",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 3293,
+    "execution_time_ms": 763.7088298797607,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_1",
+    "db_id": "codebase_community",
+    "query": "I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading zeros for the hours. For example, I want results like: 0:00:00 10:00:00 4:00:00 Instead of: 00:00:00 10:00:00 04:00:00 The issue with my current query is that it's always including leading zeros for hours under 10. How can I format this correctly to achieve the desired output?",
+    "generated_sql": "SELECT to_char(creationdate, 'H:MI:SS') AS formatted_time\nFROM comments\nLIMIT 10;",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 10,
+    "execution_time_ms": 4.957914352416992,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_2",
+    "db_id": "financial",
+    "query": "I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the following: 1. Fire when the 'status' column of a loan record is updated 2. Count how many loans with status 'A' exist for the account associated with the updated record 3. Update a summary table with this count My current attempt isn't working correctly. When I update a loan's status, the summary table doesn't reflect the correct count. I think there might be an issue with my trigger definition or the way I'm calculating the count. Can anyone help identify what's wrong with my approach to this PostgreSQL trigger?",
+    "generated_sql": null,
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 0,
+    "execution_time_ms": 0.0,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_3",
+    "db_id": "student_club",
+    "query": "In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name, event_date) where event_name is not null; CREATE UNIQUE INDEX unique_location ON event(location, event_date) where location is not null;'. However, when I attempt to insert a new record using an UPSERT operation using the query 'insert into event (event_id, event_name, location, event_date) values('test1', 'test_name', 'test_location', 'test_date')on conflict (event_name, location, event_date) do update set event_id = 'test1', event_name = 'test_name', location = 'test_location', event_date = 'test_date'', I encounter an error stating that there is no unique or exclusion constraint matching the ON CONFLICT specification.",
+    "generated_sql": null,
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 0,
+    "execution_time_ms": 0.0,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_4",
+    "db_id": "debit_card_specializing",
+    "query": "In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transactions_1k` that was updated, but I'd like it to return that row joined to something in another table, e.g. joined to `customers` tables and get both `transactions_1k.transactionid` and `customers.Segment` columns.",
+    "generated_sql": "UPDATE transactions_1k\nSET amount = transactions_1k.amount + 10\nFROM customers\nWHERE transactions_1k.customerid = customers.customerid\nAND transactions_1k.transactionid IN (SELECT transactionid FROM transactions_1k LIMIT 1)\nRETURNING transactions_1k.transactionid, customers.Segment;",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 1,
+    "execution_time_ms": 20.147085189819336,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 11: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 12: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 13: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 14: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 15: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 16: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 17: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      }
+    ]
+  }
+]

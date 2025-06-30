@@ -27,6 +27,7 @@ class AgentNL2SQLPipeline:
         metrics_enabled: bool = False,
         debug_mode: bool = False,
         max_iterations: int = 10,
+        event_callback=None,
     ):
         """Initialize the agent pipeline.
 
@@ -35,11 +36,13 @@ class AgentNL2SQLPipeline:
             metrics_enabled: Whether to track and display metrics
             debug_mode: Whether to include debug information
             max_iterations: Maximum number of agent reasoning iterations
+            event_callback: Optional callback function for streaming events
         """
         self.settings = get_settings()
         self.metrics_enabled = metrics_enabled
         self.debug_mode = debug_mode
         self.max_iterations = max_iterations
+        self.event_callback = event_callback
 
         # Initialize session
         self.session_manager = SessionManager()
@@ -80,6 +83,13 @@ class AgentNL2SQLPipeline:
     def _handle_agent_event(self, event: Dict) -> None:
         """Handle events emitted by the agent."""
         self.events.append(event)
+
+        # Call external event callback if provided
+        if self.event_callback:
+            try:
+                self.event_callback(event)
+            except Exception as e:
+                log.warning("event_callback_failed", error=str(e))
 
         # Print events in real-time if debug mode is enabled
         if self.debug_mode:

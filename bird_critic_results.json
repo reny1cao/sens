@@ -1,0 +1,1092 @@
+[
+  {
+    "task_id": "PostgreSQL_0",
+    "db_id": "financial",
+    "query": "I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at least two transactions where the difference between their highest and lowest transaction amounts exceeds 12000. I've tried writing a query to find this information, but I'm getting incorrect results. The issue seems to be with how I'm filtering the data or calculating the differences. Could someone help me fix the following issue SQL to properly identify accounts meeting these criteria?",
+    "generated_sql": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(DISTINCT trans_id) >= 2\n   AND (MAX(amount) - MIN(amount)) > 12000;",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 3293,
+    "execution_time_ms": 598.1578826904297,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to identify accounts with significant transaction variability in our PostgreSQL database. Specifically, I need to find accounts that have made at...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_1",
+    "db_id": "codebase_community",
+    "query": "I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading zeros for the hours. For example, I want results like: 0:00:00 10:00:00 4:00:00 Instead of: 00:00:00 10:00:00 04:00:00 The issue with my current query is that it's always including leading zeros for hours under 10. How can I format this correctly to achieve the desired output?",
+    "generated_sql": "SELECT to_char(creationdate, 'H:MI:SS')\nFROM comments\nLIMIT 10;",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 10,
+    "execution_time_ms": 5.600929260253906,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm trying to format time values from a datetime column in PostgreSQL. I need to extract just the time portion (hours:minutes:seconds) without any leading z...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_2",
+    "db_id": "financial",
+    "query": "I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the following: 1. Fire when the 'status' column of a loan record is updated 2. Count how many loans with status 'A' exist for the account associated with the updated record 3. Update a summary table with this count My current attempt isn't working correctly. When I update a loan's status, the summary table doesn't reflect the correct count. I think there might be an issue with my trigger definition or the way I'm calculating the count. Can anyone help identify what's wrong with my approach to this PostgreSQL trigger?",
+    "generated_sql": null,
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 0,
+    "execution_time_ms": 0.0,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I'm having trouble with PostgreSQL triggers that need to update summary data when a specific column changes. I want to create a trigger that does the follow...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_3",
+    "db_id": "student_club",
+    "query": "In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name, event_date) where event_name is not null; CREATE UNIQUE INDEX unique_location ON event(location, event_date) where location is not null;'. However, when I attempt to insert a new record using an UPSERT operation using the query 'insert into event (event_id, event_name, location, event_date) values('test1', 'test_name', 'test_location', 'test_date')on conflict (event_name, location, event_date) do update set event_id = 'test1', event_name = 'test_name', location = 'test_location', event_date = 'test_date'', I encounter an error stating that there is no unique or exclusion constraint matching the ON CONFLICT specification.",
+    "generated_sql": null,
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 0,
+    "execution_time_ms": 0.0,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, I created a unique index on the `event` table using the following queries 'CREATE UNIQUE INDEX unique_name ON event(event_name...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_4",
+    "db_id": "debit_card_specializing",
+    "query": "In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transactions_1k` that was updated, but I'd like it to return that row joined to something in another table, e.g. joined to `customers` tables and get both `transactions_1k.transactionid` and `customers.Segment` columns.",
+    "generated_sql": "WITH UpdatedTransactions AS (\n    UPDATE transactions_1k\n    SET amount = amount * 1.10\n    WHERE merchant = 'Gas Station'\n    RETURNING *\n)\nSELECT \n    ut.transactionid,\n    c.segment\nFROM UpdatedTransactions ut\nJOIN customers c ON ut.custid = c.custid;",
+    "execution_success": false,
+    "execution_error": "column \"merchant\" does not exist\nLINE 4:     WHERE merchant = 'Gas Station'\n                  ^\n",
+    "result_count": 0,
+    "execution_time_ms": 3.712892532348633,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 11: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 12: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 13: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 14: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 15: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 16: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 17: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 18: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 19: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 20: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 21: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 22: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 23: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 24: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 25: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 26: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 27: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 28: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 29: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 30: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 31: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 32: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 33: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 34: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 35: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 36: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 37: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 38: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 39: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 40: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the following SQL, how could I make the `RETURNING` clause join to something else and return the joined row(s)? Here it only returns the row from `transa...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_5",
+    "db_id": "codebase_community",
+    "query": "I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their premium account. How can I achieve this?",
+    "generated_sql": "SELECT\n  referrer.id AS referrer_id,\n  COUNT(referred.id) AS number_of_premium_referrals\nFROM\n  users AS referrer\nJOIN\n  users AS referred ON referrer.referral_id = referred.id\nWHERE\n  referred.premium_account_activated = TRUE\nGROUP BY\n  referrer.id\nORDER BY\n  referrer.id;",
+    "execution_success": false,
+    "execution_error": "column referrer.referral_id does not exist\nLINE 7:   users AS referred ON referrer.referral_id = referred.id\n                               ^\n",
+    "result_count": 0,
+    "execution_time_ms": 3.16619873046875,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I have a query that calculates the number of referrals each user has made. However, I want to count a referral only if the referred user has activated their...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_6",
+    "db_id": "codebase_community",
+    "query": "I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXISTS users;`, I encounter an error message stating: 'cannot drop table users because other objects depend on it'. This issue arises because the 'users' table is referenced by foreign keys in other tables such as 'badges', 'comments', 'postHistory', 'posts', and 'votes'. I am seeking a solution to drop the 'users' table without having to remove all dependent tables or data.",
+    "generated_sql": "SELECT 1",
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 1,
+    "execution_time_ms": 0.45013427734375,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 11: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 12: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 13: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 14: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 15: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 16: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 17: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 18: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 19: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 20: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 21: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 22: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 23: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 24: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 25: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 26: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 27: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 28: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 29: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 30: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 31: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 32: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 33: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 34: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 35: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 36: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 37: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 38: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 39: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 40: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 41: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 42: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 43: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 44: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 45: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 46: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 47: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 48: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 49: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 50: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I want to drop the 'users' table from the 'codebase_community' database. However, when I attempt to drop the table using the SQL command `DROP TABLE IF EXIS...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_7",
+    "db_id": "student_club",
+    "query": "In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together. ref1 and ref2 does not overlap, one value in ref1 does not exist in ref2.  A user can own multiple assets. I want to \"merge\" users that has one or more refs alike and then count how many assets they own together. There could be missing entries in the user table, in that case I just want to propagate the owner into ref2 and set the asset_count and asset_ids.",
+    "generated_sql": null,
+    "execution_success": true,
+    "execution_error": null,
+    "result_count": 0,
+    "execution_time_ms": 0.0,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In database student_club, there is a set of users. A student can have multiple users, but ref1 and ref2 might be alike and can therefore link users together...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_8",
+    "db_id": "student_club",
+    "query": "I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the number of attendees in the 'attendance' table does not match the number of attendees recorded in the 'budget' table. My query follows this structure:",
+    "generated_sql": "SELECT\n  e.event_name\nFROM event AS e\nJOIN attendance AS a ON e.event_id = a.event_id\nJOIN budget AS b ON e.event_id = b.event_id\nWHERE\n  a.amount <> b.amount;",
+    "execution_success": false,
+    "execution_error": "column a.event_id does not exist\nLINE 4: JOIN attendance AS a ON e.event_id = a.event_id\n                                             ^\nHINT:  Perhaps you meant to reference the column \"e.event_id\".\n",
+    "result_count": 0,
+    "execution_time_ms": 1.0461807250976562,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 11: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 12: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 13: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 14: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 15: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 16: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 17: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 18: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 19: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 20: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 21: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 22: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 23: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 24: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 25: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 26: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 27: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 28: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 29: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 30: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 31: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 32: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 33: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 34: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 35: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 36: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 37: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 38: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 39: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 40: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 41: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 42: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 43: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 44: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 45: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 46: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 47: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 48: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 49: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 50: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: I am trying to compare the number of attendees for each event between two different tables: 'attendance' and 'budget'. I want to find events where the numbe...",
+        "response": ""
+      }
+    ]
+  },
+  {
+    "task_id": "PostgreSQL_9",
+    "db_id": "student_club",
+    "query": "In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can only attend an event once. If a member attempts to attend the same event again, the system should update the attendance record with new information, such as status attend. The current approach is to use an INSERT statement, but it fails when the member already has an attendance record for the event. We need to implement an insert statement that updates the existing record if a conflict occurs based on the combination of member_id and event_id.",
+    "generated_sql": "INSERT INTO attendance (link_to_member, link_to_event, status_attend)\nVALUES (1, 1, 'present')\nON CONFLICT (link_to_member, link_to_event)\nDO UPDATE SET status_attend = EXCLUDED.status_attend;",
+    "execution_success": false,
+    "execution_error": "column \"status_attend\" of relation \"attendance\" does not exist\nLINE 1: ...T INTO attendance (link_to_member, link_to_event, status_att...\n                                                             ^\n",
+    "result_count": 0,
+    "execution_time_ms": 1.8639564514160156,
+    "prompt_flow": [
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 1: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 2: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 3: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 4: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 5: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 6: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 7: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 8: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 9: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      },
+      {
+        "model": "google/gemini-2.0-flash-001",
+        "prompt": "Reasoning step 10: \nBIRD-CRITIC EVALUATION TASK\n\nUSER REQUEST: In the student_club database, we have a scenario where a member can attend multiple events, and an event can have multiple attendees. However, a member can ...",
+        "response": ""
+      }
+    ]
+  }
+]

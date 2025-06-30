@@ -1,0 +1,18 @@
+{
+  "total_tasks": 2,
+  "successful_executions": 1,
+  "failed_executions": 1,
+  "success_rate": 0.5,
+  "sql_generation_rate": 1.0,
+  "avg_execution_time_ms": 46.611905097961426,
+  "avg_result_count": 3293.0,
+  "total_result_count": 3293,
+  "error_breakdown": {
+    "schema_errors": 1
+  },
+  "submission_ready": {
+    "execution_accuracy": 0.5,
+    "sql_generation_coverage": 1.0,
+    "performance_ms": 46.611905097961426
+  }
+}

@@ -37,6 +37,11 @@ class ActionType(Enum):
     # Database exploration
     EXPLORE_DATABASE = "explore_database"
 
+    # Database management
+    DISCOVER_DATABASES = "discover_databases"
+    SWITCH_DATABASE = "switch_database"
+    GET_CURRENT_DATABASE = "get_current_database"
+
     # Memory operations
     STORE_MAPPING = "store_mapping"
     RECALL_MAPPING = "recall_mapping"
@@ -197,11 +202,10 @@ class AgentState:
     def should_continue(self) -> bool:
         """Check if the agent should continue iterating."""
         # Continue if not successful and haven't given up
-        # Remove max_iterations check to allow longer searches
         return (
             not self.success
             and self.final_result is None
-            and self.iteration < 50  # Hard limit to prevent infinite loops
+            and self.iteration < self.max_iterations  # Use configured max_iterations
         )
 
 

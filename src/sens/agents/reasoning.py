@@ -75,9 +75,12 @@ Available Actions:
 1. EXPLORE_DATABASE - Execute a SQL query to explore the database
 2. GENERATE_SQL - Generate SQL to answer the user's query
 3. EXECUTE_SQL - Execute the generated SQL
-4. CLARIFY_QUERY - Ask the user for clarification when the query is ambiguous
-5. PROVIDE_ANSWER - Directly answer the user without SQL if you already have the information
-6. SUGGEST_OPTIONS - Offer choices or exploration paths to the user
+4. DISCOVER_DATABASES - Find available databases with a given prefix
+5. SWITCH_DATABASE - Switch to a different database
+6. GET_CURRENT_DATABASE - Get the current database name
+7. CLARIFY_QUERY - Ask the user for clarification when the query is ambiguous
+8. PROVIDE_ANSWER - Directly answer the user without SQL if you already have the information
+9. SUGGEST_OPTIONS - Offer choices or exploration paths to the user
 
 IMPORTANT: Not all questions require SQL execution! Consider these scenarios:
 - If the user asks about available data, schema, or capabilities → PROVIDE_ANSWER
@@ -89,7 +92,7 @@ Based on the context, decide which action to take and provide the necessary para
 
 Respond in this JSON format:
 {{
-    "action_type": "EXPLORE_DATABASE|GENERATE_SQL|EXECUTE_SQL|CLARIFY_QUERY|PROVIDE_ANSWER|SUGGEST_OPTIONS",
+    "action_type": "EXPLORE_DATABASE|GENERATE_SQL|EXECUTE_SQL|DISCOVER_DATABASES|SWITCH_DATABASE|GET_CURRENT_DATABASE|CLARIFY_QUERY|PROVIDE_ANSWER|SUGGEST_OPTIONS",
     "parameters": {{...}},
     "reasoning": "Why you chose this action",
     "notes": "Any important discoveries to remember (optional)"
@@ -99,6 +102,9 @@ Parameter examples:
 For EXPLORE_DATABASE: {{"query": "SELECT ..."}}
 For GENERATE_SQL: {{}}
 For EXECUTE_SQL: {{}}
+For DISCOVER_DATABASES: {{"prefix": "bird_"}}
+For SWITCH_DATABASE: {{"db_name": "bird_financial"}}
+For GET_CURRENT_DATABASE: {{}}
 For CLARIFY_QUERY: {{"clarification_message": "I need clarification about...", "options": ["Option 1", "Option 2"]}}
 For PROVIDE_ANSWER: {{"answer": "Here's the information you requested..."}}
 For SUGGEST_OPTIONS: {{"suggestions": ["Try this query...", "Or explore this..."], "context": "Based on available data..."}}

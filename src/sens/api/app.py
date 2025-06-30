@@ -177,6 +177,15 @@ app.include_router(retrieval_router, prefix="/retrieval", tags=["retrieval"])
 app.include_router(datasource_router, prefix="/api", tags=["datasource"])
 app.include_router(schema_router, prefix="/api", tags=["schema"])
 
+# Add evaluation router
+try:
+    from .routers.evaluation import router as evaluation_router
+
+    app.include_router(evaluation_router, prefix="/api", tags=["evaluation"])
+    logger.info("evaluation_router_loaded")
+except ImportError:
+    logger.warning("evaluation_router_not_available")
+
 
 @app.get("/health")
 async def health_check():

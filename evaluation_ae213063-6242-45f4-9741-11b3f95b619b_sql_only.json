@@ -1,0 +1,7 @@
+{
+  "PostgreSQL_0": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(DISTINCT trans_id) >= 2\n   AND (MAX(amount) - MIN(amount)) > 12000;",
+  "PostgreSQL_1": "SELECT to_char(creationdate, 'H:MI:SS') AS formatted_time\nFROM posts\nLIMIT 10;",
+  "PostgreSQL_2": null,
+  "PostgreSQL_3": null,
+  "PostgreSQL_4": "UPDATE transactions_1k\nSET amount = amount * 1.1 -- Example update: increase amount by 10%\nWHERE custid IN (SELECT custid FROM customers WHERE segment = 'Mass Affluent') -- Example condition\n-- Step 2: Join the updated row with the customers table in the RETURNING clause\nRETURNING transactions_1k.transactionid, (SELECT c.segment FROM customers c WHERE c.custid = transactions_1k.custid) AS segment;"
+}
