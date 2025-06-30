@@ -248,7 +248,7 @@ async def handle_extract_schema(
             cached=not args.force,
         )
 
-        print(f"\nSchema extraction completed:")
+        print("\nSchema extraction completed:")
         print(f"- Tables found: {table_count}")
         print(f"- Time taken: {elapsed_time:.2f} seconds")
         if not args.force:
@@ -844,6 +844,10 @@ def main() -> None:
         help="Clear cache (all or just schema)",
     )
 
+    # BIRD-CRITIC evaluation command (handled by click)
+    subparsers.add_parser("bird-critic", help="BIRD-CRITIC evaluation", add_help=False)
+    # Note: BIRD-CRITIC subcommands are handled by click, not argparse
+
     # Handle financial command specially to pass through to click
     if len(sys.argv) > 1 and sys.argv[1] == "financial":
         # Import and run financial commands using click directly
@@ -852,6 +856,16 @@ def main() -> None:
         # Remove 'sens' from argv and call financial with remaining args
         sys.argv = ["financial"] + sys.argv[2:]
         financial()
+        return
+
+    # Handle bird-critic command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "bird-critic":
+        # Import and run bird-critic commands using click directly
+        from sens.cli.bird_critic import bird_critic
+
+        # Remove 'sens' from argv and call bird_critic with remaining args
+        sys.argv = ["bird-critic"] + sys.argv[2:]
+        bird_critic()
         return
 
     args = parser.parse_args()

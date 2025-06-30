@@ -1,3 +1,6 @@
+# BIRD-CRITIC evaluation data
+external/BIRD-CRITIC-1/
+
 # Python
 __pycache__/
 *.py[cod]
