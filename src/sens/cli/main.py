@@ -848,6 +848,20 @@ def main() -> None:
     subparsers.add_parser("bird-critic", help="BIRD-CRITIC evaluation", add_help=False)
     # Note: BIRD-CRITIC subcommands are handled by click, not argparse
 
+    # Unified BIRD evaluation command (handled by click)
+    subparsers.add_parser(
+        "unified-bird",
+        help="Unified BIRD evaluation (CRITIC + SQL-DEV)",
+        add_help=False,
+    )
+    # Note: Unified BIRD subcommands are handled by click, not argparse
+
+    # BIRD-SQL-DEV evaluation command (handled by click)
+    subparsers.add_parser(
+        "bird-sql-dev", help="BIRD-SQL-DEV evaluation using SQLite", add_help=False
+    )
+    # Note: BIRD-SQL-DEV subcommands are handled by click, not argparse
+
     # Handle financial command specially to pass through to click
     if len(sys.argv) > 1 and sys.argv[1] == "financial":
         # Import and run financial commands using click directly
@@ -866,6 +880,26 @@ def main() -> None:
         # Remove 'sens' from argv and call bird_critic with remaining args
         sys.argv = ["bird-critic"] + sys.argv[2:]
         bird_critic()
+        return
+
+    # Handle unified-bird command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "unified-bird":
+        # Import and run unified-bird commands using click directly
+        from sens.cli.unified_bird_eval import unified_bird_eval
+
+        # Remove 'sens' from argv and call unified_bird_eval with remaining args
+        sys.argv = ["unified-bird"] + sys.argv[2:]
+        unified_bird_eval()
+        return
+
+    # Handle bird-sql-dev command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "bird-sql-dev":
+        # Import and run bird-sql-dev commands using click directly
+        from sens.cli.bird_sql_dev_eval import bird_sql_dev
+
+        # Remove 'sens' from argv and call bird_sql_dev with remaining args
+        sys.argv = ["bird-sql-dev"] + sys.argv[2:]
+        bird_sql_dev()
         return
 
     args = parser.parse_args()

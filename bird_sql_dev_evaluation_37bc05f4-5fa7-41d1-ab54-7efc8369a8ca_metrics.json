@@ -1,0 +1,23 @@
+{
+  "total_tasks": 2,
+  "execution_success_rate": 0.0,
+  "exact_match_rate": 0.0,
+  "normalized_match_rate": 0.0,
+  "execution_match_rate": 0.0,
+  "difficulty_breakdown": {
+    "simple": {
+      "total": 1,
+      "success": 0,
+      "exact_match": 0,
+      "success_rate": 0.0,
+      "exact_match_rate": 0.0
+    },
+    "moderate": {
+      "total": 1,
+      "success": 0,
+      "exact_match": 0,
+      "success_rate": 0.0,
+      "exact_match_rate": 0.0
+    }
+  }
+}

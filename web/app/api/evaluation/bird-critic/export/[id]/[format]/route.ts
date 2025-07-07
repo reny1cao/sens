@@ -4,10 +4,10 @@ const BACKEND_URL = process.env.SENS_API_URL || 'http://localhost:8000';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; format: string } }
+  { params }: { params: Promise<{ id: string; format: string }> }
 ) {
   try {
-    const { id: evaluationId, format } = params;
+    const { id: evaluationId, format } = await params;
 
     const response = await fetch(
       `${BACKEND_URL}/api/evaluation/bird-critic/export/${evaluationId}/${format}`,

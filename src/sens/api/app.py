@@ -186,6 +186,28 @@ try:
 except ImportError:
     logger.warning("evaluation_router_not_available")
 
+# Add unified evaluation router
+try:
+    from .routers.unified_evaluation import router as unified_evaluation_router
+
+    app.include_router(
+        unified_evaluation_router, prefix="/api", tags=["unified-evaluation"]
+    )
+    logger.info("unified_evaluation_router_loaded")
+except ImportError:
+    logger.warning("unified_evaluation_router_not_available")
+
+# Add BIRD-SQL-DEV evaluation router
+try:
+    from .routers.bird_sql_dev_evaluation import router as bird_sql_dev_router
+
+    app.include_router(
+        bird_sql_dev_router, prefix="/api", tags=["bird-sql-dev-evaluation"]
+    )
+    logger.info("bird_sql_dev_evaluation_router_loaded")
+except ImportError:
+    logger.warning("bird_sql_dev_evaluation_router_not_available")
+
 
 @app.get("/health")
 async def health_check():

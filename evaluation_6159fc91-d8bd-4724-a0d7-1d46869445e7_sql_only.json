@@ -1,0 +1,3 @@
+{
+  "PostgreSQL_0": "SELECT account_id\nFROM (\n    SELECT\n        account_id,\n        MAX(amount) AS max_amount,\n        MIN(amount) AS min_amount\n    FROM trans\n    GROUP BY account_id\n    HAVING COUNT(*) >= 2\n) AS account_transactions\nWHERE (max_amount - min_amount) > 12000;"
+}

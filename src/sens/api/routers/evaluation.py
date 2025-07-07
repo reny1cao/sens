@@ -370,6 +370,20 @@ async def export_evaluation_results(
         raise HTTPException(status_code=404, detail="Export file not found")
 
 
+@router.delete("/{evaluation_id}")
+async def cancel_evaluation(evaluation_id: str):
+    """Cancel a running BIRD-CRITIC evaluation."""
+    if evaluation_id not in evaluation_runs:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+
+    status = evaluation_runs[evaluation_id]
+    if status.status == "running":
+        status.status = "cancelled"
+        status.end_time = datetime.now()
+
+    return {"message": "Evaluation cancelled", "evaluation_id": evaluation_id}
+
+
 def _transform_agent_event_for_evaluation(
     event: Dict[str, Any], task_id: str
 ) -> Optional[Dict[str, Any]]:

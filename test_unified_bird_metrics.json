@@ -1,0 +1,9 @@
+{
+  "total_tasks": 1,
+  "bird_critic_tasks": 0,
+  "bird_sql_dev_tasks": 1,
+  "overall_execution_success_rate": 0.0,
+  "bird_sql_dev_execution_success_rate": 0.0,
+  "bird_sql_dev_sql_match_rate": 0.0,
+  "bird_sql_dev_exact_match_rate": 0.0
+}

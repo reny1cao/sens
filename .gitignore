@@ -1,6 +1,11 @@
 # BIRD-CRITIC evaluation data
 external/BIRD-CRITIC-1/
 
+# BIRD-SQL-DEV evaluation data
+external/BIRD-SQL-DEV/dev_databases/
+external/BIRD-SQL-DEV/dev_databases.zip
+external/BIRD-SQL-DEV/dev.json
+
 # Python
 __pycache__/
 *.py[cod]

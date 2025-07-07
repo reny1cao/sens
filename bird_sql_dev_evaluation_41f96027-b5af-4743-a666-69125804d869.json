@@ -1,0 +1,18 @@
+[
+  {
+    "question_id": "0",
+    "db_id": "california_schools",
+    "question": "What is the highest eligible free rate for K-12 students in the schools in Alameda County?",
+    "generated_sql": null,
+    "golden_sql": "SELECT `Free Meal Count (K-12)` / `Enrollment (K-12)` FROM frpm WHERE `County Name` = 'Alameda' ORDER BY (CAST(`Free Meal Count (K-12)` AS REAL) / `Enrollment (K-12)`) DESC LIMIT 1",
+    "execution_success": false,
+    "execution_error": "Database file not found: external/BIRD-SQL-DEV/dev_databases/california_schools.sqlite",
+    "result_count": null,
+    "execution_time_ms": null,
+    "exact_match": false,
+    "normalized_match": false,
+    "execution_match": false,
+    "difficulty": "simple",
+    "evidence": "Eligible free rate for K-12 = `Free Meal Count (K-12)` / `Enrollment (K-12)`"
+  }
+]
