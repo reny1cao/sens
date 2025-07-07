@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
+from sens.agents.tool_registry import EvaluationContext
+from sens.cli.agent_pipeline import AgentNL2SQLPipeline
 from sens.exceptions import PipelineError
 from sens.settings import get_settings
 
@@ -264,18 +266,11 @@ class BirdSqlDevEvaluator:
             logger.warning(f"Failed to check execution equivalence: {e}")
             return False
 
-    async def evaluate_task(
-        self, task: BirdSqlDevTask, event_callback=None
+    async def evaluate_task_with_pipeline(
+        self, task: BirdSqlDevTask, pipeline: AgentNL2SQLPipeline
     ) -> BirdSqlDevResult:
-        """Evaluate a single BIRD-SQL-DEV task.
-
-        Args:
-            task: Task to evaluate
-
-        Returns:
-            Evaluation result
-        """
-        logger.info(f"Evaluating BIRD-SQL-DEV task {task.question_id}")
+        """Evaluate a single BIRD-SQL-DEV task with provided pipeline for streaming."""
+        logger.info(f"Evaluating task {task.question_id} for database {task.db_id}")
 
         # Get database path
         db_path = self._get_database_path(task.db_id)
@@ -292,92 +287,118 @@ class BirdSqlDevEvaluator:
                 evidence=task.evidence,
             )
 
-        # For now, use a simplified approach since our agent is PostgreSQL-focused
-        # TODO: Implement SQLite-aware agent or direct NL2SQL generation
+        # Create question for SQLite evaluation
+        detailed_question = f"""
+BIRD-SQL-DEV EVALUATION TASK
+
+USER QUESTION: {task.question}
+
+EVIDENCE: {task.evidence or "No additional evidence provided"}
+
+Task: Generate and execute a SQL query that answers the user's question.
+"""
+
         try:
-            # Simulate agent thinking for streaming (if callback provided)
-            if event_callback:
-                event_callback(
-                    {
-                        "type": "reasoning",
-                        "timestamp": time.time(),
-                        "data": {
-                            "content": f"Analyzing question: {task.question}",
-                            "step": 1,
-                        },
-                    }
-                )
+            # Use agent pipeline with SQLite tools - it will handle everything automatically
+            result = await pipeline.process_question(detailed_question)
 
-                event_callback(
-                    {
-                        "type": "action",
-                        "timestamp": time.time(),
-                        "data": {
-                            "action_type": "generate_sql",
-                            "reasoning": "Generating SQL query for SQLite database",
-                        },
-                    }
-                )
+            # Extract results from agent pipeline
+            if result is None:
+                result = {"status": "error", "error": "Pipeline returned None result"}
 
-            # For demonstration, return a failed result with clear message
-            # In a real implementation, you would:
-            # 1. Use a SQLite-aware NL2SQL model
-            # 2. Connect to the specific SQLite database
-            # 3. Generate appropriate SQL for the schema
-
-            generated_sql = None
-            execution_success = False
-            execution_error = "BIRD-SQL-DEV evaluation requires SQLite-aware NL2SQL generation (not yet implemented)"
-
-            if event_callback:
-                event_callback(
-                    {
-                        "type": "observation",
-                        "timestamp": time.time(),
-                        "data": {"success": False, "error": execution_error},
-                    }
-                )
-
-            # SQL comparison with golden SQL
-            sql_comparison = self._compare_sql(generated_sql or "", task.golden_sql)
-
-            # Check execution equivalence if both SQLs are available
-            execution_match = False
-            if generated_sql and task.golden_sql:
-                execution_match = self._check_execution_equivalence(
-                    generated_sql, task.golden_sql, db_path
-                )
-
-            return BirdSqlDevResult(
-                question_id=task.question_id,
-                db_id=task.db_id,
-                question=task.question,
-                generated_sql=generated_sql,
-                golden_sql=task.golden_sql,
-                execution_success=execution_success,
-                execution_error=execution_error,
-                exact_match=sql_comparison["exact_match"],
-                normalized_match=sql_comparison["normalized_match"],
-                execution_match=execution_match,
-                difficulty=task.difficulty,
-                evidence=task.evidence,
-            )
+            generated_sql = result.get("sql")
+            execution_success = result.get("status") == "success"
+            execution_error = result.get("error") if not execution_success else None
+            result_count = result.get("row_count", 0)
+            execution_time_ms = result.get("metadata", {}).get("total_duration_ms", 0.0)
 
         except Exception as e:
-            logger.error(
-                f"Failed to evaluate BIRD-SQL-DEV task {task.question_id}: {e}"
+            logger.error(f"Agent pipeline evaluation failed: {e}")
+            generated_sql = None
+            execution_success = False
+            execution_error = str(e)
+            result_count = 0
+            execution_time_ms = 0.0
+
+        # Create evaluation result
+        eval_result = BirdSqlDevResult(
+            question_id=task.question_id,
+            db_id=task.db_id,
+            question=task.question,
+            generated_sql=generated_sql,
+            golden_sql=task.golden_sql,
+            execution_success=execution_success,
+            execution_error=execution_error,
+            result_count=result_count,
+            execution_time_ms=execution_time_ms,
+            difficulty=task.difficulty,
+            evidence=task.evidence,
+        )
+
+        # Compute additional metrics if SQL was generated successfully
+        if generated_sql and task.golden_sql:
+            eval_result = self._compute_additional_metrics(eval_result, db_path)
+
+        return eval_result
+
+    def _compute_additional_metrics(
+        self, eval_result: BirdSqlDevResult, db_path: Path
+    ) -> BirdSqlDevResult:
+        """Compute additional metrics for BIRD-SQL-DEV evaluation.
+
+        Args:
+            eval_result: Current evaluation result
+            db_path: Path to SQLite database
+
+        Returns:
+            Updated evaluation result with additional metrics
+        """
+        if not eval_result.generated_sql or not eval_result.golden_sql:
+            return eval_result
+
+        # SQL comparison metrics
+        sql_comparison = self._compare_sql(
+            eval_result.generated_sql, eval_result.golden_sql
+        )
+        eval_result.exact_match = sql_comparison["exact_match"]
+        eval_result.normalized_match = sql_comparison["normalized_match"]
+
+        # Execution equivalence check
+        if db_path.exists():
+            eval_result.execution_match = self._check_execution_equivalence(
+                eval_result.generated_sql, eval_result.golden_sql, db_path
             )
-            return BirdSqlDevResult(
-                question_id=task.question_id,
-                db_id=task.db_id,
-                question=task.question,
-                generated_sql=None,
-                golden_sql=task.golden_sql,
-                execution_success=False,
-                execution_error=str(e),
-                difficulty=task.difficulty,
-                evidence=task.evidence,
-            )
+        else:
+            eval_result.execution_match = False
+
+        return eval_result
+
+    async def evaluate_task(
+        self, task: BirdSqlDevTask, event_callback=None
+    ) -> BirdSqlDevResult:
+        """Evaluate a single BIRD-SQL-DEV task.
+
+        Args:
+            task: Task to evaluate
+
+        Returns:
+            Evaluation result
+        """
+        # Get database path for SQLite context
+        db_path = self._get_database_path(task.db_id)
+
+        # Create pipeline for this specific task with SQLite context
+        pipeline = AgentNL2SQLPipeline(
+            metrics_enabled=False,
+            debug_mode=True,
+            max_iterations=5,  # Allow multiple iterations for reasoning
+            event_callback=event_callback,  # Pass event callback for streaming
+            evaluation_context=EvaluationContext.BIRD_SQL_DEV,
+            db_path=str(db_path),
+        )
+
+        # Use the pipeline-based evaluation method
+        return await self.evaluate_task_with_pipeline(task, pipeline)
 
     async def evaluate_all(self, limit: Optional[int] = None) -> List[BirdSqlDevResult]:
         """Evaluate all loaded tasks.
@@ -424,7 +445,9 @@ class BirdSqlDevEvaluator:
         metrics = {
             "total_tasks": total_tasks,
             "execution_success_rate": execution_success / total_tasks,
+            "success_rate": execution_success / total_tasks,  # Frontend compatibility
             "exact_match_rate": exact_matches / total_tasks,
+            "execution_accuracy": exact_matches / total_tasks,  # Frontend compatibility
             "normalized_match_rate": normalized_matches / total_tasks,
             "execution_match_rate": execution_matches / total_tasks,
         }

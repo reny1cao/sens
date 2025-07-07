@@ -74,13 +74,18 @@ Current Context:
 Available Actions:
 1. EXPLORE_DATABASE - Execute a SQL query to explore the database
 2. GENERATE_SQL - Generate SQL to answer the user's query
-3. EXECUTE_SQL - Execute the generated SQL
+3. EXECUTE_SQL - Execute the generated SQL (ONLY after GENERATE_SQL has been called)
 4. DISCOVER_DATABASES - Find available databases with a given prefix
 5. SWITCH_DATABASE - Switch to a different database
 6. GET_CURRENT_DATABASE - Get the current database name
 7. CLARIFY_QUERY - Ask the user for clarification when the query is ambiguous
 8. PROVIDE_ANSWER - Directly answer the user without SQL if you already have the information
 9. SUGGEST_OPTIONS - Offer choices or exploration paths to the user
+
+CRITICAL WORKFLOW RULES:
+- EXECUTE_SQL can ONLY be called AFTER GENERATE_SQL has been successfully called in a previous iteration
+- If you need to execute SQL but haven't generated it yet, you MUST call GENERATE_SQL first
+- Never call EXECUTE_SQL unless you've already called GENERATE_SQL in a previous iteration
 
 IMPORTANT: Not all questions require SQL execution! Consider these scenarios:
 - If the user asks about available data, schema, or capabilities → PROVIDE_ANSWER
@@ -100,10 +105,10 @@ Respond in this JSON format:
 
 Parameter examples:
 For EXPLORE_DATABASE: {{"query": "SELECT ..."}}
-For GENERATE_SQL: {{}}
-For EXECUTE_SQL: {{}}
+For GENERATE_SQL: {{}} (Generate SQL based on exploration results)
+For EXECUTE_SQL: {{}} (Execute previously generated SQL - requires GENERATE_SQL to have been called first)
 For DISCOVER_DATABASES: {{"prefix": "bird_"}}
-For SWITCH_DATABASE: {{"db_name": "bird_financial"}}
+For SWITCH_DATABASE: {{"db_name": "bird_financial"}} or {{"db_path": "/path/to/database.db"}} for SQLite
 For GET_CURRENT_DATABASE: {{}}
 For CLARIFY_QUERY: {{"clarification_message": "I need clarification about...", "options": ["Option 1", "Option 2"]}}
 For PROVIDE_ANSWER: {{"answer": "Here's the information you requested..."}}

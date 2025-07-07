@@ -455,10 +455,32 @@ class SENSAgent(BaseAgent):
                 log.debug("🚀 executing_sql", iteration=state.iteration)
                 # Execute SQL needs the current SQL from state
                 if not state.current_sql:
-                    result = {
-                        "success": False,
-                        "error": "No SQL query available to execute",
-                    }
+                    # Auto-generate SQL if not available
+                    log.info(
+                        "🔧 auto_generating_sql_before_execution",
+                        iteration=state.iteration,
+                    )
+                    try:
+                        generated_sql = await self.tools.generate_sql(
+                            query=state.user_query,
+                            exploration_results=state.exploration_results,
+                            mappings=state.discovered_mappings,
+                            agent_notes=state.agent_notes,
+                        )
+                        state.current_sql = generated_sql
+                        log.info(
+                            "✅ auto_generated_sql_success",
+                            sql_preview=generated_sql[:100],
+                        )
+
+                        # Now execute the generated SQL
+                        result = await self.tools.execute_sql(sql=state.current_sql)
+                    except Exception as e:
+                        log.error("❌ auto_generate_sql_failed", error=str(e))
+                        result = {
+                            "success": False,
+                            "error": f"Failed to auto-generate SQL: {str(e)}",
+                        }
                 else:
                     result = await self.tools.execute_sql(sql=state.current_sql)
 

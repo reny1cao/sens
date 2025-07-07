@@ -167,9 +167,14 @@ async def stream_evaluation_events(
                     {
                         "type": "task_complete",
                         "task_id": task.instance_id,
+                        "db_id": task.db_id,  # Add missing field for frontend
+                        "query": task.query,  # Add missing field for frontend
                         "success": result.execution_success,
-                        "sql": result.generated_sql,
+                        "execution_success": result.execution_success,  # Add for compatibility
+                        "generated_sql": result.generated_sql,
+                        "sql": result.generated_sql,  # Add for compatibility
                         "error": result.execution_error,
+                        "execution_error": result.execution_error,  # Add for compatibility
                         "execution_time_ms": result.execution_time_ms,
                         "result_count": result.result_count,
                         "prompt_flow": result.prompt_flow,

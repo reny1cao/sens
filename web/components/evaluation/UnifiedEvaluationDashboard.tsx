@@ -411,7 +411,7 @@ export function UnifiedEvaluationDashboard() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Task List - Takes 2/3 width */}
         <div className="lg:col-span-2">
-          {(isRunning || completedTasks.length > 0) && (
+          {(isRunning || completedTasks.length > 0 || status.completed_tasks > 0 || status.status === 'completed') && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -482,7 +482,7 @@ export function UnifiedEvaluationDashboard() {
                     <div className="grid gap-4">
                       <div className="text-center p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
                         <div className="text-2xl font-bold text-green-600">
-                          {Math.round((status.metrics.success_rate || 0) * 100)}%
+                          {Math.round((status.metrics.success_rate || status.metrics.execution_success_rate || 0) * 100)}%
                         </div>
                         <div className="text-sm text-muted-foreground">Success Rate</div>
                       </div>
@@ -496,13 +496,33 @@ export function UnifiedEvaluationDashboard() {
                         </div>
                       )}
 
-                      {config.dataset === 'bird-sql-dev' && status.metrics.execution_accuracy && (
-                        <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                          <div className="text-2xl font-bold text-purple-600">
-                            {Math.round(status.metrics.execution_accuracy * 100)}%
+                      {config.dataset === 'bird-sql-dev' && (
+                        <>
+                          <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                            <div className="text-2xl font-bold text-purple-600">
+                              {Math.round((status.metrics.execution_accuracy || status.metrics.exact_match_rate || 0) * 100)}%
+                            </div>
+                            <div className="text-sm text-muted-foreground">Exact Match</div>
                           </div>
-                          <div className="text-sm text-muted-foreground">Execution Accuracy</div>
-                        </div>
+
+                          {status.metrics.normalized_match_rate !== undefined && (
+                            <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                              <div className="text-2xl font-bold text-amber-600">
+                                {Math.round(status.metrics.normalized_match_rate * 100)}%
+                              </div>
+                              <div className="text-sm text-muted-foreground">Normalized Match</div>
+                            </div>
+                          )}
+
+                          {status.metrics.execution_match_rate !== undefined && (
+                            <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg">
+                              <div className="text-2xl font-bold text-emerald-600">
+                                {Math.round(status.metrics.execution_match_rate * 100)}%
+                              </div>
+                              <div className="text-sm text-muted-foreground">Execution Match</div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </CardContent>

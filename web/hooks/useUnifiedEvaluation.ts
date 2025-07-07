@@ -192,6 +192,10 @@ export function useUnifiedEvaluation() {
       end_time: new Date().toISOString(),
       metrics: data.final_metrics || prev.metrics,
       connection_status: 'disconnected',
+      // Use final metrics from backend for accurate counts
+      completed_tasks: data.total_tasks || prev.completed_tasks,
+      successful_tasks: data.successful_tasks || prev.successful_tasks,
+      failed_tasks: data.failed_tasks || prev.failed_tasks,
     }));
 
     cleanupEventSource();
@@ -262,6 +266,17 @@ export function useUnifiedEvaluation() {
           console.error(`[UnifiedEvaluation] Failed to parse ${eventType} event:`, err);
         }
       });
+    });
+
+    // Task completion event listener (CRITICAL: needed for BIRD-SQL-DEV)
+    eventSource.addEventListener('task_complete', (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('[UnifiedEvaluation] Received task_complete event:', data);
+        handleTaskComplete(data);
+      } catch (err) {
+        console.error('[UnifiedEvaluation] Failed to parse task_complete event:', err);
+      }
     });
 
     // Enhanced error handling with completion detection

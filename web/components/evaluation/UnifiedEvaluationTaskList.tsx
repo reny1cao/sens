@@ -263,8 +263,8 @@ export function UnifiedEvaluationTaskList({
                       </Badge>
                     </div>
 
-                    <p className="text-sm text-muted-foreground truncate">
-                      {task.query}
+                    <p className="text-sm text-muted-foreground">
+                      {task.query.length > 100 ? `${task.query.substring(0, 100)}...` : task.query}
                     </p>
 
                     {task.result && (
@@ -313,6 +313,14 @@ export function UnifiedEvaluationTaskList({
 
           <Collapsible.Content>
             <CardContent className="px-4 pb-4 pt-0">
+              {/* Full Question when expanded */}
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                  Full Question
+                </h4>
+                <p className="text-sm whitespace-pre-wrap break-words">{task.query}</p>
+              </div>
               {/* Thinking Steps */}
               {task.allEvents.length > 0 && (
                 <div className="border-t pt-4">
@@ -353,6 +361,54 @@ export function UnifiedEvaluationTaskList({
                                 <pre className="text-xs overflow-x-auto">
                                   <code className="language-sql">{event.content}</code>
                                 </pre>
+                              ) : event.type === 'action' && event.metadata ? (
+                                <div>
+                                  <p className="font-medium text-orange-600 mb-1">
+                                    {event.metadata.action_type?.replace(/_/g, ' ').toUpperCase()}
+                                  </p>
+                                  {event.metadata.parameters && Object.keys(event.metadata.parameters).length > 0 && (
+                                    <pre className="text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1 overflow-x-auto">
+                                      {JSON.stringify(event.metadata.parameters, null, 2)}
+                                    </pre>
+                                  )}
+                                  {event.content && (
+                                    <p className="text-xs text-muted-foreground mt-1">{event.content}</p>
+                                  )}
+                                </div>
+                              ) : event.type === 'observation' && event.metadata && (event.metadata.rows || event.metadata.row_count !== undefined) ? (
+                                <div>
+                                  <p className="text-green-600 font-medium mb-2">{event.content}</p>
+                                  {event.metadata.rows && event.metadata.rows.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-muted-foreground mb-1">Results:</p>
+                                      <div className="overflow-x-auto">
+                                        <table className="text-xs border-collapse min-w-full">
+                                          <thead>
+                                            <tr className="border-b">
+                                              {Object.keys(event.metadata.rows[0]).map(col => (
+                                                <th key={col} className="text-left p-2 font-medium">{col}</th>
+                                              ))}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {event.metadata.rows.slice(0, 5).map((row: any, idx: number) => (
+                                              <tr key={idx} className="border-b">
+                                                {Object.values(row).map((val: any, colIdx: number) => (
+                                                  <td key={colIdx} className="p-2">{String(val)}</td>
+                                                ))}
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                        {event.metadata.rows.length > 5 && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            ... and {event.metadata.rows.length - 5} more rows
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <p className="whitespace-pre-wrap break-words">{event.content}</p>
                               )}
@@ -455,6 +511,23 @@ export function UnifiedEvaluationTaskList({
   };
 
   if (tasks.length === 0) {
+    // Show backend status if available
+    if (status.completed_tasks > 0 || status.status === 'completed') {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <div>
+            <p className="mb-2">Evaluation completed</p>
+            <p className="text-sm">
+              {status.completed_tasks} task{status.completed_tasks !== 1 ? 's' : ''} completed
+              {status.successful_tasks > 0 && ` (${status.successful_tasks} successful)`}
+              {status.failed_tasks > 0 && ` (${status.failed_tasks} failed)`}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="text-center py-8 text-muted-foreground">
         <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />

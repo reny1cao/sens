@@ -65,41 +65,76 @@ def _transform_agent_event_for_bird_sql_dev(
 ) -> Optional[Dict]:
     """Transform agent events for BIRD-SQL-DEV evaluation streaming."""
     event_type = event.get("type")
+    event_data = event.get("data", {})
 
     if event_type == "reasoning":
+        # Agent emits reasoning events with "reasoning" field, not "content"
+        reasoning_text = event_data.get("reasoning", "")
         return {
             "event_type": "thought",
             "data": {
-                "content": event["data"]["content"],
+                "content": reasoning_text,
                 "task_id": task_id,
                 "timestamp": event.get("timestamp"),
-                "iteration": event["data"].get("step", 1),
+                "iteration": event_data.get("iteration", 1),
             },
         }
     elif event_type == "action":
+        # Agent emits action events with "action_type" field
+        action_type = event_data.get("action_type", "unknown")
+        parameters = event_data.get("parameters", {})
+
+        # Create a more informative action description
+        action_desc = action_type.replace("_", " ").title()
+        if action_type == "EXECUTE_SQL" and "sql" in parameters:
+            content = "Executing SQL query"
+        elif action_type == "SWITCH_DATABASE" and "db_path" in parameters:
+            content = f"Switching to database: {parameters.get('db_path', 'unknown')}"
+        elif action_type == "EXPLORE_DATABASE":
+            table_name = parameters.get("table_name")
+            content = f"Exploring {'table ' + table_name if table_name else 'database schema'}"
+        else:
+            content = f"Performing action: {action_desc}"
+
         return {
             "event_type": "action",
             "data": {
-                "content": event["data"].get(
-                    "reasoning", event["data"]["action_type"].replace("_", " ").title()
-                ),
+                "content": content,
                 "task_id": task_id,
                 "timestamp": event.get("timestamp"),
-                "iteration": event["data"].get("step", 1),
+                "iteration": event_data.get("iteration", 1),
                 "metadata": {
-                    "action_type": event["data"]["action_type"],
-                    "parameters": event["data"].get("parameters", {}),
+                    "action_type": action_type,
+                    "parameters": parameters,
                 },
             },
         }
     elif event_type == "observation":
-        success = event["data"].get("success", True)
-        error = event["data"].get("error")
+        success = event_data.get("success", True)
+        error = event_data.get("error")
 
+        # Extract more details from observation
         if error:
             content = f"Error: {error}"
         elif success:
-            content = "Action completed successfully"
+            # Check if this is a SQL execution result
+            if "row_count" in event_data:
+                row_count = event_data.get("row_count", 0)
+                execution_time = event_data.get("execution_time_ms")
+                if execution_time:
+                    content = f"Query executed successfully: {row_count} rows returned in {execution_time:.1f}ms"
+                else:
+                    content = f"Query executed successfully: {row_count} rows returned"
+            elif "table_count" in event_data:
+                # Database exploration result
+                table_count = event_data.get("table_count", 0)
+                content = f"Found {table_count} tables in database"
+            elif "databases_found" in event_data:
+                # Database discovery result
+                db_count = event_data.get("databases_found", 0)
+                content = f"Found {db_count} database(s)"
+            else:
+                content = "Action completed successfully"
         else:
             content = "Action failed"
 
@@ -109,7 +144,12 @@ def _transform_agent_event_for_bird_sql_dev(
                 "content": content,
                 "task_id": task_id,
                 "timestamp": event.get("timestamp"),
-                "iteration": event["data"].get("step", 1),
+                "iteration": event_data.get("iteration", 1),
+                "metadata": (
+                    event_data
+                    if success and ("row_count" in event_data or "rows" in event_data)
+                    else None
+                ),
             },
         }
     elif event_type == "sql_generated":
@@ -294,6 +334,9 @@ async def stream_bird_sql_dev_events(
                 "evaluation_id": evaluation_id,
                 "total_tasks": len(results),
                 "successful_tasks": sum(1 for r in results if r.execution_success),
+                "failed_tasks": sum(
+                    1 for r in results if not r.execution_success
+                ),  # Add missing field
                 "exact_matches": sum(1 for r in results if r.exact_match),
                 "normalized_matches": sum(1 for r in results if r.normalized_match),
                 "execution_matches": sum(1 for r in results if r.execution_match),

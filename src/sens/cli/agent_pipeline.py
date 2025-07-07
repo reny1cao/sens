@@ -11,6 +11,7 @@ from sens.agents.core import SENSAgent
 from sens.agents.event_emitter import EventEmittingAgent
 from sens.agents.memory import AgentMemory
 from sens.agents.reasoning import ReasoningEngine
+from sens.agents.tool_registry import EvaluationContext, tool_registry
 from sens.agents.tools import AgentTools
 from sens.chat.session import SessionManager
 from sens.settings import get_settings
@@ -28,6 +29,8 @@ class AgentNL2SQLPipeline:
         debug_mode: bool = False,
         max_iterations: int = 10,
         event_callback=None,
+        evaluation_context: Optional[EvaluationContext] = None,
+        db_path: Optional[str] = None,
     ):
         """Initialize the agent pipeline.
 
@@ -37,6 +40,8 @@ class AgentNL2SQLPipeline:
             debug_mode: Whether to include debug information
             max_iterations: Maximum number of agent reasoning iterations
             event_callback: Optional callback function for streaming events
+            evaluation_context: Context for tool selection (BIRD_CRITIC, BIRD_SQL_DEV, etc.)
+            db_path: Database path (required for SQLite contexts)
         """
         self.settings = get_settings()
         self.metrics_enabled = metrics_enabled
@@ -54,8 +59,27 @@ class AgentNL2SQLPipeline:
 
             self.session_id = str(uuid.uuid4())
 
-        # Initialize agent components
-        self.agent_tools = AgentTools()
+        # Initialize context-aware tools
+        if evaluation_context:
+            tool_config = tool_registry.get_tools_for_context(
+                evaluation_context, db_path=db_path
+            )
+            self.agent_tools = tool_config["tools"]
+            self.tool_instructions = tool_config["instructions"]
+            self.evaluation_context = evaluation_context
+
+            log.info(
+                "context_aware_tools_initialized",
+                context=evaluation_context,
+                database_type=tool_config["database_type"],
+                available_tools=tool_config["available_tools"],
+            )
+        else:
+            # Default tools for backward compatibility
+            self.agent_tools = AgentTools()
+            self.tool_instructions = ""
+            self.evaluation_context = None
+
         self.agent_memory = AgentMemory()
         self.reasoning_engine = ReasoningEngine()
 
@@ -135,10 +159,19 @@ class AgentNL2SQLPipeline:
         )
 
         try:
+            # Enhance question with context-specific instructions
+            enhanced_question = question
+            if hasattr(self, "tool_instructions") and self.tool_instructions:
+                enhanced_question = f"""
+{self.tool_instructions}
+
+USER QUESTION: {question}
+"""
+
             # Process query with agent
             print("\n🤖 Agent is thinking about your query...")
             result = await self.agent.process_query(
-                user_query=question,
+                user_query=enhanced_question,
                 conversation_id=self.session_id,
             )
 
