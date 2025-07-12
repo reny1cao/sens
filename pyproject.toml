@@ -35,6 +35,11 @@ python-multipart = "^0.0.20"
 boto3 = "^1.38.25"
 pandas = "^2.2.3"
 click = "^8.1.0"  # For CLI commands
+# LangGraph dependencies for agent refactoring
+langgraph = "^0.2.45"
+langchain-core = "^0.5.7"
+langchain-google-genai = "^2.1.0"
+langchain-openai = "^0.3.4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

@@ -15,6 +15,7 @@ from .routers.agent_stream import router as agent_stream_router  # Clean SSE str
 from .routers.column_search.router import router as column_search_router
 from .routers.datasource import router as datasource_router
 from .routers.intent.router import router as intent_router
+from .routers.langgraph_agent import router as langgraph_agent_router  # LangGraph agent
 from .routers.nl2sql import router as nl2sql_router  # Main implementation
 from .routers.nl2sql_agent import router as nl2sql_agent_router  # Agent-based with SSE
 from .routers.nl2sql_dev import router as nl2sql_dev_router  # Development/mock endpoint
@@ -169,6 +170,7 @@ app.include_router(
     nl2sql_simple_agent_router, prefix="/api", tags=["nl2sql-simple-agent"]
 )
 app.include_router(agent_stream_router, prefix="/api", tags=["agent-stream"])
+app.include_router(langgraph_agent_router, tags=["langgraph-agent"])
 app.include_router(intent_router, prefix="/intent", tags=["intent"])
 app.include_router(table_search_router, prefix="/table-search", tags=["table-search"])
 app.include_router(
