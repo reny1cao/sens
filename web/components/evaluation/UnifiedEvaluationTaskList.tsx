@@ -12,7 +12,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+// import { Card, CardContent } from '@/components/ui/card'; // Removed - using div elements instead
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -236,105 +236,152 @@ export function UnifiedEvaluationTaskList({
     const { icon: StatusIcon, color, bgColor, label, animate } = statusConfig[task.status];
 
     return (
-      <Card className={cn(
-        "transition-all duration-200 border-l-4",
-        task.status === 'processing' && "border-l-blue-500 shadow-md",
-        task.status === 'completed' && "border-l-green-500",
-        task.status === 'failed' && "border-l-red-500",
-        task.status === 'waiting' && "border-l-gray-300"
+      <div className={cn(
+        "relative overflow-hidden rounded-2xl border transition-all duration-300",
+        task.status === 'processing' && "border-blue-200 dark:border-blue-800 bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-950/20 shadow-lg shadow-blue-500/10",
+        task.status === 'completed' && "border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/20",
+        task.status === 'failed' && "border-rose-200 dark:border-rose-800 bg-gradient-to-r from-rose-50/50 to-transparent dark:from-rose-950/20",
+        task.status === 'waiting' && "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50"
       )}>
+        {/* Status indicator bar */}
+        <div className={cn(
+          "absolute left-0 top-0 bottom-0 w-1",
+          task.status === 'processing' && "bg-gradient-to-b from-blue-500 to-indigo-600",
+          task.status === 'completed' && "bg-gradient-to-b from-emerald-500 to-teal-600",
+          task.status === 'failed' && "bg-gradient-to-b from-rose-500 to-red-600",
+          task.status === 'waiting' && "bg-slate-300 dark:bg-slate-600"
+        )} />
+
         <Collapsible.Root open={isExpanded} onOpenChange={() => toggleTaskExpansion(task.task_id)}>
           <Collapsible.Trigger asChild>
-            <CardContent className="p-4 cursor-pointer hover:bg-gray-50/50 transition-colors">
+            <div className="p-6 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-all duration-200">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <StatusIcon className={cn("h-5 w-5", color, animate)} />
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className={cn(
+                    "p-2 rounded-xl transition-all duration-200",
+                    task.status === 'processing' && "bg-blue-100 dark:bg-blue-950/30",
+                    task.status === 'completed' && "bg-emerald-100 dark:bg-emerald-950/30",
+                    task.status === 'failed' && "bg-rose-100 dark:bg-rose-950/30",
+                    task.status === 'waiting' && "bg-slate-100 dark:bg-slate-800"
+                  )}>
+                    <StatusIcon className={cn("h-5 w-5", color, animate)} />
+                  </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="px-3 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full">
                         {task.task_id}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
+                      </span>
+                      <span className="px-3 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full">
                         {task.db_id}
-                      </Badge>
-                      <Badge className={cn("text-xs", bgColor, color)}>
+                      </span>
+                      <span className={cn(
+                        "px-3 py-1 text-xs font-medium rounded-full",
+                        task.status === 'processing' && "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300",
+                        task.status === 'completed' && "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300",
+                        task.status === 'failed' && "bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300",
+                        task.status === 'waiting' && "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                      )}>
                         {label}
-                      </Badge>
+                      </span>
                     </div>
 
-                    <p className="text-sm text-muted-foreground">
-                      {task.query.length > 100 ? `${task.query.substring(0, 100)}...` : task.query}
+                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                      {task.query.length > 120 ? `${task.query.substring(0, 120)}...` : task.query}
                     </p>
 
                     {task.result && (
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-4 text-xs">
                         {task.result.execution_time_ms && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {task.result.execution_time_ms}ms
-                          </span>
+                          <div className="flex items-center gap-2 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <Clock className="h-3 w-3 text-slate-500" />
+                            <span className="text-slate-600 dark:text-slate-400 font-medium">
+                              {task.result.execution_time_ms}ms
+                            </span>
+                          </div>
                         )}
                         {task.result.result_count !== undefined && (
-                          <span className="flex items-center gap-1">
-                            <Table2 className="h-3 w-3" />
-                            {task.result.result_count} rows
-                          </span>
+                          <div className="flex items-center gap-2 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <Table2 className="h-3 w-3 text-slate-500" />
+                            <span className="text-slate-600 dark:text-slate-400 font-medium">
+                              {task.result.result_count} rows
+                            </span>
+                          </div>
                         )}
                         {task.result.exact_match !== undefined && (
-                          <span className={cn(
-                            "flex items-center gap-1",
-                            task.result.exact_match ? "text-green-600" : "text-yellow-600"
+                          <div className={cn(
+                            "flex items-center gap-2 px-2 py-1 rounded-lg",
+                            task.result.exact_match
+                              ? "bg-emerald-100 dark:bg-emerald-950/30"
+                              : "bg-amber-100 dark:bg-amber-950/30"
                           )}>
-                            <Database className="h-3 w-3" />
-                            {task.result.exact_match ? "Exact Match" : "Partial Match"}
-                          </span>
+                            <Database className={cn(
+                              "h-3 w-3",
+                              task.result.exact_match ? "text-emerald-600" : "text-amber-600"
+                            )} />
+                            <span className={cn(
+                              "font-medium",
+                              task.result.exact_match
+                                ? "text-emerald-700 dark:text-emerald-300"
+                                : "text-amber-700 dark:text-amber-300"
+                            )}>
+                              {task.result.exact_match ? "Exact Match" : "Partial Match"}
+                            </span>
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {hasEvents && (
-                    <Badge variant="outline" className="text-xs">
-                      {task.allEvents.length} events
-                    </Badge>
+                    <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        {task.allEvents.length} events
+                      </span>
+                    </div>
                   )}
-                  {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
+                  <div className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    {isExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-slate-400" />
+                    )}
+                  </div>
                 </div>
               </div>
-            </CardContent>
+            </div>
           </Collapsible.Trigger>
 
           <Collapsible.Content>
-            <CardContent className="px-4 pb-4 pt-0">
+            <div className="px-6 pb-6">
               {/* Full Question when expanded */}
-              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-blue-500" />
-                  Full Question
-                </h4>
-                <p className="text-sm whitespace-pre-wrap break-words">{task.query}</p>
+              <div className="mb-6 p-6 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200/50 dark:border-slate-700/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-blue-500 rounded-xl shadow-lg shadow-blue-500/25">
+                    <MessageSquare className="h-4 w-4 text-white" />
+                  </div>
+                  <h4 className="text-lg font-medium text-slate-900 dark:text-slate-100">Full Question</h4>
+                </div>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words">{task.query}</p>
               </div>
               {/* Thinking Steps */}
               {task.allEvents.length > 0 && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-blue-500" />
-                    Agent Thinking Steps
-                  </h4>
+                <div className="mb-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl shadow-lg shadow-purple-500/25">
+                      <Sparkles className="h-4 w-4 text-white" />
+                    </div>
+                    <h4 className="text-lg font-medium text-slate-900 dark:text-slate-100">Agent Intelligence Flow</h4>
+                  </div>
 
-                  {/* Improved ScrollArea with better height and refs for auto-scroll */}
+                  {/* Refined thinking steps container */}
                   <div
                     ref={(el) => { taskScrollRefs.current[task.task_id] = el; }}
-                    className="max-h-[500px] overflow-y-auto relative rounded-lg border bg-gray-50/50 dark:bg-gray-900/30"
+                    className="max-h-[600px] overflow-y-auto relative rounded-2xl border border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800"
                   >
-                    <div className="p-4 space-y-3">
+                    <div className="p-6 space-y-4">
                       {task.allEvents.map((event, index) => (
                         <div key={index} className="flex gap-3">
                           <div className="flex-shrink-0 mt-1">
@@ -503,10 +550,10 @@ export function UnifiedEvaluationTaskList({
                   </div>
                 </div>
               )}
-            </CardContent>
+            </div>
           </Collapsible.Content>
         </Collapsible.Root>
-      </Card>
+      </div>
     );
   };
 

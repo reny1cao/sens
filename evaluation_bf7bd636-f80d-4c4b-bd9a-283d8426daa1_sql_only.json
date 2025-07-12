@@ -1,7 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(DISTINCT amount) >= 2 AND MAX(amount) - MIN(amount) > 12000;",
-  "PostgreSQL_1": "SELECT to_char(creationdate, 'H:MI:SS')\nFROM comments\nLIMIT 10;",
-  "PostgreSQL_2": null,
-  "PostgreSQL_3": null,
-  "PostgreSQL_4": "UPDATE transactions_1k\nSET amount = amount * 1.10\nFROM customers\nWHERE transactions_1k.custid = customers.custid AND transactions_1k.transactionid = 1\nRETURNING transactions_1k.transactionid, customers.segment;"
-}

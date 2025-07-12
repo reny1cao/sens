@@ -1,4 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account_id\nFROM (\n    SELECT\n        account_id,\n        MAX(amount) - MIN(amount) AS amount_difference,\n        COUNT(*) AS transaction_count\n    FROM trans\n    GROUP BY account_id\n    HAVING COUNT(*) >= 2\n) AS subquery\nWHERE amount_difference > 12000;",
-  "PostgreSQL_1": null
-}

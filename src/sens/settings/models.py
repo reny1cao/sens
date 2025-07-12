@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Valid environments
 EnvironmentType = Literal["development", "staging", "production"]
@@ -264,6 +264,10 @@ class AgentReasoningConfig(ModelConfig):
         default=30,
         description="Timeout in seconds for reasoning requests",
     )
+    max_iterations: int = Field(
+        default=25,
+        description="Maximum number of reasoning iterations",
+    )
 
 
 class CacheConfig(BaseModel):
@@ -381,4 +385,66 @@ class FinancialDataConfig(BaseSettings):
         """Validate API key format if provided."""
         if v is not None and len(v.strip()) == 0:
             return None
+        return v
+
+
+class MemoryConfig(BaseModel):
+    """Agent memory system configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable agent memory system",
+        validation_alias="SENS_MEMORY_ENABLED",
+    )
+    db_path: str = Field(
+        default="agent_memory.db",
+        description="Path to memory database file",
+        validation_alias="SENS_MEMORY_DB_PATH",
+    )
+    session_isolation: bool = Field(
+        default=False,
+        description="Use separate memory per session",
+        validation_alias="SENS_MEMORY_SESSION_ISOLATION",
+    )
+    max_memories_per_type: int = Field(
+        default=1000,
+        description="Maximum memories to store per type",
+        gt=0,
+        validation_alias="SENS_MEMORY_MAX_PER_TYPE",
+    )
+    auto_consolidation: bool = Field(
+        default=True,
+        description="Automatically consolidate similar memories",
+        validation_alias="SENS_MEMORY_AUTO_CONSOLIDATION",
+    )
+    memory_recall_timeout_ms: int = Field(
+        default=200,
+        description="Timeout for memory recall operations in milliseconds",
+        gt=0,
+        le=5000,
+        validation_alias="SENS_MEMORY_RECALL_TIMEOUT_MS",
+    )
+    background_learning: bool = Field(
+        default=True,
+        description="Enable background learning from successful actions",
+        validation_alias="SENS_MEMORY_BACKGROUND_LEARNING",
+    )
+    cross_session_sharing: bool = Field(
+        default=True,
+        description="Share successful patterns across sessions",
+        validation_alias="SENS_MEMORY_CROSS_SESSION_SHARING",
+    )
+    min_confidence_threshold: float = Field(
+        default=0.7,
+        description="Minimum confidence threshold for applying memories",
+        ge=0.0,
+        le=1.0,
+        validation_alias="SENS_MEMORY_MIN_CONFIDENCE",
+    )
+
+    @field_validator("db_path")
+    def validate_db_path(cls, v: str) -> str:
+        """Ensure db_path has .db extension."""
+        if not v.endswith(".db"):
+            v = f"{v}.db"
         return v

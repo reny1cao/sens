@@ -1,8 +1,11 @@
 """SENS Agent System - Intelligent query processing with self-correction and learning."""
 
 from .base import AgentAction, AgentObservation, AgentState, AgentThought
-from .core import SENSAgent
 from .tools import AgentTools
+from .unified import UnifiedSENSAgent
+
+# Backwards compatibility alias
+SENSAgent = UnifiedSENSAgent
 
 __all__ = [
     "AgentState",
@@ -10,5 +13,6 @@ __all__ = [
     "AgentObservation",
     "AgentThought",
     "SENSAgent",
+    "UnifiedSENSAgent",
     "AgentTools",
 ]

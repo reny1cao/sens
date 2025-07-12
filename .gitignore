@@ -86,4 +86,24 @@ Thumbs.db
 web/lib/
 !web/lib/utils.ts
 !web/lib/api/
+web/.next/
+web/node_modules/
+
+# Build artifacts and results
+bird_*_evaluation_*.json
+bird_*_metrics.json
+evaluation_*.json
+*_test_results*.json
+learning_performance_results.json
+
+# Memory databases
+*.db/
+*_memory.db/
+
+# Test artifacts in root
+test_*.json
+*_test.json
+
+# Archived code (keep in repo but ignore in git status)
 /src/sens/api/routers/archived/
+/src/sens/agents/archived/

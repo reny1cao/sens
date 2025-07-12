@@ -392,6 +392,16 @@ class AgentTools:
                     "hint": self._suggest_exploration_fix(result.error),
                 }
 
+            # Check for empty database (no tables found)
+            is_table_query = "information_schema.tables" in query.lower()
+            insights = self._extract_insights(result)
+
+            if is_table_query and result.row_count == 0:
+                insights["empty_database"] = True
+                insights["suggestion"] = (
+                    "Database has no tables. Try discovering other databases or check connection."
+                )
+
             # Format results for agent understanding
             return {
                 "success": True,
@@ -399,7 +409,7 @@ class AgentTools:
                 "row_count": result.row_count,
                 "data": result.rows[:20],  # Limit to 20 rows for exploration
                 "truncated": result.row_count > 20,
-                "insights": self._extract_insights(result),
+                "insights": insights,
             }
 
         except Exception as e:

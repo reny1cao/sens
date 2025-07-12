@@ -449,7 +449,7 @@ export function useUnifiedEvaluation() {
   }, [startEvaluation]);
 
   // Export functionality
-  const exportResults = useCallback(async (format: 'submission' | 'detailed' | 'sql_only' | 'metrics') => {
+  const exportResults = useCallback(async (format: 'submission' | 'detailed' | 'sql_only' | 'metrics' | 'analysis') => {
     if (!currentEvaluationIdRef.current || !status.dataset) {
       throw new Error('No evaluation to export');
     }
@@ -469,6 +469,37 @@ export function useUnifiedEvaluation() {
     a.download = `evaluation_${currentEvaluationIdRef.current}_${format}.${format === 'submission' ? 'jsonl' : 'json'}`;
     a.click();
     URL.revokeObjectURL(url);
+  }, [status.dataset, getApiEndpoint]);
+
+  // Copy analysis to clipboard
+  const copyAnalysisToClipboard = useCallback(async () => {
+    if (!currentEvaluationIdRef.current || !status.dataset) {
+      throw new Error('No evaluation to copy');
+    }
+
+    const response = await fetch(
+      getApiEndpoint(status.dataset, `/export/${currentEvaluationIdRef.current}/analysis`)
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to get analysis: ${response.statusText}`);
+    }
+
+    const analysisData = await response.text();
+
+    try {
+      await navigator.clipboard.writeText(analysisData);
+      return 'Analysis copied to clipboard!';
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = analysisData;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return 'Analysis copied to clipboard!';
+    }
   }, [status.dataset, getApiEndpoint]);
 
   // Cleanup on unmount
@@ -505,5 +536,6 @@ export function useUnifiedEvaluation() {
     resetEvaluation,
     retryEvaluation,
     exportResults,
+    copyAnalysisToClipboard,
   };
 }

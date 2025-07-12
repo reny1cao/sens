@@ -1,4 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account\nFROM trans\nGROUP BY account\nHAVING COUNT(DISTINCT trans_id) >= 2 AND MAX(amount) - MIN(amount) > 12000;",
-  "PostgreSQL_1": null
-}

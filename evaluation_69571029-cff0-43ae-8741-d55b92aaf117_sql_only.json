@@ -1,3 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(*) >= 2 AND MAX(amount) - MIN(amount) > 12000;"
-}

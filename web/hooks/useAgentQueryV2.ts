@@ -87,7 +87,7 @@ export function useAgentQueryV2(): UseAgentQueryV2Result {
         },
         body: JSON.stringify({
           question: query,
-          max_iterations: 10
+          max_iterations: 25
         }),
       });
 

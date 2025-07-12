@@ -8,6 +8,7 @@ with real-time streaming of agent thinking steps and progress updates.
 import asyncio
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -335,14 +336,22 @@ async def list_evaluations():
 @router.get("/export/{evaluation_id}/{format}")
 async def export_evaluation_results(
     evaluation_id: str,
-    format: str = "submission",  # "submission", "detailed", "sql_only", "metrics"
+    format: str = "submission",  # "submission", "detailed", "sql_only", "metrics", "analysis"
 ):
     """Export evaluation results in specified format."""
-    if evaluation_id not in evaluation_runs:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+    # Check if evaluation file exists (more reliable than memory check)
+    base_file = f"evaluation_{evaluation_id}.json"
+    if not Path(base_file).exists():
+        raise HTTPException(status_code=404, detail="Evaluation results not found")
 
-    if evaluation_runs[evaluation_id].status != "completed":
-        raise HTTPException(status_code=400, detail="Evaluation not completed")
+    # Check if evaluation is still in memory and completed
+    if evaluation_id in evaluation_runs:
+        if evaluation_runs[evaluation_id].status != "completed":
+            raise HTTPException(status_code=400, detail="Evaluation not completed")
+
+    # Handle new analysis format
+    if format == "analysis":
+        return await export_analysis_format(evaluation_id)
 
     # Determine file path based on format
     base_file = f"evaluation_{evaluation_id}.json"
@@ -373,6 +382,123 @@ async def export_evaluation_results(
         )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Export file not found")
+
+
+async def export_analysis_format(evaluation_id: str):
+    """Export evaluation results in a comprehensive analysis format for Claude."""
+    import json
+
+    from fastapi.responses import JSONResponse
+
+    try:
+        # Load detailed results
+        base_file = f"evaluation_{evaluation_id}.json"
+
+        with open(base_file, "r") as f:
+            detailed_results = json.load(f)
+
+        # Get evaluation status (if available in memory, otherwise use file data)
+        if evaluation_id in evaluation_runs:
+            status = evaluation_runs[evaluation_id]
+            evaluation_summary = {
+                "evaluation_id": evaluation_id,
+                "dataset": "BIRD-CRITIC",
+                "status": status.status,
+                "total_tasks": status.total_tasks,
+                "completed_tasks": status.completed_tasks,
+                "successful_tasks": status.successful_tasks,
+                "failed_tasks": status.failed_tasks,
+                "start_time": (
+                    status.start_time.isoformat() if status.start_time else None
+                ),
+                "end_time": status.end_time.isoformat() if status.end_time else None,
+                "metrics": status.metrics,
+            }
+        else:
+            # Use data from results file if not in memory
+            results = detailed_results.get("results", [])
+            total_tasks = len(results)
+            successful_tasks = sum(
+                1 for r in results if r.get("execution_success", False)
+            )
+            failed_tasks = total_tasks - successful_tasks
+
+            evaluation_summary = {
+                "evaluation_id": evaluation_id,
+                "dataset": "BIRD-CRITIC",
+                "status": "completed",  # Assume completed since file exists
+                "total_tasks": total_tasks,
+                "completed_tasks": total_tasks,
+                "successful_tasks": successful_tasks,
+                "failed_tasks": failed_tasks,
+                "start_time": detailed_results.get("start_time"),
+                "end_time": detailed_results.get("end_time"),
+                "metrics": detailed_results.get("metrics", {}),
+            }
+
+        # Create comprehensive analysis export
+        analysis_data = {"evaluation_summary": evaluation_summary, "task_details": []}
+
+        # Process each task result
+        for result in detailed_results.get("results", []):
+            task_analysis = {
+                "task_info": {
+                    "task_id": result.get("instance_id", result.get("task_id")),
+                    "db_id": result.get("db_id"),
+                    "difficulty": result.get("difficulty"),
+                    "question": result.get("query", result.get("question")),
+                },
+                "sql_analysis": {
+                    "generated_sql": result.get("generated_sql"),
+                    "execution_success": result.get("execution_success"),
+                    "execution_error": result.get("execution_error"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "result_count": result.get("result_count"),
+                },
+                "thinking_steps": [],
+                "performance_metrics": {
+                    "execution_success": result.get("execution_success"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "result_count": result.get("result_count"),
+                },
+            }
+
+            # Extract thinking steps from prompt flow
+            if "prompt_flow" in result and result["prompt_flow"]:
+                for i, flow_item in enumerate(result["prompt_flow"]):
+                    step = {
+                        "step_number": i + 1,
+                        "model": flow_item.get("model"),
+                        "prompt": flow_item.get("prompt"),
+                        "response": flow_item.get("response"),
+                        "step_type": (
+                            "reasoning"
+                            if "reasoning" in flow_item.get("prompt", "").lower()
+                            else "action"
+                        ),
+                    }
+                    task_analysis["thinking_steps"].append(step)
+
+            analysis_data["task_details"].append(task_analysis)
+
+        # Create filename and return as downloadable JSON
+        filename = f"evaluation_{evaluation_id}_analysis.json"
+        content = json.dumps(analysis_data, indent=2, ensure_ascii=False)
+
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Evaluation results not found")
+    except Exception as e:
+        logger.error("Failed to export analysis format", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
 @router.delete("/{evaluation_id}")

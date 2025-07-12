@@ -1,4 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account\nFROM trans\nGROUP BY account\nHAVING COUNT(DISTINCT trans_id) >= 2\n   AND (MAX(amount) - MIN(amount)) > 12000;",
-  "PostgreSQL_1": "SELECT to_char(creaiondate, 'H:MI:SS') AS formatted_time\nFROM posts\nLIMIT 10;"
-}

@@ -23,6 +23,8 @@ import structlog
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.chat.session import SessionManager
 from sens.cli.commands.config import handle_config_command
+
+# from sens.cli.commands.database_profile import handle_profile_database_command
 from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
 from sens.cli.formatters import format_nl2sql_response
 from sens.execution import SQLExecutor
@@ -116,7 +118,7 @@ async def handle_nl2sql(
                 metrics_enabled=args.metrics,
                 debug_mode=args.debug,
                 max_iterations=(
-                    args.max_iterations if hasattr(args, "max_iterations") else 10
+                    args.max_iterations if hasattr(args, "max_iterations") else None
                 ),
             )
             print(
@@ -844,6 +846,37 @@ def main() -> None:
         help="Clear cache (all or just schema)",
     )
 
+    # Database profiling command
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Profile databases for semantic understanding",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    profile_group = profile_parser.add_mutually_exclusive_group(required=True)
+    profile_group.add_argument(
+        "--database-path", type=str, help="Path to single database to profile"
+    )
+    profile_group.add_argument(
+        "--bird-directory",
+        type=str,
+        default="external/BIRD-SQL-DEV",
+        help="Directory containing BIRD databases to profile",
+    )
+    profile_parser.add_argument(
+        "--database-name",
+        type=str,
+        help="Name for the database (auto-detected if not provided)",
+    )
+    profile_parser.add_argument(
+        "--lightrag-url",
+        type=str,
+        default="http://127.0.0.1:9621",
+        help="LightRAG server URL for storing semantic knowledge",
+    )
+    profile_parser.add_argument(
+        "--detailed", action="store_true", help="Show detailed profiling results"
+    )
+
     # BIRD-CRITIC evaluation command (handled by click)
     subparsers.add_parser("bird-critic", help="BIRD-CRITIC evaluation", add_help=False)
     # Note: BIRD-CRITIC subcommands are handled by click, not argparse
@@ -929,6 +962,11 @@ def main() -> None:
         handle_config_command(args, log)
     elif args.command == "cache":
         asyncio.run(handle_cache_status(args, log))
+    elif args.command == "profile":
+        # exit_code = asyncio.run(handle_profile_database_command(args))
+        print("Database profiling command is currently disabled")
+        exit_code = 1
+        sys.exit(exit_code)
     # Financial command is handled above before argparse
 
 

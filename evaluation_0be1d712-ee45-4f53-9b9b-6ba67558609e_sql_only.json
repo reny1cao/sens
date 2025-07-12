@@ -1,7 +1,0 @@
-{
-  "PostgreSQL_0": "SELECT account_id\nFROM trans\nGROUP BY account_id\nHAVING COUNT(DISTINCT trans_id) >= 2\n   AND (MAX(amount) - MIN(amount)) > 12000;",
-  "PostgreSQL_1": "SELECT to_char(creationdate, 'H:MI:SS') AS formatted_time\nFROM comments\nLIMIT 10;",
-  "PostgreSQL_2": null,
-  "PostgreSQL_3": null,
-  "PostgreSQL_4": "UPDATE transactions_1k\nSET amount = amount -- No actual update, just selecting and returning\nWHERE transactionid = 1 -- Example WHERE clause, replace with your actual condition\nRETURNING (SELECT t.transactionid, c.segment\n           FROM transactions_1k t\n           JOIN customers c ON t.customerid = c.customerid\n           WHERE t.transactionid = transactions_1k.transactionid);"
-}

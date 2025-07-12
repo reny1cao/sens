@@ -20,6 +20,7 @@ from .models import (
     DatabaseConfig,
     EnvironmentType,
     IntentExtractorConfig,
+    MemoryConfig,
     ModelConfig,
     OpenRouterConfig,
     ResponseBuilderConfig,
@@ -44,4 +45,5 @@ __all__ = [
     "IntentExtractorConfig",
     "DatabaseConfig",
     "ResponseBuilderConfig",
+    "MemoryConfig",
 ]

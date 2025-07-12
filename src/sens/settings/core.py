@@ -19,6 +19,7 @@ from .models import (
     FinancialDataConfig,
     IntentExtractorConfig,
     LoggingConfig,
+    MemoryConfig,
     OpenRouterConfig,
     ResponseBuilderConfig,
     SQLGeneratorConfig,
@@ -149,6 +150,14 @@ class Settings(BaseSettings):
         description="Response builder component configuration",
     )
 
+    # Agent Configuration
+    # -------------------
+    agent_max_iterations: int = Field(
+        default=25,
+        description="Maximum number of agent reasoning iterations",
+        validation_alias="SENS_AGENT_MAX_ITERATIONS",
+    )
+
     # Add Agent Reasoning configuration
     agent_reasoning: AgentReasoningConfig = Field(
         default_factory=AgentReasoningConfig,
@@ -165,6 +174,12 @@ class Settings(BaseSettings):
     financial: FinancialDataConfig = Field(
         default_factory=FinancialDataConfig,
         description="Financial data API configuration",
+    )
+
+    # Memory system configuration
+    memory: MemoryConfig = Field(
+        default_factory=MemoryConfig,
+        description="Agent memory system configuration",
     )
 
     # API Security Settings
@@ -286,6 +301,18 @@ class Settings(BaseSettings):
                     password=self.db_password if self.db_password else "dummy",
                 ),
             )
+
+        # Override agent_reasoning.max_iterations with agent_max_iterations
+        current_config = self.agent_reasoning
+        updated_config = AgentReasoningConfig(
+            primary_model=current_config.primary_model,
+            fallback_model=current_config.fallback_model,
+            max_tokens=current_config.max_tokens,
+            temperature=current_config.temperature,
+            timeout_seconds=current_config.timeout_seconds,
+            max_iterations=self.agent_max_iterations,
+        )
+        object.__setattr__(self, "agent_reasoning", updated_config)
 
     @field_validator("cors_origins", "cors_methods", "cors_headers", mode="before")
     @classmethod

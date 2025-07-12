@@ -24,9 +24,10 @@ from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-# Agent imports
-from ...agents.event_emitter import EventEmittingAgent
 from ...agents.tools import AgentTools
+
+# Agent imports
+from ...agents.unified import UnifiedSENSAgent
 from ...api.models import NL2SQLRequest, NL2SQLResponse, QueryMetadata, QueryMode
 from ...chat.session import SessionManager
 from ...common import (
@@ -64,7 +65,7 @@ _orchestrator_pipeline: Optional[Pipeline] = None
 _agent_pipeline: Optional[Pipeline] = None
 _session_pipeline: Optional[Pipeline] = None
 _session_manager: Optional[SessionManager] = None
-_agent: Optional[Any] = None  # EventEmittingAgent when available
+_agent: Optional[Any] = None  # UnifiedSENSAgent when available
 
 # In-memory storage for agent results (with TTL)
 _agent_results: Dict[str, Dict[str, Any]] = {}
@@ -112,10 +113,19 @@ async def initialize_components():
             logger.info("Mock mode enabled - agent features disabled")
         else:
             try:
-                # Initialize agent with tools
+                # Initialize agent with tools and session management
                 tools = AgentTools()
-                _agent = EventEmittingAgent(tools=tools, max_iterations=5)
-                logger.info("Agent initialized successfully")
+                session_manager = SessionManager()
+                _agent = UnifiedSENSAgent(
+                    tools=tools,
+                    session_manager=session_manager,
+                    max_iterations=settings.agent_reasoning.max_iterations,
+                    streaming_enabled=True,
+                    conversation_enabled=True,
+                )
+                logger.info(
+                    f"Agent initialized successfully with max_iterations={settings.agent_reasoning.max_iterations}, conversation_enabled=True"
+                )
             except Exception as e:
                 logger.error(f"Failed to initialize agent: {e}")
                 _agent = None
@@ -310,7 +320,7 @@ async def agent_query(
         {
             "question": question,
             "session_id": request.get("session_id"),
-            "max_iterations": request.get("max_iterations", 10),
+            "max_iterations": request.get("max_iterations"),
         },
     )
 
@@ -943,6 +953,13 @@ def _transform_agent_event(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "timestamp": timestamp,
         }
     elif event_type == "answer_generated":
+        return {
+            "type": "answer",
+            "content": event_data.get("content", ""),
+            "iteration": event_data.get("iteration", 1),
+            "timestamp": timestamp,
+        }
+    elif event_type == "answer_provided":
         return {
             "type": "answer",
             "content": event_data.get("content", ""),

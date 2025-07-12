@@ -48,9 +48,18 @@ class ActionType(Enum):
     STORE_PATTERN = "store_pattern"
 
     # Conversational actions
-    CLARIFY_QUERY = "clarify_query"  # Ask user for clarification
-    PROVIDE_ANSWER = "provide_answer"  # Answer without SQL
-    SUGGEST_OPTIONS = "suggest_options"  # Offer choices to user
+    CLARIFY_QUERY = (
+        "clarify_query"  # Ask user for clarification (deprecated - use RESPOND_TO_USER)
+    )
+    PROVIDE_ANSWER = (
+        "provide_answer"  # Answer without SQL (deprecated - use RESPOND_TO_USER)
+    )
+    SUGGEST_OPTIONS = (
+        "suggest_options"  # Offer choices to user (deprecated - use RESPOND_TO_USER)
+    )
+    RESPOND_TO_USER = (
+        "respond_to_user"  # Unified response action (answer, clarify, or suggest)
+    )
 
 
 @dataclass

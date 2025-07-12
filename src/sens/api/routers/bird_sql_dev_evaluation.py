@@ -492,3 +492,220 @@ async def cancel_bird_sql_dev_evaluation(evaluation_id: str):
         status.end_time = datetime.now()
 
     return {"message": "Evaluation cancelled", "evaluation_id": evaluation_id}
+
+
+@router.get("/export/{evaluation_id}/{format}")
+async def export_bird_sql_dev_results(
+    evaluation_id: str,
+    format: str = "submission",  # "submission", "detailed", "sql_only", "metrics", "analysis"
+):
+    """Export BIRD-SQL-DEV evaluation results in specified format."""
+    # Check if evaluation file exists (more reliable than memory check)
+    base_file = f"bird_sql_dev_evaluation_{evaluation_id}.json"
+    if not Path(base_file).exists():
+        raise HTTPException(status_code=404, detail="Evaluation results not found")
+
+    # Check if evaluation is still in memory and completed
+    if evaluation_id in bird_sql_dev_runs:
+        if bird_sql_dev_runs[evaluation_id].status != "completed":
+            raise HTTPException(status_code=400, detail="Evaluation not completed")
+
+    # Handle new analysis format
+    if format == "analysis":
+        return await export_bird_sql_dev_analysis_format(evaluation_id)
+
+    # Determine file path based on format
+    base_file = f"bird_sql_dev_evaluation_{evaluation_id}.json"
+
+    if format == "submission":
+        file_path = base_file.replace(".json", "_submission.jsonl")
+        media_type = "application/x-ndjson"
+    elif format == "detailed":
+        file_path = base_file
+        media_type = "application/json"
+    elif format == "sql_only":
+        file_path = base_file.replace(".json", "_sql_only.json")
+        media_type = "application/json"
+    elif format == "metrics":
+        file_path = base_file.replace(".json", "_metrics.json")
+        media_type = "application/json"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format")
+
+    try:
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        return StreamingResponse(
+            iter([content]),
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={file_path}"},
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Export file not found")
+
+
+async def export_bird_sql_dev_analysis_format(evaluation_id: str):
+    """Export BIRD-SQL-DEV results in a comprehensive analysis format for Claude."""
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    try:
+        # Load detailed results
+        base_file = f"bird_sql_dev_evaluation_{evaluation_id}.json"
+
+        with open(base_file, "r") as f:
+            detailed_results = json.load(f)
+
+        # Get evaluation status (if available in memory, otherwise use file data)
+        if evaluation_id in bird_sql_dev_runs:
+            status = bird_sql_dev_runs[evaluation_id]
+            evaluation_summary = {
+                "evaluation_id": evaluation_id,
+                "dataset": "BIRD-SQL-DEV",
+                "status": status.status,
+                "total_tasks": status.total_tasks,
+                "completed_tasks": status.completed_tasks,
+                "successful_tasks": status.successful_tasks,
+                "failed_tasks": status.failed_tasks,
+                "start_time": (
+                    status.start_time.isoformat() if status.start_time else None
+                ),
+                "end_time": status.end_time.isoformat() if status.end_time else None,
+                "metrics": status.metrics,
+            }
+        else:
+            # Use data from results file if not in memory
+            # Handle both array format (BIRD-SQL-DEV) and object format (other evaluations)
+            if isinstance(detailed_results, list):
+                results = detailed_results
+            else:
+                results = detailed_results.get("results", [])
+            total_tasks = len(results)
+            successful_tasks = sum(
+                1 for r in results if r.get("execution_success", False)
+            )
+            failed_tasks = total_tasks - successful_tasks
+
+            evaluation_summary = {
+                "evaluation_id": evaluation_id,
+                "dataset": "BIRD-SQL-DEV",
+                "status": "completed",  # Assume completed since file exists
+                "total_tasks": total_tasks,
+                "completed_tasks": total_tasks,
+                "successful_tasks": successful_tasks,
+                "failed_tasks": failed_tasks,
+                "start_time": (
+                    detailed_results.get("start_time")
+                    if isinstance(detailed_results, dict)
+                    else None
+                ),
+                "end_time": (
+                    detailed_results.get("end_time")
+                    if isinstance(detailed_results, dict)
+                    else None
+                ),
+                "metrics": (
+                    detailed_results.get("metrics", {})
+                    if isinstance(detailed_results, dict)
+                    else {}
+                ),
+            }
+
+        # Create comprehensive analysis export for BIRD-SQL-DEV
+        analysis_data = {"evaluation_summary": evaluation_summary, "task_details": []}
+
+        # Process each task result
+        # Handle both array format (BIRD-SQL-DEV) and object format (other evaluations)
+        if isinstance(detailed_results, list):
+            results_list = detailed_results
+        else:
+            results_list = detailed_results.get("results", [])
+
+        for result in results_list:
+            task_analysis = {
+                "task_info": {
+                    "task_id": result.get("question_id", result.get("task_id")),
+                    "db_id": result.get("db_id"),
+                    "difficulty": result.get("difficulty"),
+                    "question": result.get("question"),
+                },
+                "sql_analysis": {
+                    "generated_sql": result.get("generated_sql"),
+                    "golden_sql": result.get("golden_sql"),
+                    "execution_success": result.get("execution_success"),
+                    "execution_error": result.get("execution_error"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "result_count": result.get("result_count"),
+                },
+                "match_analysis": {
+                    "exact_match": result.get("exact_match"),
+                    "normalized_match": result.get("normalized_match"),
+                    "execution_match": result.get("execution_match"),
+                },
+                "thinking_steps": [],
+                "performance_metrics": {
+                    "execution_success": result.get("execution_success"),
+                    "execution_time_ms": result.get("execution_time_ms"),
+                    "result_count": result.get("result_count"),
+                    "exact_match": result.get("exact_match"),
+                    "normalized_match": result.get("normalized_match"),
+                    "execution_match": result.get("execution_match"),
+                },
+            }
+
+            # Extract thinking steps from agent events if available
+            if "agent_events" in result and result["agent_events"]:
+                for i, event in enumerate(result["agent_events"]):
+                    step = {
+                        "step_number": i + 1,
+                        "event_type": event.get("type"),
+                        "content": event.get("content"),
+                        "iteration": event.get("iteration", 1),
+                        "timestamp": event.get("timestamp"),
+                        "metadata": event.get("metadata", {}),
+                    }
+                    task_analysis["thinking_steps"].append(step)
+            # Note: agent_events are typically not saved in the final results file
+            # They're only available during real-time streaming
+
+            # Add SQL comparison analysis
+            if (
+                task_analysis["sql_analysis"]["generated_sql"]
+                and task_analysis["sql_analysis"]["golden_sql"]
+            ):
+                task_analysis["sql_comparison"] = {
+                    "generated_length": len(
+                        task_analysis["sql_analysis"]["generated_sql"]
+                    ),
+                    "golden_length": len(task_analysis["sql_analysis"]["golden_sql"]),
+                    "exact_match": task_analysis["match_analysis"]["exact_match"],
+                    "normalized_match": task_analysis["match_analysis"][
+                        "normalized_match"
+                    ],
+                    "execution_match": task_analysis["match_analysis"][
+                        "execution_match"
+                    ],
+                }
+
+            analysis_data["task_details"].append(task_analysis)
+
+        # Create filename and return as downloadable JSON
+        filename = f"bird_sql_dev_evaluation_{evaluation_id}_analysis.json"
+        content = json.dumps(analysis_data, indent=2, ensure_ascii=False)
+
+        return StreamingResponse(
+            iter([content]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Evaluation results not found")
+    except Exception as e:
+        logger.error("Failed to export BIRD-SQL-DEV analysis format", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
