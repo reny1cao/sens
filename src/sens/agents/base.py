@@ -6,9 +6,15 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-import structlog
-
-log = structlog.get_logger()
+# Import structlog if available, otherwise create a simple logger
+try:
+    import structlog
+    log = structlog.get_logger()
+    HAS_STRUCTLOG = True
+except ImportError:
+    import logging
+    log = logging.getLogger(__name__)
+    HAS_STRUCTLOG = False
 
 
 class ActionType(Enum):
@@ -182,16 +188,20 @@ class AgentState:
             self.agent_notes = f"Agent Notes:\n{new_info}"
 
         # Log the update with more detail
-        log.info(
-            "agent_notes_updated",
-            notes_length=len(self.agent_notes),
-            new_info=new_info,
-            notes_preview=(
-                self.agent_notes[-300:]
-                if len(self.agent_notes) > 300
-                else self.agent_notes
-            ),
-        )
+        if HAS_STRUCTLOG:
+            log.info(
+                "agent_notes_updated",
+                notes_length=len(self.agent_notes),
+                new_info=new_info,
+                notes_preview=(
+                    self.agent_notes[-300:]
+                    if len(self.agent_notes) > 300
+                    else self.agent_notes
+                ),
+            )
+        else:
+            # Fall back to standard logging
+            log.info(f"Agent notes updated: {new_info[:100]}...")
 
     @property
     def should_continue(self) -> bool:

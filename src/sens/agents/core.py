@@ -3,7 +3,15 @@
 import asyncio
 from typing import Any, Dict, List, Optional
 
-import structlog
+# Import structlog if available, otherwise create a simple logger
+try:
+    import structlog
+    log = structlog.get_logger()
+    HAS_STRUCTLOG = True
+except ImportError:
+    import logging
+    log = logging.getLogger(__name__)
+    HAS_STRUCTLOG = False
 
 from sens.agents.base import (
     ActionType,
