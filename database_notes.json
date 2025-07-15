@@ -108,6 +108,46 @@
         "The table names might be misspelled.",
         "The database schema might be different than expected."
       ]
+    },
+    {
+      "timestamp": "2025-07-15T14:20:09.744062",
+      "category": "schema_discovery",
+      "title": "Absence of Common Financial Columns in Public Schema",
+      "content": "The query searched for columns related to financial data (volume, ticker, symbol, date) within the 'public' schema of the database. The query returned zero rows, indicating that tables within the 'public' schema do not contain columns with names including 'volume', 'ticker', 'symbol', or 'date'. This suggests that financial data, if present, might reside in a different schema or use different naming conventions for these common financial attributes.",
+      "tables_involved": [],
+      "confidence": 0.9,
+      "source": "exploration",
+      "tags": [
+        "schema",
+        "financial data",
+        "naming conventions",
+        "public schema"
+      ],
+      "insights": [
+        "The 'public' schema likely does not contain financial data directly.",
+        "Financial data, if present, might be in a different schema.",
+        "Column naming conventions for financial data may differ from common terms."
+      ]
+    },
+    {
+      "timestamp": "2025-07-15T14:20:56.402835",
+      "category": "schema_discovery",
+      "title": "Column 'PRIJEM' Not Found in Information Schema",
+      "content": "The query `SELECT table_name FROM information_schema.columns WHERE column_name = 'PRIJEM'` returned no rows. This indicates that no column named 'PRIJEM' exists in any table within the database, or that the user does not have sufficient privileges to view the column's metadata. This could be due to a typo in the column name, or the column may not exist at all. Further investigation is needed to determine the correct column name or if the data is stored under a different naming convention.",
+      "tables_involved": [],
+      "confidence": 0.9,
+      "source": "exploration",
+      "tags": [
+        "schema",
+        "column",
+        "not_found",
+        "naming_convention"
+      ],
+      "insights": [
+        "Column 'PRIJEM' does not exist in the database schema (or is inaccessible)",
+        "Potential typo in column name",
+        "Possible alternative naming convention used for related data"
+      ]
     }
   ],
   "table_knowledge": {}
