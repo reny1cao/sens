@@ -8,19 +8,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const sessionId = request.headers.get('X-Session-Id');
 
-    // Determine which endpoint to use based on session
-    const endpoint = sessionId
-      ? `${API_URL}/api/nl2sql/session/query`
-      : `${API_URL}/api/nl2sql/`;
+    // Use unified endpoint with mode parameter
+    const endpoint = `${API_URL}/api/nl2sql/query`;
+
+    // Prepare request body with session info and mode
+    const requestBody = {
+      ...body,
+      mode: sessionId ? 'session' : 'standard',
+      ...(sessionId && { session_id: sessionId }),
+    };
 
     // Forward request to FastAPI backend
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'X-Session-Id': sessionId }),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

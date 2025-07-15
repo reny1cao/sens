@@ -19,6 +19,8 @@ interface AgentResult {
   answer?: string;
   summary?: string;
   metadata?: any;
+  success?: boolean;
+  error?: string;
 }
 
 interface UseAgentQueryV2Result {
@@ -85,7 +87,7 @@ export function useAgentQueryV2(): UseAgentQueryV2Result {
         },
         body: JSON.stringify({
           question: query,
-          max_iterations: 10
+          max_iterations: 25
         }),
       });
 
@@ -106,6 +108,16 @@ export function useAgentQueryV2(): UseAgentQueryV2Result {
         stepCounterRef.current++;
         return id;
       };
+
+      // Debug: Log all events
+      eventSource.onmessage = (event) => {
+        console.log('[V2] Raw SSE message - type:', event.type, 'data:', event.data);
+      };
+
+      // Add generic event listener to catch any missed events
+      eventSource.addEventListener('message', (event: MessageEvent) => {
+        console.log('[V2] Generic message event:', event.type, event.data);
+      });
 
       // Event handlers
       eventSource.addEventListener('thought', (event: MessageEvent) => {
@@ -160,6 +172,7 @@ export function useAgentQueryV2(): UseAgentQueryV2Result {
       eventSource.addEventListener('answer', (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('[V2] Answer event:', data);
           setSteps(prev => [...prev, {
             id: createStepId('answer', data.iteration),
             type: 'answer',
@@ -172,30 +185,156 @@ export function useAgentQueryV2(): UseAgentQueryV2Result {
         }
       });
 
+      eventSource.addEventListener('result', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[V2] Result event:', data);
+
+          // The content contains the actual result
+          const resultData = data.content;
+          console.log('[V2] Processing result data:', resultData);
+
+          if (resultData) {
+            // Check if we have SQL execution results
+            if (resultData.result && typeof resultData.result === 'object') {
+              // Transform the result to match frontend expectations
+              const sqlResult = resultData.result;
+
+              // Convert rows array to data array with column names
+              if (sqlResult.rows && sqlResult.columns) {
+                sqlResult.data = sqlResult.rows.map((row: any[]) => {
+                  const obj: any = {};
+                  sqlResult.columns.forEach((col: string, idx: number) => {
+                    obj[col] = row[idx];
+                  });
+                  return obj;
+                });
+                console.log('[V2] Converted rows to data:', sqlResult.data);
+              }
+
+              // Create the expected structure
+              const finalResult = {
+                results: sqlResult,
+                sql: resultData.sql,
+                answer: resultData.answer,
+                success: resultData.success !== false // Default to true if not explicitly false
+              };
+              console.log('[V2] Setting final result:', finalResult);
+              setResult(finalResult);
+
+              // Check for errors in the result
+              if (resultData.error) {
+                setError(resultData.error);
+              } else {
+                // Clear any previous errors since we have a successful result
+                setError(null);
+              }
+            } else if (resultData.answer || resultData.direct_answer) {
+              // Direct conversational answer without SQL
+              const finalResult = {
+                answer: resultData.answer || resultData.direct_answer,
+                success: resultData.success !== false
+              };
+              console.log('[V2] Setting conversational result:', finalResult);
+              setResult(finalResult);
+              // Clear any previous errors
+              setError(null);
+            } else if (resultData.error) {
+              // Error case
+              console.log('[V2] Error in result:', resultData.error);
+              setError(resultData.error);
+              setResult({
+                success: false,
+                error: resultData.error
+              });
+            } else {
+              // Fallback - set the raw result
+              console.log('[V2] Setting raw result data');
+              setResult(resultData);
+            }
+          } else {
+            console.log('[V2] No result data found');
+            setResult(null);
+          }
+        } catch (e) {
+          console.error('Failed to parse result event:', e);
+        }
+      });
+
       eventSource.addEventListener('complete', async () => {
         console.log('[V2] Complete event received');
         hasCompletedRef.current = true;
-        try {
-          // Fetch final results
-          const resultResponse = await fetch(`/api/nl2sql/agent/result/${data.query_id}`);
-          if (resultResponse.ok) {
-            const resultData = await resultResponse.json();
-            console.log('[V2] Final result:', resultData);
 
-            // Always set the result, even if it contains an error
-            setResult(resultData.result || null);
+        // Implement polling with exponential backoff to ensure we get the result
+        const maxAttempts = 5;
+        const baseDelay = 50; // Start with 50ms
 
-            // Set error if present, but keep the result
-            if (resultData.result?.error) {
-              setError(resultData.result.error.message || 'Query processing failed');
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            const delay = baseDelay * Math.pow(2, attempt); // 50, 100, 200, 400, 800ms
+            if (attempt > 0) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            const resultResponse = await fetch(`/api/nl2sql/agent/result/${data.query_id}`);
+            if (resultResponse.ok) {
+              const resultData = await resultResponse.json();
+              console.log('[V2] Fetched final result on attempt', attempt + 1, ':', resultData);
+
+              if (resultData.result) {
+                // Transform the result to match frontend expectations
+                const result = resultData.result.result || resultData.result;
+
+                // Convert rows array to data array with column names if needed
+                if (result.rows && result.columns && !result.data) {
+                  result.data = result.rows.map((row: any[]) => {
+                    const obj: any = {};
+                    result.columns.forEach((col: string, idx: number) => {
+                      obj[col] = row[idx];
+                    });
+                    return obj;
+                  });
+                }
+
+                // Set the final result - merge with what we already have
+                setResult(prevResult => ({
+                  ...prevResult,
+                  results: result,
+                  sql: resultData.result.sql || prevResult?.sql,
+                  answer: resultData.result.answer || prevResult?.answer,
+                  success: resultData.result.success !== false
+                }));
+
+                // Check for errors
+                if (resultData.result.error) {
+                  setError(resultData.result.error);
+                } else {
+                  // Clear any previous errors if the result is successful
+                  setError(null);
+                }
+              }
+              break; // Success, exit the retry loop
+            } else if (attempt === maxAttempts - 1) {
+              console.error('[V2] Failed to fetch result after', maxAttempts, 'attempts:', resultResponse.status);
+            }
+          } catch (e) {
+            if (attempt === maxAttempts - 1) {
+              console.error('[V2] Error fetching results after', maxAttempts, 'attempts:', e);
             }
           }
-        } catch (e) {
-          console.error('Failed to fetch results:', e);
-        } finally {
-          setIsStreaming(false);
-          setIsComplete(true);
-          eventSource.close();
+        }
+
+        // Mark as complete and close the stream
+        setIsStreaming(false);
+        eventSource.close();
+
+        // Only mark as complete after we've attempted to fetch the result
+        // This prevents the brief "failed" state
+        setIsComplete(true);
+
+        // Clean up event handler from agent
+        if (eventSourceRef.current) {
+          eventSourceRef.current = null;
         }
       });
 

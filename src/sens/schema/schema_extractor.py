@@ -5,7 +5,7 @@ Extracts and formats database schema information for LLM consumption.
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -405,7 +405,7 @@ class SchemaExtractor:
                 tables=tables,
                 relationships=relationships,
                 metadata={
-                    "extracted_at": datetime.now(UTC).isoformat(),
+                    "extracted_at": datetime.now(timezone.utc).isoformat(),
                     "database": self.db_config["dbname"],
                 },
             )

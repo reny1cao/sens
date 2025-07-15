@@ -44,10 +44,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error('[Suggestions API] Error fetching suggestions:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Return fallback suggestions if backend is not available
+    return NextResponse.json({
+      source: 'fallback',
+      suggestions: [
+        "Show me the latest Apple stock prices",
+        "What are the top 10 stocks by volume today?",
+        "Show me stocks with price changes over 5%",
+        "List all technology sector stocks"
+      ]
+    });
   }
 }
 

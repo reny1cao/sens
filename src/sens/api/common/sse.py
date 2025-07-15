@@ -76,6 +76,17 @@ def create_agent_event(
     return SSEMessage(data=data, event=event_type, id=event_id)
 
 
+def create_sse_response(
+    data: Any,
+    event: Optional[str] = None,
+    id: Optional[str] = None,
+    retry: Optional[int] = None,
+) -> str:
+    """Create a formatted SSE response string."""
+    message = SSEMessage(data=data, event=event, id=id, retry=retry)
+    return message.format()
+
+
 async def heartbeat_generator(interval: int = 30) -> AsyncGenerator[SSEMessage, None]:
     """Generate heartbeat messages to keep connection alive."""
     while True:

@@ -11,10 +11,16 @@ Example:
 """
 
 from .core import Settings, get_llm_settings, get_settings, reload_settings
+from .environment import (
+    get_environment_info,
+    log_environment_status,
+    validate_bird_critic_environment,
+)
 from .models import (
     DatabaseConfig,
     EnvironmentType,
     IntentExtractorConfig,
+    MemoryConfig,
     ModelConfig,
     OpenRouterConfig,
     ResponseBuilderConfig,
@@ -27,6 +33,10 @@ __all__ = [
     "get_settings",
     "get_llm_settings",
     "reload_settings",
+    # Environment utilities
+    "get_environment_info",
+    "log_environment_status",
+    "validate_bird_critic_environment",
     # Models
     "EnvironmentType",
     "OpenRouterConfig",
@@ -35,4 +45,5 @@ __all__ = [
     "IntentExtractorConfig",
     "DatabaseConfig",
     "ResponseBuilderConfig",
+    "MemoryConfig",
 ]

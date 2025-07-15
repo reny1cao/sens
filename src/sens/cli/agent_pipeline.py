@@ -1,4 +1,4 @@
-"""Agent-based NL2SQL pipeline for CLI."""
+"""Agent-based NL2SQL pipeline with integrated memory system for CLI."""
 
 import asyncio
 import json
@@ -7,26 +7,31 @@ from typing import Dict, Optional
 
 import structlog
 
-from sens.agents.core import SENSAgent
-from sens.agents.event_emitter import EventEmittingAgent
-from sens.agents.memory import AgentMemory
 from sens.agents.reasoning import ReasoningEngine
+from sens.agents.tool_registry import EvaluationContext, tool_registry
 from sens.agents.tools import AgentTools
+from sens.agents.unified import UnifiedSENSAgent
 from sens.chat.session import SessionManager
+from sens.memory import AgentMemory, AgentMemoryTools
 from sens.settings import get_settings
 
 log = structlog.get_logger()
 
 
 class AgentNL2SQLPipeline:
-    """Agent-based pipeline for natural language to SQL conversion."""
+    """Agent-based pipeline with integrated memory system for natural language to SQL conversion."""
 
     def __init__(
         self,
         session_id: Optional[str] = None,
         metrics_enabled: bool = False,
         debug_mode: bool = False,
-        max_iterations: int = 10,
+        max_iterations: Optional[int] = None,
+        event_callback=None,
+        evaluation_context: Optional[EvaluationContext] = None,
+        db_path: Optional[str] = None,
+        memory_enabled: bool = True,
+        memory_db_path: str = "agent_memory.db",
     ):
         """Initialize the agent pipeline.
 
@@ -35,11 +40,19 @@ class AgentNL2SQLPipeline:
             metrics_enabled: Whether to track and display metrics
             debug_mode: Whether to include debug information
             max_iterations: Maximum number of agent reasoning iterations
+            event_callback: Optional callback function for streaming events
+            evaluation_context: Context for tool selection (BIRD_CRITIC, BIRD_SQL_DEV, etc.)
+            db_path: Database path (required for SQLite contexts)
+            memory_enabled: Whether to enable the agent memory system
+            memory_db_path: Path to the memory database file
         """
         self.settings = get_settings()
         self.metrics_enabled = metrics_enabled
         self.debug_mode = debug_mode
-        self.max_iterations = max_iterations
+        self.max_iterations = (
+            max_iterations or self.settings.agent_reasoning.max_iterations
+        )
+        self.event_callback = event_callback
 
         # Initialize session
         self.session_manager = SessionManager()
@@ -51,17 +64,62 @@ class AgentNL2SQLPipeline:
 
             self.session_id = str(uuid.uuid4())
 
-        # Initialize agent components
-        self.agent_tools = AgentTools()
-        self.agent_memory = AgentMemory()
+        # Initialize context-aware tools
+        if evaluation_context:
+            tool_config = tool_registry.get_tools_for_context(
+                evaluation_context, db_path=db_path
+            )
+            self.agent_tools = tool_config["tools"]
+            self.tool_instructions = tool_config["instructions"]
+            self.evaluation_context = evaluation_context
+
+            log.info(
+                "context_aware_tools_initialized",
+                context=evaluation_context,
+                database_type=tool_config["database_type"],
+                available_tools=tool_config["available_tools"],
+            )
+        else:
+            # Default tools for backward compatibility
+            self.agent_tools = AgentTools()
+            self.tool_instructions = ""
+            self.evaluation_context = None
+
         self.reasoning_engine = ReasoningEngine()
 
-        # Create event-emitting agent
-        self.agent = EventEmittingAgent(
+        # Initialize memory system first
+        self.memory_enabled = memory_enabled
+        if memory_enabled:
+            self.memory = AgentMemory(db_path=memory_db_path)
+            self.memory_tools = AgentMemoryTools(self.memory)
+
+            # Add memory tools to agent tools
+            self._integrate_memory_tools()
+
+            self.memory_context = {
+                "database": db_path,
+                "evaluation_context": (
+                    evaluation_context.value if evaluation_context else None
+                ),
+                "database_type": (
+                    tool_config.get("database_type")
+                    if evaluation_context
+                    else "default"
+                ),
+            }
+        else:
+            self.memory = None
+            self.memory_tools = None
+            self.memory_context = {}
+
+        # Create unified agent with memory and session management
+        self.agent = UnifiedSENSAgent(
             tools=self.agent_tools,
-            memory=self.agent_memory,
+            memory_tools=self.memory_tools,
             reasoning_engine=self.reasoning_engine,
+            session_manager=self.session_manager,
             max_iterations=max_iterations,
+            conversation_enabled=True,
         )
 
         # Register event handler to store events
@@ -74,12 +132,51 @@ class AgentNL2SQLPipeline:
             max_iterations=max_iterations,
             debug_mode=debug_mode,
             metrics_enabled=metrics_enabled,
-            agent_type="EventEmittingAgent",
+            memory_enabled=memory_enabled,
+            agent_type="UnifiedSENSAgent",
+        )
+
+    def _integrate_memory_tools(self) -> None:
+        """Integrate memory tools into the agent's toolkit."""
+        if not self.memory_tools:
+            return
+
+        # Add memory methods to agent tools
+        self.agent_tools.remember_concept = self.memory_tools.remember_concept
+        self.agent_tools.remember_pattern = self.memory_tools.remember_pattern
+        self.agent_tools.remember_mapping = self.memory_tools.remember_mapping
+        self.agent_tools.remember_error_fix = self.memory_tools.remember_error_fix
+        self.agent_tools.recall_knowledge = self.memory_tools.recall_knowledge
+        self.agent_tools.connect_memories = self.memory_tools.connect_memories
+        self.agent_tools.reflect_on_memory = self.memory_tools.reflect_on_memory
+        self.agent_tools.forget_memory = self.memory_tools.forget_memory
+        self.agent_tools.consolidate_memories = self.memory_tools.consolidate_memories
+        self.agent_tools.get_memory_stats = self.memory_tools.get_memory_stats
+
+        log.info(
+            "memory_tools_integrated",
+            tool_count=len(self.memory_tools.get_tool_descriptions()),
         )
 
     def _handle_agent_event(self, event: Dict) -> None:
         """Handle events emitted by the agent."""
         self.events.append(event)
+
+        # Note: Agent now controls its own memory through memory tools
+        # No passive event recording needed
+
+        # Call external event callback if provided
+        if self.event_callback:
+            try:
+                # Log for debugging
+                log.debug(
+                    "calling_external_event_callback",
+                    event_type=event.get("type"),
+                    has_callback=bool(self.event_callback),
+                )
+                self.event_callback(event)
+            except Exception as e:
+                log.warning("event_callback_failed", error=str(e))
 
         # Print events in real-time if debug mode is enabled
         if self.debug_mode:
@@ -125,10 +222,53 @@ class AgentNL2SQLPipeline:
         )
 
         try:
+            # Get relevant knowledge from memory if enabled
+            relevant_knowledge = ""
+            if self.memory_enabled and self.memory_tools:
+                memory_result = await self.memory_tools.recall_knowledge(
+                    query=question, context=self.memory_context, limit=5
+                )
+
+                if memory_result.success and memory_result.data:
+                    memories = memory_result.data.get("memories", [])
+                    if memories:
+                        knowledge_parts = []
+                        for mem in memories:
+                            knowledge_parts.append(
+                                f"[{mem['type'].upper()}] {mem['name']}: {json.dumps(mem['content'], indent=2)}"
+                            )
+                        relevant_knowledge = "\n\n".join(knowledge_parts)
+
+                        log.info(
+                            "applying_memory_knowledge",
+                            session_id=self.session_id,
+                            memory_count=len(memories),
+                            knowledge_length=len(relevant_knowledge),
+                        )
+
+            # Enhance question with context-specific instructions and memory
+            enhanced_question = question
+            if hasattr(self, "tool_instructions") and self.tool_instructions:
+                if relevant_knowledge:
+                    enhanced_question = f"""
+{self.tool_instructions}
+
+RELEVANT MEMORIES:
+{relevant_knowledge}
+
+USER QUESTION: {question}
+"""
+                else:
+                    enhanced_question = f"""
+{self.tool_instructions}
+
+USER QUESTION: {question}
+"""
+
             # Process query with agent
             print("\n🤖 Agent is thinking about your query...")
             result = await self.agent.process_query(
-                user_query=question,
+                user_query=enhanced_question,
                 conversation_id=self.session_id,
             )
 
@@ -148,6 +288,7 @@ class AgentNL2SQLPipeline:
                     "iterations": result.get("iterations", 0),
                     "discovered_mappings": result.get("discovered_mappings", {}),
                     "agent_trace": self._format_agent_trace(result),
+                    "memory_applied": bool(relevant_knowledge),
                 },
             }
 
@@ -181,12 +322,17 @@ class AgentNL2SQLPipeline:
             # Store in session
             await self._store_in_session(question, response)
 
+            # Note: Agent manages its own memory through tools during processing
+
             return response
 
         except Exception as e:
             log.error(
                 "agent_processing_failed", error=str(e), session_id=self.session_id
             )
+
+            # Note: Agent manages its own memory through tools during processing
+
             return {
                 "status": "error",
                 "error": str(e),
@@ -273,3 +419,60 @@ class AgentNL2SQLPipeline:
         """Get the current session history."""
         state = self.session_manager.get_session(self.session_id)
         return state if state else {"interactions": []}
+
+    async def get_memory_stats(self) -> Dict:
+        """Get memory system statistics."""
+        if not self.memory_enabled or not self.memory_tools:
+            return {"memory_enabled": False}
+
+        result = await self.memory_tools.get_memory_stats()
+        return result.data if result.success else {"error": result.error}
+
+    async def enable_memory(self) -> bool:
+        """Enable memory system if it was disabled."""
+        if not self.memory_enabled:
+            try:
+                self.memory = AgentMemory()
+                self.memory_tools = AgentMemoryTools(self.memory)
+                self._integrate_memory_tools()
+                self.memory_enabled = True
+
+                log.info("memory_system_enabled", session_id=self.session_id)
+                return True
+            except Exception as e:
+                log.error("memory_enable_failed", error=str(e))
+                return False
+        return True
+
+    async def disable_memory(self) -> bool:
+        """Disable memory system."""
+        if self.memory_enabled:
+            try:
+                if self.memory:
+                    self.memory.close()
+                self.memory = None
+                self.memory_tools = None
+                self.memory_enabled = False
+
+                log.info("memory_system_disabled", session_id=self.session_id)
+                return True
+            except Exception as e:
+                log.error("memory_disable_failed", error=str(e))
+                return False
+        return True
+
+    def close(self) -> None:
+        """Close the pipeline and clean up resources."""
+        try:
+            if self.memory:
+                self.memory.close()
+            log.info("agent_pipeline_closed", session_id=self.session_id)
+        except Exception as e:
+            log.error("pipeline_close_failed", error=str(e))
+
+    def __del__(self):
+        """Destructor to ensure cleanup."""
+        try:
+            self.close()
+        except:
+            pass

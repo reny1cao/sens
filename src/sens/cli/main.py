@@ -23,6 +23,8 @@ import structlog
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.chat.session import SessionManager
 from sens.cli.commands.config import handle_config_command
+
+# from sens.cli.commands.database_profile import handle_profile_database_command
 from sens.cli.enhanced_pipeline import EnhancedNL2SQLPipeline
 from sens.cli.formatters import format_nl2sql_response
 from sens.execution import SQLExecutor
@@ -116,7 +118,7 @@ async def handle_nl2sql(
                 metrics_enabled=args.metrics,
                 debug_mode=args.debug,
                 max_iterations=(
-                    args.max_iterations if hasattr(args, "max_iterations") else 10
+                    args.max_iterations if hasattr(args, "max_iterations") else None
                 ),
             )
             print(
@@ -248,7 +250,7 @@ async def handle_extract_schema(
             cached=not args.force,
         )
 
-        print(f"\nSchema extraction completed:")
+        print("\nSchema extraction completed:")
         print(f"- Tables found: {table_count}")
         print(f"- Time taken: {elapsed_time:.2f} seconds")
         if not args.force:
@@ -844,6 +846,55 @@ def main() -> None:
         help="Clear cache (all or just schema)",
     )
 
+    # Database profiling command
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Profile databases for semantic understanding",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    profile_group = profile_parser.add_mutually_exclusive_group(required=True)
+    profile_group.add_argument(
+        "--database-path", type=str, help="Path to single database to profile"
+    )
+    profile_group.add_argument(
+        "--bird-directory",
+        type=str,
+        default="external/BIRD-SQL-DEV",
+        help="Directory containing BIRD databases to profile",
+    )
+    profile_parser.add_argument(
+        "--database-name",
+        type=str,
+        help="Name for the database (auto-detected if not provided)",
+    )
+    profile_parser.add_argument(
+        "--lightrag-url",
+        type=str,
+        default="http://127.0.0.1:9621",
+        help="LightRAG server URL for storing semantic knowledge",
+    )
+    profile_parser.add_argument(
+        "--detailed", action="store_true", help="Show detailed profiling results"
+    )
+
+    # BIRD-CRITIC evaluation command (handled by click)
+    subparsers.add_parser("bird-critic", help="BIRD-CRITIC evaluation", add_help=False)
+    # Note: BIRD-CRITIC subcommands are handled by click, not argparse
+
+    # Unified BIRD evaluation command (handled by click)
+    subparsers.add_parser(
+        "unified-bird",
+        help="Unified BIRD evaluation (CRITIC + SQL-DEV)",
+        add_help=False,
+    )
+    # Note: Unified BIRD subcommands are handled by click, not argparse
+
+    # BIRD-SQL-DEV evaluation command (handled by click)
+    subparsers.add_parser(
+        "bird-sql-dev", help="BIRD-SQL-DEV evaluation using SQLite", add_help=False
+    )
+    # Note: BIRD-SQL-DEV subcommands are handled by click, not argparse
+
     # Handle financial command specially to pass through to click
     if len(sys.argv) > 1 and sys.argv[1] == "financial":
         # Import and run financial commands using click directly
@@ -852,6 +903,36 @@ def main() -> None:
         # Remove 'sens' from argv and call financial with remaining args
         sys.argv = ["financial"] + sys.argv[2:]
         financial()
+        return
+
+    # Handle bird-critic command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "bird-critic":
+        # Import and run bird-critic commands using click directly
+        from sens.cli.bird_critic import bird_critic
+
+        # Remove 'sens' from argv and call bird_critic with remaining args
+        sys.argv = ["bird-critic"] + sys.argv[2:]
+        bird_critic()
+        return
+
+    # Handle unified-bird command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "unified-bird":
+        # Import and run unified-bird commands using click directly
+        from sens.cli.unified_bird_eval import unified_bird_eval
+
+        # Remove 'sens' from argv and call unified_bird_eval with remaining args
+        sys.argv = ["unified-bird"] + sys.argv[2:]
+        unified_bird_eval()
+        return
+
+    # Handle bird-sql-dev command specially to pass through to click
+    if len(sys.argv) > 1 and sys.argv[1] == "bird-sql-dev":
+        # Import and run bird-sql-dev commands using click directly
+        from sens.cli.bird_sql_dev_eval import bird_sql_dev
+
+        # Remove 'sens' from argv and call bird_sql_dev with remaining args
+        sys.argv = ["bird-sql-dev"] + sys.argv[2:]
+        bird_sql_dev()
         return
 
     args = parser.parse_args()
@@ -881,6 +962,11 @@ def main() -> None:
         handle_config_command(args, log)
     elif args.command == "cache":
         asyncio.run(handle_cache_status(args, log))
+    elif args.command == "profile":
+        # exit_code = asyncio.run(handle_profile_database_command(args))
+        print("Database profiling command is currently disabled")
+        exit_code = 1
+        sys.exit(exit_code)
     # Financial command is handled above before argparse
 
 

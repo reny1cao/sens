@@ -1,17 +1,17 @@
 #!/bin/bash
 
-echo "Starting SENS Full Stack..."
-echo "=========================="
+# Start all services for SENS development
 
-# Kill any existing processes on our ports
-echo "Cleaning up existing processes..."
-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+set -e
 
-# Start the FastAPI backend
-echo "Starting FastAPI backend on port 8000..."
-cd /Users/renyitsao/workplace/sens
-poetry run uvicorn sens.api.app:app --reload --host 0.0.0.0 --port 8000 &
+echo "🚀 Starting SENS development environment..."
+
+# Set Python path
+export PYTHONPATH="$(pwd)/src:$PYTHONPATH"
+
+# Start backend API
+echo "Starting backend API..."
+poetry run uvicorn sens.api.app_unified:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Wait for backend to start

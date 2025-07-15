@@ -16,10 +16,17 @@ export async function POST(request: NextRequest) {
       headers['X-Session-Id'] = sessionId;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/nl2sql/simple-agent/query`, {
+    // Use unified endpoint with simple mode
+    const requestBody = {
+      ...body,
+      mode: 'simple',
+      ...(sessionId && { session_id: sessionId }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/api/nl2sql/query`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

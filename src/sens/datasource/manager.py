@@ -601,11 +601,8 @@ class DataSourceManager:
                     table_count=len(schema_graph._all_tables),
                 )
 
-                # Reset the orchestrator so it picks up the new schema
-                from sens.api.routers.nl2sql import reset_orchestrator
-
-                reset_orchestrator()
-                logger.info("orchestrator_reset_after_schema_update")
+                # With the new architecture, components will get fresh schema on demand
+                logger.info("schema_update_completed")
 
                 # Build embedding index if needed
                 if self.settings.index_dir.exists():

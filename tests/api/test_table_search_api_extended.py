@@ -1,11 +1,9 @@
-"""Extended tests for the table search API endpoints."""
-
-from unittest.mock import MagicMock, patch
+"""Extended tests for the table search API endpoint with realistic data."""
 
 import pytest
 from fastapi.testclient import TestClient
 
-from sens.api.app import app
+from sens.api.app_unified import app
 from sens.api.routers.table_search.models import (
     DetailedIndexResponse,
     IndexStatsResponse,
@@ -13,6 +11,7 @@ from sens.api.routers.table_search.models import (
     TableSearchResponse,
 )
 from sens.api.routers.table_search.service import TableSearchService
+from sens.schema.graph import SchemaGraph
 
 
 @pytest.fixture
