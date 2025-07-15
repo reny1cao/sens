@@ -148,6 +148,79 @@
         "Potential typo in column name",
         "Possible alternative naming convention used for related data"
       ]
+    },
+    {
+      "timestamp": "2025-07-15T15:04:19.210710",
+      "category": "schema_discovery",
+      "title": "Error: `column_schema` does not exist in `information_schema.columns`",
+      "content": "The query attempting to retrieve column names and data types from `information_schema.columns` for tables 'loan', 'account', 'client', 'district', 'card', 'disp', and 'trans' failed because the `column_schema` column does not exist. This suggests that the database system might be using a different schema for information schema or a different version where `column_schema` is named differently or not available. Further investigation is needed to determine the correct column name or alternative approach to filter by schema.",
+      "tables_involved": [
+        "information_schema.columns",
+        "loan",
+        "account",
+        "client",
+        "district",
+        "card",
+        "disp",
+        "trans"
+      ],
+      "confidence": 0.9,
+      "source": "exploration",
+      "tags": [
+        "information_schema",
+        "schema",
+        "error",
+        "metadata",
+        "columns"
+      ],
+      "insights": [
+        "`column_schema` does not exist in `information_schema.columns`",
+        "Need to find alternative way to filter by schema in information schema"
+      ]
+    },
+    {
+      "timestamp": "2025-07-15T15:04:23.710824",
+      "category": "schema_discovery",
+      "title": "No Tables Found in Public Schema Matching Specified Names",
+      "content": "The query to retrieve column names and data types from the `information_schema.columns` table for the specified tables (`loan`, `account`, `client`, `district`, `card`, `disp`, `trans`) within the `public` schema returned zero rows. This indicates that either these tables do not exist in the `public` schema, or the table names are misspelled in the query, or the schema is incorrect. This is unexpected as these table names are commonly associated with banking datasets.",
+      "tables_involved": [
+        "information_schema.columns"
+      ],
+      "confidence": 0.9,
+      "source": "exploration",
+      "tags": [
+        "schema",
+        "discovery",
+        "tables",
+        "public",
+        "information_schema"
+      ],
+      "insights": [
+        "Specified tables do not exist in the public schema or there is a naming/schema issue.",
+        "Further investigation is required to locate the tables."
+      ]
+    },
+    {
+      "timestamp": "2025-07-15T15:05:03.736006",
+      "category": "data_quality",
+      "title": "Loan table contains no loans with any status",
+      "content": "The query `SELECT status, AVG(amount) AS average_loan_amount FROM loan GROUP BY status;` returned 0 rows. This indicates that the `loan` table either contains no data at all, or all the loans have a `NULL` status, or the `status` column is empty for all rows. This is unexpected and suggests a potential data quality issue or a problem with data loading.",
+      "tables_involved": [
+        "loan"
+      ],
+      "confidence": 0.9,
+      "source": "query_execution",
+      "tags": [
+        "data quality",
+        "loan",
+        "status",
+        "empty table",
+        "null values"
+      ],
+      "insights": [
+        "The `loan` table might be empty or have issues with the `status` column.",
+        "Further investigation is needed to determine the cause of the empty result set."
+      ]
     }
   ],
   "table_knowledge": {}
