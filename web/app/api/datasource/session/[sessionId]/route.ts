@@ -8,14 +8,20 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
+  const { sessionId } = await params;
+
   try {
-    const { sessionId } = await params;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
     const response = await fetch(`${API_URL}/api/datasource/session/${sessionId}`, {
       headers: {
         'X-Session-Id': sessionId,
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (response.status === 404) {

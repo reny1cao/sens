@@ -107,6 +107,11 @@ from .routers.memory_management import router as memory_router
 
 app.include_router(memory_router, tags=["memory"])
 
+# Knowledge system API
+from .routers.knowledge import router as knowledge_router
+
+app.include_router(knowledge_router, tags=["knowledge"])
+
 # Schema and datasource management
 app.include_router(datasource_router, prefix="/api", tags=["datasource"])
 app.include_router(schema_router, prefix="/api", tags=["schema"])
@@ -122,7 +127,7 @@ app.include_router(retrieval_router, prefix="/retrieval", tags=["search"])
 try:
     from .routers.unified_evaluation import router as evaluation_router
 
-    app.include_router(evaluation_router, prefix="/api/evaluation", tags=["evaluation"])
+    app.include_router(evaluation_router, prefix="/api", tags=["evaluation"])
     logger.info("evaluation_router_loaded")
 except ImportError:
     logger.info("evaluation_router_not_available")
@@ -131,9 +136,7 @@ except ImportError:
 try:
     from .routers.bird_sql_dev_evaluation import router as bird_router
 
-    app.include_router(
-        bird_router, prefix="/api/evaluation/bird-sql-dev", tags=["evaluation"]
-    )
+    app.include_router(bird_router, prefix="/api", tags=["evaluation"])
     logger.info("bird_sql_dev_router_loaded")
 except ImportError:
     logger.info("bird_sql_dev_router_not_available")

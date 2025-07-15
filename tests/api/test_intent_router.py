@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from sens.api.app import app
+from sens.api.app_unified import app
 from sens.api.models.intent import IntentRequest, SchemaSnippet
 
 client = TestClient(app)

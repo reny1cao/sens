@@ -1,31 +1,33 @@
+# Use the official Python 3.12 image
 FROM python:3.12-slim
 
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set work directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install Poetry
+RUN pip install poetry
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy poetry files
+COPY pyproject.toml poetry.lock ./
 
-# Copy application code
-COPY src ./src
-COPY scripts ./scripts
+# Configure poetry and install dependencies
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-dev
 
-# Create necessary directories
-RUN mkdir -p /tmp/sens /app/indices
+# Copy source code
+COPY src/ src/
 
-# Set environment variables
-ENV PYTHONPATH=/app/src
-ENV SENS_ENVIRONMENT=production
+# Expose port
+EXPOSE 8000
 
-# Start command - use shell to expand Railway's PORT variable
-CMD sh -c "uvicorn sens.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Start command
+CMD sh -c "uvicorn sens.api.app_unified:app --host 0.0.0.0 --port ${PORT:-8000}"

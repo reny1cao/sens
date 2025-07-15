@@ -1,10 +1,9 @@
 """Tests for the column search API endpoint."""
 
-from unittest.mock import patch
-
+import pytest
 from fastapi.testclient import TestClient
 
-from sens.api.app import app
+from sens.api.app_unified import app
 
 client = TestClient(app)
 

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import structlog
 from sqlglot import exp, parse_one
 
+from sens.agents.note_taker import LLMDatabaseNoteTaker
 from sens.chat.orchestrator import ChatOrchestrator
 from sens.execution.executor import SQLExecutor
 from sens.execution.safe_executor import SafeSQLExecutor
@@ -17,16 +18,34 @@ log = structlog.get_logger()
 
 
 class AgentTools:
-    """Collection of tools the agent can use."""
+    """Tools available to the unified agent."""
 
-    def __init__(self):
-        """Initialize agent tools."""
+    def __init__(self, executor=None, generator=None, memory_manager=None):
+        # Initialize executor if not provided
+        if executor is None:
+            from sens.execution.safe_executor import SafeSQLExecutor
+
+            executor = SafeSQLExecutor()
+
+        self.executor = executor
+        self.generator = generator
+        self.memory_manager = memory_manager
+        self.discovered_mappings = {}
+        self.current_sql = None
+        self.current_database = None
+
+        # Initialize settings for LLM configuration access
         self.settings = get_settings()
-        # Use SafeSQLExecutor for better transaction handling
-        self.executor = SafeSQLExecutor(self.settings.db_url)
-        self.schema_graph = SchemaGraph.get_instance()
-        self.embedding_search = EmbeddingSearch()
-        self.chat_orchestrator = None  # Lazy init to avoid circular imports
+
+        # Initialize LLM-powered note taker
+        self.note_taker = LLMDatabaseNoteTaker()
+
+        log.info(
+            "agent_tools_initialized",
+            has_memory=memory_manager is not None,
+            has_note_taker=True,
+            has_executor=executor is not None,
+        )
 
     async def search_schema(self, query: str) -> Dict[str, Any]:
         """DISABLED: Search for relevant schema elements."""
@@ -101,20 +120,29 @@ class AgentTools:
                 modified_query = modified_query.replace(user_term, db_value)
                 log.info("applying_mapping", from_term=user_term, to_value=db_value)
 
-        # Build schema context from exploration results
+        # Build comprehensive context from exploration results AND accumulated memory
         schema_context = self._build_exploration_schema_context(exploration_results)
+        memory_context = self.get_knowledge_context(query)
 
-        # Log the schema context for debugging
+        # Combine contexts for comprehensive decision making
+        full_context = f"""=== SCHEMA DISCOVERY ===
+{schema_context}
+
+=== ACCUMULATED KNOWLEDGE ===
+{memory_context}"""
+
+        # Log the full context for debugging
         log.info(
-            "schema_context_for_sql_generation",
-            context=schema_context,
+            "comprehensive_context_for_sql_generation",
+            schema_context_length=len(schema_context),
+            memory_context_length=len(memory_context),
             exploration_keys=list(exploration_results.keys()),
         )
 
-        # Generate SQL using direct LLM call with exploration context
+        # Generate SQL using direct LLM call with comprehensive context
         try:
             sql = await self._generate_sql_from_exploration(
-                modified_query, schema_context, agent_notes
+                modified_query, full_context, agent_notes
             )
             return sql
         except Exception as e:
@@ -124,38 +152,34 @@ class AgentTools:
             # Fallback to basic SQL generation
             return await self._fallback_sql_generation(modified_query)
 
-    async def execute_sql(self, sql: str) -> Dict[str, Any]:
-        """Execute SQL and return results."""
-        log.info("tool_execute_sql", sql=sql[:100])
+    async def execute_sql(self, sql: Optional[str] = None) -> Dict[str, Any]:
+        """Execute the current SQL query or provided SQL."""
+        # Use provided SQL or fall back to current_sql
+        query_to_execute = sql or self.current_sql
+
+        if not query_to_execute:
+            return {"error": "No SQL query available to execute", "data": []}
 
         try:
-            result = self.executor.execute(sql)
+            log.info("tool_execute_sql", sql=query_to_execute)
+            result = self.executor.execute(query_to_execute)
 
-            # Check if the query actually failed
-            if result.error:
-                log.info("sql_execution_error", error=result.error)
-                return {
-                    "success": False,
-                    "row_count": 0,
-                    "columns": [],
-                    "rows": [],
-                    "error": result.error,
-                }
+            # Convert QueryResult to dict format expected by the system
+            result_dict = result.to_dict() if hasattr(result, "to_dict") else result
 
-            return {
-                "success": True,
-                "row_count": result.row_count,
-                "columns": result.columns,
-                "rows": result.rows[:100],  # Limit for agent processing
-                "error": None,
-            }
+            # Let LLM note taker intelligently observe the execution
+            await self.note_taker.observe_database_interaction(
+                interaction_type="query_execution",
+                query=query_to_execute,
+                results=result_dict,
+                context="User query execution",
+            )
+
+            return result_dict
 
         except Exception as e:
-            return {
-                "success": False,
-                "row_count": 0,
-                "error": str(e),
-            }
+            log.error("execute_sql_error", error=str(e), sql=self.current_sql)
+            return {"error": str(e), "data": []}
 
     async def diagnose_empty_results(
         self,
@@ -343,78 +367,28 @@ class AgentTools:
             log.error("get_current_database_failed", error=str(e))
             return {"success": False, "error": str(e), "current_database": None}
 
-    async def explore_database(self, query: str = None) -> Dict[str, Any]:
-        """Execute exploratory SQL queries to understand the PostgreSQL database.
-
-        This tool allows direct SQL execution for exploration purposes:
-        - Check table structures in PostgreSQL
-        - Sample data from tables using PostgreSQL syntax
-        - Understand value formats and data types
-        - Discover relationships and constraints
-        - Use PostgreSQL-specific information_schema queries
-
-        CONTEXT: You are exploring a PostgreSQL database with financial/stock market data.
-        Use PostgreSQL-specific syntax and functions when needed.
-
-        Args:
-            query: PostgreSQL SQL query to execute (read-only SELECT only)
-
-        Returns:
-            Dict with query results and metadata
-        """
-        # Validate required parameter
-        if not query:
-            return {
-                "success": False,
-                "error": "Missing required parameter: query",
-                "hint": "Provide a SQL query to explore the database. Example: SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
-            }
-
-        log.info("tool_explore_database_postgresql", query=query)
-
+    async def explore_database(self, query: str) -> Dict[str, Any]:
+        """Execute a database exploration query."""
         try:
-            # Safety check - only allow SELECT queries
-            normalized_query = query.strip().upper()
-            if not normalized_query.startswith("SELECT"):
-                return {
-                    "success": False,
-                    "error": "Only SELECT queries allowed for exploration",
-                    "hint": "Use SELECT statements to explore data",
-                }
-
-            # Execute query
+            log.info("tool_explore_database_postgresql", query=query)
             result = self.executor.execute(query)
 
-            if result.error:
-                return {
-                    "success": False,
-                    "error": result.error,
-                    "hint": self._suggest_exploration_fix(result.error),
-                }
+            # Convert QueryResult to dict format expected by the system
+            result_dict = result.to_dict() if hasattr(result, "to_dict") else result
 
-            # Check for empty database (no tables found)
-            is_table_query = "information_schema.tables" in query.lower()
-            insights = self._extract_insights(result)
+            # Let LLM note taker intelligently observe the exploration
+            await self.note_taker.observe_database_interaction(
+                interaction_type="exploration",
+                query=query,
+                results=result_dict,
+                context="Database schema exploration",
+            )
 
-            if is_table_query and result.row_count == 0:
-                insights["empty_database"] = True
-                insights["suggestion"] = (
-                    "Database has no tables. Try discovering other databases or check connection."
-                )
-
-            # Format results for agent understanding
-            return {
-                "success": True,
-                "columns": result.columns,
-                "row_count": result.row_count,
-                "data": result.rows[:20],  # Limit to 20 rows for exploration
-                "truncated": result.row_count > 20,
-                "insights": insights,
-            }
+            return result_dict
 
         except Exception as e:
-            log.error("explore_database_failed", error=str(e))
-            return {"success": False, "error": str(e)}
+            log.error("explore_database_error", error=str(e), query=query)
+            return {"error": str(e), "data": []}
 
     def _suggest_exploration_fix(self, error: str) -> str:
         """Suggest how to fix common exploration errors."""
@@ -453,119 +427,138 @@ class AgentTools:
     def _build_exploration_schema_context(
         self, exploration_results: Dict[str, Any]
     ) -> str:
-        """Build focused schema context from exploration results."""
+        """Build comprehensive schema context from all exploration results."""
         context_parts = []
 
-        # Focus on main data tables (skip system tables)
+        # If no exploration results, say so clearly
+        if not exploration_results:
+            return "No database exploration has been performed yet."
+
+        # Document all discovered information without filtering
+        context_parts.append("=== DATABASE EXPLORATION FINDINGS ===")
+
+        # 1. Document any discovered tables
         if "discovered_tables" in exploration_results:
             tables = exploration_results["discovered_tables"]
-            # Filter out PostgreSQL system tables
-            data_tables = [
-                t
-                for t in tables
-                if not t.startswith("pg_") and t != "information_schema"
-            ]
-            # Prioritize main tables
-            primary_tables = [
-                t for t in data_tables if t in ["securities", "daily_prices", "trades"]
-            ]
-            other_tables = [t for t in data_tables if t not in primary_tables]
+            if tables:
+                context_parts.append(
+                    f"\nTables found in database ({len(tables)} total):"
+                )
+                for table in tables:
+                    context_parts.append(f"  • {table}")
+            else:
+                context_parts.append("\nNo tables discovered in recent exploration.")
 
-            if primary_tables:
-                context_parts.append(f"Primary Tables: {', '.join(primary_tables)}")
-            if other_tables[:5]:  # Limit to first 5 other tables
-                context_parts.append(f"Other Tables: {', '.join(other_tables[:5])}")
-
-        # Add detailed schema for important tables
+        # 2. Document any table schemas discovered
         if "table_schemas" in exploration_results:
-            # Prioritize schema info for key tables
-            for table in ["daily_prices", "securities", "trades"]:
-                if table in exploration_results["table_schemas"]:
-                    table_info = exploration_results["table_schemas"][table]
-                    # Handle both dict format and list format
-                    if isinstance(table_info, dict) and "columns" in table_info:
-                        columns = table_info["columns"]
+            schemas = exploration_results["table_schemas"]
+            if schemas:
+                context_parts.append(
+                    f"\nTable schemas discovered ({len(schemas)} tables):"
+                )
+                for table_name, schema_info in schemas.items():
+                    context_parts.append(f"\n  Table: {table_name}")
+                    if isinstance(schema_info, dict) and "columns" in schema_info:
+                        columns = schema_info["columns"]
+                        context_parts.append(
+                            f"    Columns ({len(columns)}): {', '.join(columns)}"
+                        )
+                    elif isinstance(schema_info, list):
+                        context_parts.append(
+                            f"    Columns ({len(schema_info)}): {', '.join(schema_info)}"
+                        )
                     else:
-                        columns = table_info if isinstance(table_info, list) else []
+                        context_parts.append(f"    Schema info: {schema_info}")
 
-                    if columns:
-                        # Group columns by type for better understanding
-                        key_cols = [
-                            c
-                            for c in columns
-                            if c in ["id", "symbol", "trade_date", "created_at"]
-                        ]
-                        price_cols = [
-                            c
-                            for c in columns
-                            if "price" in c.lower()
-                            or c in ["open", "high", "low", "close"]
-                        ]
-                        volume_cols = [c for c in columns if "volume" in c.lower()]
-                        metric_cols = [
-                            c
-                            for c in columns
-                            if c not in key_cols + price_cols + volume_cols
-                        ]
+        # 3. Document raw exploration query results
+        raw_results = []
+        for key, value in exploration_results.items():
+            if key not in [
+                "discovered_tables",
+                "table_schemas",
+                "sample_data",
+                "value_mappings",
+                "insights",
+            ]:
+                raw_results.append((key, value))
 
-                        context_parts.append(f"\nTable '{table}':")
-                        if key_cols:
-                            context_parts.append(
-                                f"  Key columns: {', '.join(key_cols)}"
-                            )
-                        if price_cols:
-                            context_parts.append(
-                                f"  Price columns: {', '.join(price_cols)}"
-                            )
-                        if volume_cols:
-                            context_parts.append(
-                                f"  Volume columns: {', '.join(volume_cols)}"
-                            )
-                        if metric_cols[:5]:  # Limit metrics shown
-                            context_parts.append(
-                                f"  Other metrics: {', '.join(metric_cols[:5])}"
-                            )
+        if raw_results:
+            context_parts.append(
+                f"\nRaw exploration results ({len(raw_results)} queries):"
+            )
+            for result_key, result_data in raw_results:
+                if isinstance(result_data, dict):
+                    if "rows" in result_data and "columns" in result_data:
+                        rows = result_data["rows"]
+                        columns = result_data["columns"]
+                        context_parts.append(f"\n  Query result '{result_key}':")
+                        context_parts.append(f"    Columns: {columns}")
+                        if rows:
+                            context_parts.append(f"    Found {len(rows)} row(s):")
+                            # Show first few rows to give context
+                            for i, row in enumerate(rows[:5]):  # Limit to first 5 rows
+                                context_parts.append(f"      Row {i+1}: {row}")
+                            if len(rows) > 5:
+                                context_parts.append(
+                                    f"      ... and {len(rows) - 5} more rows"
+                                )
+                        else:
+                            context_parts.append("    No rows found.")
+                    elif "error" in result_data:
+                        context_parts.append(
+                            f"\n  Query '{result_key}' failed: {result_data['error']}"
+                        )
+                    else:
+                        context_parts.append(
+                            f"\n  Result '{result_key}': {result_data}"
+                        )
+                else:
+                    context_parts.append(f"\n  Result '{result_key}': {result_data}")
 
-        # Add curated sample data
+        # 4. Document any sample data
         if "sample_data" in exploration_results:
-            for table in ["daily_prices", "securities"]:
-                if table in exploration_results["sample_data"]:
-                    data = exploration_results["sample_data"][table]
-                    if data and len(data) > 0:
-                        sample = data[0] if isinstance(data, list) else data
-                        # Extract key fields from sample
-                        if table == "daily_prices" and len(sample) > 6:
-                            context_parts.append(f"\nSample from '{table}':")
-                            context_parts.append(
-                                f"  Symbol: {sample[1]}, Date: {sample[2]}, Close: {sample[6]}"
-                            )
-                        elif table == "securities" and len(sample) > 1:
-                            context_parts.append(f"\nSample from '{table}':")
-                            context_parts.append(
-                                f"  Symbol: {sample[0]}, Company: {sample[1]}"
-                            )
+            sample_data = exploration_results["sample_data"]
+            if sample_data:
+                context_parts.append(
+                    f"\nSample data from tables ({len(sample_data)} tables):"
+                )
+                for table_name, data in sample_data.items():
+                    context_parts.append(f"\n  Sample from '{table_name}':")
+                    if isinstance(data, list) and data:
+                        context_parts.append(f"    First row: {data[0]}")
+                        if len(data) > 1:
+                            context_parts.append(f"    Total samples: {len(data)}")
+                    else:
+                        context_parts.append(f"    Data: {data}")
 
-        # Add value mappings in a clear format
+        # 5. Document any value mappings discovered
         if "value_mappings" in exploration_results:
             mappings = exploration_results["value_mappings"]
             if mappings:
-                context_parts.append("\nStock Symbol Mappings:")
-                # Group by first letter for organization
-                for key, value in sorted(mappings.items())[:10]:  # Limit to 10 mappings
-                    if len(key) > 20:  # Truncate long company names
-                        key = key[:20] + "..."
-                    context_parts.append(f"  {key} = {value}")
+                context_parts.append(
+                    f"\nValue mappings discovered ({len(mappings)} mappings):"
+                )
+                for user_term, db_value in mappings.items():
+                    context_parts.append(f"  '{user_term}' maps to '{db_value}'")
 
-        # Add discovered patterns or insights
+        # 6. Document any insights or patterns discovered
         if "insights" in exploration_results:
             insights = exploration_results["insights"]
-            context_parts.append(f"\nData Insights: {insights}")
+            if insights:
+                context_parts.append(f"\nInsights from exploration:")
+                if isinstance(insights, dict):
+                    for insight_key, insight_value in insights.items():
+                        context_parts.append(f"  {insight_key}: {insight_value}")
+                else:
+                    context_parts.append(f"  {insights}")
 
-        return (
-            "\n".join(context_parts)
-            if context_parts
-            else "No schema information discovered yet."
-        )
+        # 7. Summary statement
+        if len(context_parts) == 1:  # Only the header was added
+            return "No meaningful database schema information has been discovered yet through exploration."
+
+        context_parts.append(f"\n=== END OF EXPLORATION FINDINGS ===")
+
+        return "\n".join(context_parts)
 
     async def _generate_sql_from_exploration(
         self, query: str, schema_context: str, agent_notes: str = ""
@@ -585,38 +578,38 @@ class AgentTools:
                 },
             )
 
-        prompt = f"""You are a PostgreSQL SQL expert. Generate a COMPLETE SQL query for the user's request based only on the database schema discovered through exploration.
+        prompt = f"""You are a PostgreSQL SQL expert with access to comprehensive database exploration findings and accumulated knowledge.
+
+Your task: Generate a COMPLETE SQL query for the user's request, but ONLY if the database actually contains the relevant data.
 
 DATABASE: PostgreSQL (use PostgreSQL-specific syntax and functions)
 
 User Request: {query}
 
-Agent's Discovery Notes:
-{agent_notes if agent_notes else "No notes available."}
+Agent's Current Notes:
+{agent_notes if agent_notes else "No current session notes."}
 
-Database Schema (discovered through exploration):
+Comprehensive Database Context:
 {schema_context}
 
-POSTGRESQL-SPECIFIC RULES:
-1. Use ONLY the tables and columns mentioned in the schema above
-2. Return ONLY the COMPLETE SQL query with SELECT, FROM, WHERE clauses
-3. Use PostgreSQL syntax and functions (DATE_TRUNC, EXTRACT, AGE, etc.)
-4. Use proper PostgreSQL date/timestamp handling with INTERVAL syntax
-5. Use PostgreSQL string functions (ILIKE for case-insensitive matching)
-6. For aggregations, use PostgreSQL window functions when appropriate
-7. Use PostgreSQL LIMIT syntax (not TOP)
-8. Use double quotes for case-sensitive identifiers if needed
-9. If you need to filter by company names, check if there's a mapping in the schema
-10. For stock data, common columns are: symbol, trade_date, open, high, low, close, volume
-11. MUST include FROM clause and appropriate WHERE clauses for filtering
+CRITICAL DECISION RULES:
+1. EXAMINE THE EVIDENCE: Look at all exploration findings and accumulated knowledge above
+2. IF NO RELEVANT TABLES/COLUMNS EXIST: Do not generate SQL. Instead respond with: "INSUFFICIENT_DATA: The database does not contain tables or columns related to [describe what's missing]"
+3. IF RELEVANT DATA EXISTS: Generate a complete PostgreSQL query using only discovered tables and columns
+4. NEVER HALLUCINATE: Do not assume tables or columns exist unless explicitly shown in the context above
 
-PostgreSQL Examples:
-- Time filtering: WHERE trade_date >= CURRENT_DATE - INTERVAL '30 days'
-- Case-insensitive search: WHERE company_name ILIKE '%apple%'
-- Date truncation: SELECT DATE_TRUNC('month', trade_date) as month
-- Window functions: ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY trade_date DESC)
+POSTGRESQL RULES (only if generating SQL):
+- Use ONLY tables and columns explicitly mentioned in the context above
+- Use PostgreSQL syntax (ILIKE, DATE_TRUNC, INTERVAL, etc.)
+- Include proper FROM clause and WHERE conditions
+- Use appropriate aggregations and GROUP BY clauses
+- Return only the complete SQL query
 
-SQL Query:"""
+RESPONSE FORMAT:
+- If insufficient data: "INSUFFICIENT_DATA: [explanation]"
+- If sufficient data: Return the complete SQL query only
+
+Generate your response:"""
 
         try:
             response = await self._llm_client.chat.completions.create(
@@ -658,10 +651,19 @@ SQL Query:"""
             return "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
 
     def _extract_sql_from_response(self, response: str) -> str:
-        """Extract SQL query from LLM response."""
+        """Extract SQL query from LLM response, handling INSUFFICIENT_DATA cases."""
         if not response:
             log.error("empty_sql_response")
             return "SELECT 1"  # Fallback query
+
+        response = response.strip()
+
+        # Check if the LLM determined there's insufficient data
+        if response.startswith("INSUFFICIENT_DATA:"):
+            log.warning("llm_determined_insufficient_data", reason=response)
+            # Return a descriptive error instead of generating SQL
+            reason = response[len("INSUFFICIENT_DATA:") :].strip()
+            return f"-- ERROR: {reason}\nSELECT 'Insufficient data: {reason}' as error_message"
 
         # Remove markdown code blocks if present
         if "```sql" in response.lower():
@@ -687,6 +689,7 @@ SQL Query:"""
             "SQL:",
             "Here is the SQL query:",
             "Here's the SQL:",
+            "Generate your response:",
         ]
         for prefix in prefixes_to_remove:
             if response.startswith(prefix):
@@ -724,3 +727,80 @@ SQL Query:"""
             return "SELECT 1"  # Fallback
 
         return response
+
+    def _extract_table_name_from_query(self, query: str) -> Optional[str]:
+        """Extract table name from a query."""
+        query_upper = query.upper()
+
+        # For information_schema.columns queries
+        if "TABLE_NAME = '" in query_upper:
+            start = query_upper.find("TABLE_NAME = '") + len("TABLE_NAME = '")
+            end = query_upper.find("'", start)
+            return query[start:end] if end > start else None
+
+        # For SELECT FROM queries
+        if "FROM " in query_upper:
+            parts = query_upper.split("FROM ")
+            if len(parts) > 1:
+                table_part = parts[1].split()[0]
+                return table_part.strip("'\"")
+
+        return None
+
+    def _extract_tables_from_sql(self, sql: str) -> List[str]:
+        """Extract table names from SQL query."""
+        tables = []
+        sql_upper = sql.upper()
+
+        # Simple extraction - can be improved
+        if "FROM " in sql_upper:
+            parts = sql_upper.split("FROM ")
+            for part in parts[1:]:
+                table_name = part.split()[0].strip("'\"")
+                if table_name and table_name not in tables:
+                    tables.append(table_name)
+
+        return tables
+
+    def get_knowledge_context(self, query: str) -> str:
+        """Get relevant knowledge context for a query."""
+        # Get relevant notes using LLM-powered search
+        relevant_notes = self.note_taker.search_notes(query)
+
+        if not relevant_notes:
+            return "No specific database knowledge available for this query."
+
+        context_parts = ["=== RELEVANT DATABASE KNOWLEDGE ==="]
+
+        # Add top relevant notes
+        for note in relevant_notes[:5]:  # Top 5 most relevant
+            context_parts.append(f"• {note.title} (confidence: {note.confidence:.2f})")
+            context_parts.append(f"  {note.content}")
+            if note.insights:
+                context_parts.append(f"  Key insights: {', '.join(note.insights[:2])}")
+            if note.tables_involved:
+                context_parts.append(f"  Tables: {', '.join(note.tables_involved)}")
+
+        # Add table summaries for any mentioned tables
+        query_lower = query.lower()
+        for table_name in self.note_taker.table_knowledge.keys():
+            if table_name.lower() in query_lower:
+                summary = self.note_taker.get_table_summary(table_name)
+                if "error" not in summary:
+                    context_parts.append(
+                        f"\n=== {table_name.upper()} TABLE SUMMARY ==="
+                    )
+                    if summary.get("description"):
+                        context_parts.append(f"Description: {summary['description']}")
+                    if summary.get("purpose"):
+                        context_parts.append(f"Purpose: {summary['purpose']}")
+                    if summary.get("key_insights"):
+                        context_parts.append(
+                            f"Key insights: {', '.join(summary['key_insights'][:3])}"
+                        )
+
+        return "\n".join(context_parts)
+
+    def get_knowledge_summary(self) -> Dict[str, Any]:
+        """Get summary of accumulated knowledge."""
+        return self.note_taker.get_knowledge_summary()

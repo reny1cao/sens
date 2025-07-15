@@ -69,9 +69,9 @@ cleanup() {
 
 trap cleanup INT TERM
 
-# Start the FastAPI backend
-echo -e "${BLUE}Starting Backend API on port 8000...${NC}"
-poetry run uvicorn sens.api.app:app --reload --host 0.0.0.0 --port 8000 &
+# Start backend API
+echo "Starting backend API on port 8000..."
+poetry run uvicorn sens.api.app_unified:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Wait for backend to start

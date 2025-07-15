@@ -1,11 +1,22 @@
 """
 SENS Agent Memory System
 
-Agent-controlled knowledge graph for learning and remembering patterns.
-Uses KuzuDB for efficient graph operations and relationship modeling.
+Simple file-based memory system for learning and remembering patterns.
+Integrates with LLM note-taking system for enhanced knowledge management.
 """
 
-from .agent_memory import AgentMemory, Memory, MemoryType
-from .memory_tools import AgentMemoryTools
+from .simple_memory import Memory, MemoryType, SimpleAgentMemory
+from .simple_memory_tools import SimpleAgentMemoryTools
 
-__all__ = ["AgentMemory", "Memory", "MemoryType", "AgentMemoryTools"]
+# Aliases for backward compatibility
+AgentMemory = SimpleAgentMemory
+AgentMemoryTools = SimpleAgentMemoryTools
+
+__all__ = [
+    "AgentMemory",
+    "Memory",
+    "MemoryType",
+    "AgentMemoryTools",
+    "SimpleAgentMemory",
+    "SimpleAgentMemoryTools",
+]

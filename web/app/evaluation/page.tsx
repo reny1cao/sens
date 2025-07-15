@@ -13,10 +13,13 @@
 
 import React from "react";
 import { UnifiedEvaluationDashboard } from "@/components/evaluation/UnifiedEvaluationDashboard";
+import { Header } from "@/components/ui/header";
 
 export default function EvaluationPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950">
+      <Header currentPage="eval" />
+
       {/* Sophisticated background pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(59,130,246,0.08)_1px,transparent_0)] bg-[size:48px_48px] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(59,130,246,0.12)_1px,transparent_0)]" />
 

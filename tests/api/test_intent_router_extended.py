@@ -1,11 +1,11 @@
-"""Extended tests for the intent extraction API endpoint."""
+"""Extended tests for the intent router with realistic data."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from sens.api.app import app
+from sens.api.app_unified import app
 from sens.api.models.intent import IntentRequest, IntentResponse, SchemaSnippet
 from sens.api.routers.intent.router import format_schema_snippet
 from sens.llm.models import Intent, QueryType

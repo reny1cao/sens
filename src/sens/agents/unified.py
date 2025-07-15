@@ -757,6 +757,136 @@ class UnifiedSENSAgent:
                 action_type=action.action_type.value,
             )
 
+    def _accumulate_exploration_results(
+        self, state: AgentState, action: AgentAction, result: Dict[str, Any]
+    ) -> None:
+        """Accumulate exploration results in state for comprehensive context building."""
+        if action.action_type != ActionType.EXPLORE_DATABASE or not result.get(
+            "success"
+        ):
+            return
+
+        # Initialize exploration_results if needed
+        if not state.exploration_results:
+            state.exploration_results = {}
+
+        # Create a unique key for this exploration
+        exploration_key = (
+            f"exploration_{state.iteration}_{int(time.time() * 1000) % 10000}"
+        )
+
+        # Store the raw result
+        state.exploration_results[exploration_key] = result
+
+        # Try to categorize and organize the results
+        columns = result.get("columns", [])
+        rows = result.get("rows", [])
+
+        if columns and rows:
+            # Detect and categorize the type of exploration
+            if len(columns) == 1 and "table" in columns[0].lower():
+                # This looks like table listing
+                table_names = [row[0] for row in rows if row and row[0]]
+                if table_names:
+                    if "discovered_tables" not in state.exploration_results:
+                        state.exploration_results["discovered_tables"] = []
+                    # Merge with existing tables (avoiding duplicates)
+                    existing_tables = set(
+                        state.exploration_results["discovered_tables"]
+                    )
+                    new_tables = [t for t in table_names if t not in existing_tables]
+                    state.exploration_results["discovered_tables"].extend(new_tables)
+
+            elif "column_name" in columns and "table_name" in columns:
+                # This looks like column information
+                if "table_schemas" not in state.exploration_results:
+                    state.exploration_results["table_schemas"] = {}
+
+                # Group columns by table
+                for row in rows:
+                    if len(row) >= 2:
+                        column_name, table_name = row[0], row[1]
+                        if table_name not in state.exploration_results["table_schemas"]:
+                            state.exploration_results["table_schemas"][table_name] = []
+                        if (
+                            column_name
+                            not in state.exploration_results["table_schemas"][
+                                table_name
+                            ]
+                        ):
+                            state.exploration_results["table_schemas"][
+                                table_name
+                            ].append(column_name)
+
+            elif "column_name" in columns:
+                # Column information for a specific table
+                query = action.parameters.get("query", "")
+                table_name = self._extract_table_name_from_query(query)
+                if table_name:
+                    if "table_schemas" not in state.exploration_results:
+                        state.exploration_results["table_schemas"] = {}
+                    if table_name not in state.exploration_results["table_schemas"]:
+                        state.exploration_results["table_schemas"][table_name] = []
+
+                    column_names = [row[0] for row in rows if row and row[0]]
+                    # Merge with existing columns (avoiding duplicates)
+                    existing_columns = set(
+                        state.exploration_results["table_schemas"][table_name]
+                    )
+                    new_columns = [c for c in column_names if c not in existing_columns]
+                    state.exploration_results["table_schemas"][table_name].extend(
+                        new_columns
+                    )
+
+            elif len(columns) > 1:
+                # This looks like sample data from a table
+                query = action.parameters.get("query", "")
+                table_name = self._extract_table_name_from_query(query)
+                if table_name:
+                    if "sample_data" not in state.exploration_results:
+                        state.exploration_results["sample_data"] = {}
+                    state.exploration_results["sample_data"][table_name] = {
+                        "columns": columns,
+                        "sample_rows": rows[:5],  # Keep only first 5 rows as samples
+                    }
+
+        # Log the accumulation for debugging
+        log.info(
+            "exploration_results_accumulated",
+            iteration=state.iteration,
+            exploration_key=exploration_key,
+            total_explorations=len(
+                [
+                    k
+                    for k in state.exploration_results.keys()
+                    if k.startswith("exploration_")
+                ]
+            ),
+            discovered_tables_count=len(
+                state.exploration_results.get("discovered_tables", [])
+            ),
+            table_schemas_count=len(state.exploration_results.get("table_schemas", {})),
+        )
+
+    def _extract_table_name_from_query(self, query: str) -> Optional[str]:
+        """Extract table name from a query string."""
+        query_upper = query.upper()
+
+        # For information_schema.columns queries
+        if "TABLE_NAME = '" in query_upper:
+            start = query_upper.find("TABLE_NAME = '") + len("TABLE_NAME = '")
+            end = query_upper.find("'", start)
+            return query[start:end] if end > start else None
+
+        # For SELECT FROM queries
+        if "FROM " in query_upper:
+            parts = query_upper.split("FROM ")
+            if len(parts) > 1:
+                table_part = parts[1].split()[0]
+                return table_part.strip("'\"")
+
+        return None
+
     async def _execute_action(
         self, action: AgentAction, state: AgentState
     ) -> Dict[str, Any]:
@@ -764,7 +894,10 @@ class UnifiedSENSAgent:
 
         # Map action types to tool methods
         if action.action_type == ActionType.EXPLORE_DATABASE:
-            return await self.tools.explore_database(**action.parameters)
+            result = await self.tools.explore_database(**action.parameters)
+            # Accumulate exploration results for comprehensive context
+            self._accumulate_exploration_results(state, action, result)
+            return result
 
         elif action.action_type == ActionType.GENERATE_SQL:
             sql = await self.tools.generate_sql(
@@ -1296,11 +1429,20 @@ class UnifiedSENSAgent:
         return list(set(tables))
 
     def _build_enhanced_context(self, state: AgentState) -> str:
-        """Build context with memory insights."""
+        """Build context with memory insights and knowledge notes."""
 
         context_parts = [f"=== ITERATION {state.iteration}/{state.max_iterations} ==="]
 
-        # === CONVERSATION HISTORY FIRST (Most Important Context) ===
+        # === DATABASE KNOWLEDGE FIRST (From Note-Taking System) ===
+        if hasattr(self.tools, "get_knowledge_context"):
+            knowledge_context = self.tools.get_knowledge_context(state.user_query)
+            if (
+                knowledge_context
+                and "No specific database knowledge" not in knowledge_context
+            ):
+                context_parts.append(f"\n{knowledge_context}")
+
+        # === CONVERSATION HISTORY SECOND (Most Important Context) ===
         # Extract conversation history from agent notes if present
         conversation_context = ""
         if state.agent_notes and "Conversation History:" in state.agent_notes:

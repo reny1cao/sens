@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from sens.api.app import app
+from sens.api.app_unified import app
 from sens.retrieval.models import RetrievedColumn, RetrievedContext, RetrievedTable
 
 

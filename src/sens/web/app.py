@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from sens.api.app import app as api_app
+from sens.api.app_unified import app as api_app
 
 # Create web app
 web_app = FastAPI(title="SENS Web Interface")
