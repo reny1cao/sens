@@ -14,17 +14,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
-RUN pip install poetry
+RUN pip install --no-cache-dir poetry==1.8.3
 
 # Copy poetry files
 COPY pyproject.toml poetry.lock ./
 
 # Configure poetry and install dependencies
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-dev
+    && poetry install --only main --no-root
 
 # Copy source code
 COPY src/ src/
+COPY README.md ./
+RUN poetry install --only-root
 
 # Expose port
 EXPOSE 8000
