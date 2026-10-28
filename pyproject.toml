@@ -11,6 +11,7 @@ sens = "sens.cli.main:main"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
+certifi = "2026.10.19"  # GHSA-6q48-6c7w-9gw2: exclude compromised CA trust
 fastapi = "^0.115.12"
 uvicorn = "^0.34.2"
 openai = "^1.76.0"
